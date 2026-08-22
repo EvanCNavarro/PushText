@@ -2,6 +2,14 @@ import Foundation
 import AVFoundation
 import PushTextCore
 
+// `SpeechAnalyzer` ships with the macOS 26 SDK, NOT with the OS, so `@available(macOS 26, *)`
+// alone is not enough: on an older SDK the symbols do not exist and the file cannot compile at all.
+// CI runs `macos-15`, where exactly that happened - `cannot find type 'SpeechTranscriber' in scope`.
+// `canImport(FoundationModels)` is the repo's chosen proxy for "building against the 26 SDK"
+// (Package.swift), since that framework is absent from the 15 SDK and present in 26 - verified by
+// `ls` on both before and after the Xcode upgrade.
+#if canImport(FoundationModels)
+
 /// Headless proof that `AppleSpeechEngine` actually transcribes on this machine.
 ///
 /// A green `AudioFormatConverter` suite proves the conversion arithmetic and nothing about whether
@@ -203,3 +211,4 @@ private final class LockedBuffers: @unchecked Sendable {
         return buffers
     }
 }
+#endif

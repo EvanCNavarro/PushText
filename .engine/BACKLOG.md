@@ -114,6 +114,11 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   The mock is NOT the fallback for unsupported systems - it returns canned phrases and this app
   types its output into whatever window has focus, so UnsupportedTranscriptionEngine refuses
   instead. Volatile results are dropped rather than accumulated; only isFinal text is kept.
+  Gated on the SDK as well as the OS: `#if canImport(FoundationModels)` + `@available(macOS 26, *)`
+  answer different questions, and CI's macos-15 runner proved it by failing with "cannot find type
+  SpeechTranscriber" on an @available-only version (TRAP-23). Because that gate compiles the engine
+  OUT on macos-15, check.yml gained a macos-26 job that asserts the SDK is 26.x - otherwise a green
+  CI would never have built the engine at all (TRAP-24).
   NOT established: the real microphone path (#35) and cold-start model download (#36).
   Gaps: #35, #36.) Volatile results must REPLACE, never append - they duplicate the tail of the last
   finalized result. Wrap `transcriber.results` in a timeout; the stream hangs in the field.

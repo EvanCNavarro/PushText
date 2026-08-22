@@ -1,5 +1,4 @@
 import Foundation
-import Speech
 import PushTextCore
 
 /// Chooses the transcription engine for a real run.
@@ -14,11 +13,20 @@ import PushTextCore
 public enum TranscriptionEngineFactory {
 
     /// The engine for a shipping run.
+    ///
+    /// Two separate gates, and they are not the same question. `canImport` asks whether this
+    /// binary was BUILT against the macOS 26 SDK - without it the engine's symbols do not exist and
+    /// the file will not compile. `#available` asks whether the machine RUNNING it is on macOS 26.
+    /// A build on the 26 SDK still has to run on the macOS 15 floor the package declares.
     public static func makeDefault() -> any TranscriptionEngine {
+        #if canImport(FoundationModels)
         if #available(macOS 26, *) {
             return AppleSpeechEngine()
         }
         return UnsupportedTranscriptionEngine(reason: .requiresMacOS26)
+        #else
+        return UnsupportedTranscriptionEngine(reason: .requiresMacOS26)
+        #endif
     }
 }
 

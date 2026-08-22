@@ -19,9 +19,13 @@ struct PushTextApp: App {
         if InjectionProbe.isRequested {
             InjectionProbe.runAndExit()
         }
+        // Gated on the SDK, not the OS: TranscriptionProbe drives SpeechAnalyzer, whose symbols do
+        // not exist when building against an older SDK (CI's macos-15 runner).
+        #if canImport(FoundationModels)
         if TranscriptionProbe.isRequested {
             TranscriptionProbe.runAndExit()
         }
+        #endif
         // Phase 1 wiring (#12): Apple's on-device SpeechAnalyzer, now that Xcode 26 ships the SDK
         // and #11 confirmed the streaming path works on this OS build. Systems that cannot run it
         // get an engine that REFUSES rather than the mock, whose canned phrases would otherwise be

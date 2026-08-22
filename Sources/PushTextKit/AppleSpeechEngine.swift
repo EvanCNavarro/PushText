@@ -3,6 +3,14 @@ import AVFoundation
 import Speech
 import PushTextCore
 
+// `SpeechAnalyzer` ships with the macOS 26 SDK, NOT with the OS, so `@available(macOS 26, *)`
+// alone is not enough: on an older SDK the symbols do not exist and the file cannot compile at all.
+// CI runs `macos-15`, where exactly that happened - `cannot find type 'SpeechTranscriber' in scope`.
+// `canImport(FoundationModels)` is the repo's chosen proxy for "building against the 26 SDK"
+// (Package.swift), since that framework is absent from the 15 SDK and present in 26 - verified by
+// `ls` on both before and after the Xcode upgrade.
+#if canImport(FoundationModels)
+
 /// `TranscriptionEngine` backed by Apple's on-device `SpeechAnalyzer` (macOS 26+).
 ///
 /// **Streaming, not chunked files.** `start(inputSequence:)` was the open question - FB22149971
@@ -214,3 +222,4 @@ public actor AppleSpeechEngine: TranscriptionEngine {
         }
     }
 }
+#endif

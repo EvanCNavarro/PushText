@@ -211,3 +211,28 @@ research that found them is not read on every cycle, and the trap is.
   back on the very next line showed `["en_US"]`. The reservation had taken effect.
 - warning: do not branch on that Bool. Read `reservedLocales` back and assert the post-condition -
   the same shape as TRAP-11 (assert the post-condition, not the attempt).
+
+### TRAP-23: `@available(macOS 26, *)` does not make a file compile against an older SDK
+- what happened: AppleSpeechEngine was annotated `@available(macOS 26, *)` and built green locally
+  on Xcode 26.6. CI, which runs `macos-15`, failed with `cannot find type 'SpeechTranscriber' in
+  scope`. The two annotations answer different questions: `@available` gates the OS the binary RUNS
+  on, `#if canImport(...)` gates the SDK it is BUILT against. SpeechAnalyzer ships with Xcode, not
+  with macOS, so on the 15 SDK the symbols are simply absent and no availability annotation can
+  help. Package.swift had prescribed `#if canImport(FoundationModels)` from commit one; the comment
+  was read during this work and not applied.
+- warning: any macOS 26 API needs BOTH gates. And battle-test the SDK gate rather than trusting it:
+  temporarily point the condition at a framework that does not exist, build, and confirm the
+  fallback branch compiles. Doing that here immediately caught a second defect the first fix had
+  introduced - PushTextApp still called the now-gated TranscriptionProbe unconditionally, which
+  would have produced a second red CI run.
+
+### TRAP-24: a compile-time gate makes absent code look like passing code
+- what happened: `#if canImport(FoundationModels)` fixed the macos-15 CI failure by compiling
+  AppleSpeechEngine OUT of that job entirely. CI then goes green while never building the most
+  consequential file in the repo - and a green build with the engine excluded is indistinguishable
+  from a green build with the engine compiled.
+- warning: when a gate excludes code from a job, add a job where the gate is OPEN, and assert the
+  condition that opens it. `.github/workflows/check.yml` now runs a `macos-26` job that fails if
+  `xcrun --show-sdk-version` is not 26.x, so "the engine compiled" cannot silently become "the
+  engine was skipped". Same shape as the zero-checks-vs-all-green failure: absence and success must
+  not render identically.
