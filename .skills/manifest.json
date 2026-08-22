@@ -1,0 +1,10 @@
+{
+  "canonicalSource": "~/Developer/skills",
+  "adapters": {
+    "codex": ".agents/skills",
+    "claude": ".claude/skills",
+    "cursor": ".cursor/skills",
+    "antigravity": ".antigravity/skills",
+    "hermes": ".hermes/skills"
+  }
+}

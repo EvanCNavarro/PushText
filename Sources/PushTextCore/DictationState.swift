@@ -40,7 +40,7 @@ public enum DictationFailure: Equatable, Sendable {
     /// The engine errored, or its result stream stalled past the timeout.
     ///
     /// The stall case is not theoretical: VoiceInk ships a `max(20, duration * 4 + 10)`s timeout
-    /// on `transcriber.results` because the stream hangs in the field (research/01 §7).
+    /// on `transcriber.results` because the stream hangs in the field (docs/research/01 §7).
     case transcriptionFailed
     /// Text was produced but could not be written into the frontmost app.
     case injectionFailed
@@ -61,7 +61,7 @@ public enum DictationEvent: Equatable, Sendable {
     ///
     /// Real risk, not defensive coding — `CGEventFlags.maskAlternate` is a union mask, so with the
     /// wrong flag handling a left-Option hold makes the right-Option release invisible and the mic
-    /// stays open (research/03, research/04 §1).
+    /// stays open (docs/research/03, docs/research/04 §1).
     case watchdogExpired
 }
 

@@ -1697,7 +1697,7 @@ and which targets the exact user the 2026 market is made of.
 44. https://developer.apple.com/forums/thread/788581 — Apple engineer on shared/evictable model assets
 45. https://developer.apple.com/forums/thread/802863 and /801197 — Apple DTS on the undocumented hardware floor
 46. https://developer.apple.com/documentation/technotes/tn3193-managing-the-on-device-foundation-model-s-context-window
-47. https://machinelearning.apple.com/research/apple-foundation-models-2025-updates — ~3B, 2-bit QAT, 5:3 block split, KV sharing
+47. https://machinelearning.apple.com/docs/research/apple-foundation-models-2025-updates — ~3B, 2-bit QAT, 5:3 block split, KV sharing
 48. https://arxiv.org/pdf/2507.13575 — Apple Intelligence Foundation Language Models tech report
 49. https://drobinin.com/consulting/foundation-models-apple-intelligence/putting-apple-foundation-models-in-a-real-app/
 50. https://developer.apple.com/forums/thread/787736, /793876, /792022, /802921 — guardrail false-refusal reports

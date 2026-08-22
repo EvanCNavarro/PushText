@@ -326,7 +326,7 @@ docs/
   environment/               COMMAND_PORTABILITY.md, MAC_TERMINAL.md, TMUX.md — the "project contract"
   github/REPOSITORY_POLICY.md  CI baseline + branch-protection expectations, with doc-URL sources
   product/spec-draft.md      the provisional product spec (explicitly "not locked scope")
-  research/                  deep-research notes + spikes/NN-<slug>.md findings
+  docs/research/                  deep-research notes + spikes/NN-<slug>.md findings
   skills/SKILL_AUTHORITY.md  one canonical skill source; project adapters reference it
   superpowers/specs/         (empty, .gitkeep)
   verification/              COMMANDS.md + per-task evidence .md files + .png screenshots

@@ -1,0 +1,6 @@
+{
+  "test_command": "swift test",
+  "llm_node_globs": [],
+  "subprocess_globs": ["Sources/**/*.swift", "Sources/*.swift", "scripts/**/*.sh", "scripts/*.sh"],
+  "frontend_globs": []
+}

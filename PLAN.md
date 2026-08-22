@@ -1,6 +1,6 @@
 # Mumbler — plan
 
-Written 2026-08-22 from `research/00`–`07` (9,412 lines, ~400 sources).
+Written 2026-08-22 from `docs/research/00`–`07` (9,412 lines, ~400 sources).
 Nothing here has been compiled or run. Every runtime claim is documentation- or
 source-derived; the Tahoe half of this cannot be executed on this machine at all.
 
@@ -142,7 +142,7 @@ transcript without user-visible failure.
 
 ## 3. Architecture
 
-Three SPM targets, mirroring TermTile's split (`research/05`), with its purity check:
+Three SPM targets, mirroring TermTile's split (`docs/research/05`), with its purity check:
 
 ```
 MumblerCore     pure logic, no AppKit/ApplicationServices
@@ -161,7 +161,7 @@ Mumbler         SwiftUI MenuBarExtra(.window) shell + composition root in App.in
 ```
 
 Packaging, signing, notarization, Sparkle appcast and CI all lifted from TermTile's
-`scripts/` (`research/05` §4 documents every step).
+`scripts/` (`docs/research/05` §4 documents every step).
 
 ---
 
@@ -218,7 +218,7 @@ S5  FoundationModels: availability, prewarm-on-hotkey-down win, `contextSize` at
 S6  Verify the API renames landed: `reservedLocales` / `release(reservedLocale:)` /
     `.transcription`. The WWDC names (`allocatedLocales`, `deallocate`,
     `.offlineTranscription`) 404 on live docs — every WWDC-derived tutorial is stale.
-S7  Run `research/04` §9 — the 12-item Tahoe first-boot plan. Test #1 is Secure Input:
+S7  Run `docs/research/04` §9 — the 12-item Tahoe first-boot plan. Test #1 is Secure Input:
     confirm `flagsChanged` still flows in a password field.
 
 ### Phase 2 — real engines

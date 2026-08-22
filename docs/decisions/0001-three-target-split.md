@@ -55,4 +55,4 @@ which is where UI-free system code goes to become untestable.
 ## Prior art
 
 This mirrors `TermTile`'s `Core` / `Kit` / shell split, including the purity-check script, which
-has been running in that project's CI. See `research/05-termtile-blueprint.md`.
+has been running in that project's CI. See `docs/research/05-termtile-blueprint.md`.

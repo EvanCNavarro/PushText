@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build-app.sh - assemble the SPM binary into a signed distributable PushText.app.
 #
-# Adapted from TermTile's build-app.sh (see research/05-termtile-blueprint.md sec 4). Everything is
+# Adapted from TermTile's build-app.sh (see docs/research/05-termtile-blueprint.md sec 4). Everything is
 # env-overridable so CI and local e2e reuse the SAME build path with no drift. Menu-bar-only
 # (LSUIElement); Sparkle is embedded, so signing is an inside-out pass with the hardened runtime
 # enabled and NO --deep on sign operations (--deep corrupts nested Sparkle signatures), then
@@ -59,7 +59,7 @@ cp "$BINARY" "$APP/Contents/MacOS/$APP_NAME"
 #
 # NSMicrophoneUsageDescription is required - the app records audio. Accessibility
 # (AXIsProcessTrusted) needs no usage string. NSSpeechRecognitionUsageDescription is deliberately
-# ABSENT: it gates the legacy SFSpeechRecognizer, and research/01 found a shipping SpeechAnalyzer
+# ABSENT: it gates the legacy SFSpeechRecognizer, and docs/research/01 found a shipping SpeechAnalyzer
 # binary (yap, via Homebrew) doing live dictation with no Info.plist at all. Add it only if a real
 # Tahoe run proves it is needed - Phase 1 test S2.
 PLIST="$APP/Contents/Info.plist"

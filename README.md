@@ -45,7 +45,7 @@ without touching the app.
   capital of France" must not type "Paris".
 - **We never request Input Monitoring.** Microphone + Accessibility + PostEvent is the whole set.
 
-Full reasoning, with sources, in [`PLAN.md`](PLAN.md) and [`research/`](research/).
+Full reasoning, with sources, in [`PLAN.md`](PLAN.md) and [`docs/research/`](docs/research/).
 
 ## Build
 
@@ -56,6 +56,8 @@ scripts/setup-dev-signing.sh   # once — stable code identity so TCC grants sur
 scripts/fetch-sparkle.sh       # once — vendors Sparkle.xcframework into gitignored Vendor/
 swift build && swift test
 scripts/build-app.sh           # prints the path to a signed dist/PushText.app
+scripts/test-packaged-app.sh   # structural invariants + a real launch proof
+scripts/install-app.sh         # build, install to /Applications, relaunch
 ```
 
 Run `setup-dev-signing.sh` before granting any permission. Ad-hoc signing produces a fresh cdhash
@@ -81,9 +83,11 @@ architecture pivots to chunked file transcription.
 | `Sources/PushTextCore` | Pure logic: state machine, drift guard, dictionary matcher. No frameworks — enforced by `.engine/checks/core-purity.sh`. |
 | `Sources/PushTextKit` | System adapters behind protocol ports. |
 | `Sources/PushText` | SwiftUI `MenuBarExtra` shell and composition root. |
-| `scripts/` | Build, sign, notarize, release. |
-| `research/` | ~9,400 lines of sourced research behind every decision above. |
+| `scripts/` | Build, sign, install, notarize, smoke-test. |
+| `docs/decisions/` | ADRs. |
+| `docs/research/` | ~9,400 lines of sourced research behind every decision above. |
+| `.engine/` | Project memory, backlog, traps, and the fail-closed check scripts. |
 
 ## License
 
-Not yet chosen.
+MIT. See [LICENSE](LICENSE).

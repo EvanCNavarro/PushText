@@ -1,0 +1,25 @@
+name: Semgrep
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  schedule:
+    # Weekly full scan (Mondays 07:00 UTC) - catches new rule coverage on unchanged code.
+    - cron: '0 7 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    # Semgrep's own action is unavailable on schedule events without a PR context; run the CLI directly.
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Scan (security-audit + secrets)
+        run: semgrep ci --config p/security-audit --config p/secrets

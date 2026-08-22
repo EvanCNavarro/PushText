@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # SwiftPM has no Dependabot ecosystem. MacFaceKit is pinned .upToNextMinor in Package.swift and
+  # bumped deliberately; github-actions keeps the CI workflow action pins current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -154,7 +154,7 @@ work:
 - **#194** macOS 27 SDK build + full test-suite qualification
 - **#362** `--adapter` for custom LoRA adapters — **deferred to macOS 27**
 - **#375** test-infra: 85 fresh-process model spawns per run
-- **#195, #196, #119** research/watch/parked
+- **#195, #196, #119** docs/research/watch/parked
 
 **Read that list as a signal, not a defect:** the project's whole open backlog is "the OS underneath me is
 changing." That is precisely the maintenance burden you inherit if you depend on it.
@@ -1010,9 +1010,9 @@ Grouped by how much weight I put on them.
 
 13. WWDC25 286, *Meet the Foundation Models framework* — 3B params @ 2 bits, in-OS, availability switch, use cases, Instruments profiling template — https://developer.apple.com/videos/play/wwdc2025/286/
 14. WWDC25 301, *Deep dive into the Foundation Models framework* — constrained decoding, `exceededContextWindowSize` recovery, temperature, `Tool`, latency-per-token — https://developer.apple.com/videos/play/wwdc2025/301/
-15. *Updates to Apple's On-Device and Server Foundation Language Models* — **2 bpw QAT decoder, 4 bpw embeddings, 8 bpw KV cache, LoRA quality recovery, 65K training seqs** — https://machinelearning.apple.com/research/apple-foundation-models-2025-updates
-16. *Introducing Apple's On-Device and Server Foundation Models* — **iPhone 15 Pro: 0.6 ms/prompt-token TTFT, 30 tok/s** — https://machinelearning.apple.com/research/introducing-apple-foundation-models
-17. *Introducing the Third Generation of Apple's Foundation Models* — https://machinelearning.apple.com/research/introducing-third-generation-of-apple-foundation-models
+15. *Updates to Apple's On-Device and Server Foundation Language Models* — **2 bpw QAT decoder, 4 bpw embeddings, 8 bpw KV cache, LoRA quality recovery, 65K training seqs** — https://machinelearning.apple.com/docs/research/apple-foundation-models-2025-updates
+16. *Introducing Apple's On-Device and Server Foundation Models* — **iPhone 15 Pro: 0.6 ms/prompt-token TTFT, 30 tok/s** — https://machinelearning.apple.com/docs/research/introducing-apple-foundation-models
+17. *Introducing the Third Generation of Apple's Foundation Models* — https://machinelearning.apple.com/docs/research/introducing-third-generation-of-apple-foundation-models
 
 ### apfel — source and docs (read directly, not via the marketing page)
 

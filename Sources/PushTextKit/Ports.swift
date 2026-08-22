@@ -9,7 +9,7 @@ import PushTextCore
 // Phase 0 runs against MockTranscriptionEngine), and the streaming path we intend to use has an
 // open bug on macOS 26.3 — FB22149971, start(inputSequence:) failing with _GenericObjCError —
 // which may force a pivot to chunked file-based transcription. A protocol makes that pivot a new
-// conformer instead of surgery. See PLAN.md §2.7 and research/01.
+// conformer instead of surgery. See PLAN.md §2.7 and docs/research/01.
 
 // MARK: - Transcription
 
@@ -19,7 +19,7 @@ public protocol TranscriptionEngine: Actor {
     ///
     /// For the Apple engine the real gate is `SpeechTranscriber.isAvailable`, which tracks Neural
     /// Engine core count — NOT whether Apple Intelligence is switched on. An empty
-    /// `supportedLocales` is a hardware signal, not a missing download (research/01).
+    /// `supportedLocales` is a hardware signal, not a missing download (docs/research/01).
     var isAvailable: Bool { get async }
 
     /// Begin a new utterance. Called on hotkey-down.
@@ -32,14 +32,14 @@ public protocol TranscriptionEngine: Actor {
     /// Close the utterance and return the final transcript.
     ///
     /// Implementations MUST bound their own wait. The Apple result stream is known to hang in the
-    /// field; VoiceInk ships `max(20, duration * 4 + 10)` seconds as its ceiling (research/01 §7).
+    /// field; VoiceInk ships `max(20, duration * 4 + 10)` seconds as its ceiling (docs/research/01 §7).
     func finishUtterance() async throws -> Transcript
 }
 
 /// A finished transcript.
 public struct Transcript: Equatable, Sendable {
     /// Final text. Apple's `SpeechTranscriber` already punctuates and capitalizes this — measured
-    /// at 99.9% punctuated / 99.7% capitalized across 5,559 published hypotheses (research/06).
+    /// at 99.9% punctuated / 99.7% capitalized across 5,559 published hypotheses (docs/research/06).
     /// That is why cleanup is polish rather than a load-bearing stage.
     public let text: String
     /// Wall-clock seconds from `beginUtterance` to final result. Recorded because no published
@@ -110,7 +110,7 @@ public protocol TextInjector: Sendable {
     /// The shipping implementation is pasteboard + synthetic Command-V with a change-count-guarded
     /// restore, NOT an AX write. AX set-text returns *success while doing nothing* in Electron,
     /// VS Code, Google Docs and Pages, and five of five surveyed open-source dictation apps use
-    /// the pasteboard route (research/04 §3). Murmur treats AX as primary with pasteboard as
+    /// the pasteboard route (docs/research/04 §3). Murmur treats AX as primary with pasteboard as
     /// fallback; that is inverted.
     func inject(_ text: String) async throws
 }
@@ -121,7 +121,7 @@ public protocol TextInjector: Sendable {
 ///
 /// Deliberately does not include Input Monitoring: `CGRequestListenEventAccess` is a permission
 /// request, not a detection mechanism, and the OS's own `TCCServiceList.plist` marks that service
-/// `requiresAdmin => 1` while Accessibility carries no such flag (research/04 §4).
+/// `requiresAdmin => 1` while Accessibility carries no such flag (docs/research/04 §4).
 public protocol PermissionProbe: Sendable {
     func status(of permission: Permission) -> PermissionStatus
 }

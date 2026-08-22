@@ -1,0 +1,229 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Least privilege, widened only for what a release needs: create the release + attest provenance.
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # build-app.sh derives CFBundleVersion from git rev-list --count (full history)
+      - name: Select Xcode (Swift 6 toolchain)
+        run: sudo xcode-select -switch /Applications/Xcode.app
+
+      # Sparkle is a local binaryTarget vendored into gitignored Vendor/ — fetch it before ANY
+      # swift build/test (build-app.sh also fetches lazily, but the Test step runs first).
+      - name: Vendor Sparkle
+        run: scripts/fetch-sparkle.sh
+
+      # Gate the release on the SAME test suite as check.yml (audit: no release without green tests).
+      - name: Test
+        run: swift test
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint --strict
+
+      # Public releases must never be ad-hoc signed: TCC grants bind ad-hoc builds to a per-build
+      # cdhash, so every update can silently break Accessibility/Input Monitoring.
+      - name: Import release signing identity
+        env:
+          PUSHTEXT_RELEASE_SIGNING_CERT_P12_BASE64: ${{ secrets.PUSHTEXT_RELEASE_SIGNING_CERT_P12_BASE64 }}
+          PUSHTEXT_RELEASE_SIGNING_CERT_PASSWORD: ${{ secrets.PUSHTEXT_RELEASE_SIGNING_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${PUSHTEXT_RELEASE_SIGNING_CERT_P12_BASE64}" || {
+            echo "::error::PUSHTEXT_RELEASE_SIGNING_CERT_P12_BASE64 is not set"; exit 1;
+          }
+          test -n "${PUSHTEXT_RELEASE_SIGNING_CERT_PASSWORD}" || {
+            echo "::error::PUSHTEXT_RELEASE_SIGNING_CERT_PASSWORD is not set"; exit 1;
+          }
+          KEYCHAIN="${RUNNER_TEMP}/pushtext-release-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          P12="${RUNNER_TEMP}/pushtext-release-signing.p12"
+          DEVELOPER_ID_G2_CA="${RUNNER_TEMP}/DeveloperIDG2CA.cer"
+          printf '%s' "${PUSHTEXT_RELEASE_SIGNING_CERT_P12_BASE64}" | base64 --decode > "${P12}"
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}"
+          security set-keychain-settings -lut 21600 "${KEYCHAIN}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}"
+          security list-keychains -d user -s "${KEYCHAIN}"
+          security default-keychain -s "${KEYCHAIN}"
+          curl -fsSL --max-time 60 \
+            "https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer" \
+            -o "${DEVELOPER_ID_G2_CA}"
+          security add-certificates -k "${KEYCHAIN}" "${DEVELOPER_ID_G2_CA}"
+          security import "${P12}" -k "${KEYCHAIN}" \
+            -P "${PUSHTEXT_RELEASE_SIGNING_CERT_PASSWORD}" \
+            -A -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}"
+          security find-identity -v -p codesigning "${KEYCHAIN}"
+
+      # CALL the packaging script (do not duplicate the build - audit "CI should call the scripts").
+      # build-app.sh prints the built .app path as its LAST stdout line.
+      - name: Build .app
+        id: build
+        env:
+          PUSHTEXT_SIGN_IDENTITY: ${{ vars.PUSHTEXT_SIGN_IDENTITY }}
+        run: |
+          set -euo pipefail
+          test -n "${PUSHTEXT_SIGN_IDENTITY}" || {
+            echo "::error::PUSHTEXT_SIGN_IDENTITY repo variable is not set"; exit 1;
+          }
+          case "${PUSHTEXT_SIGN_IDENTITY}" in
+            Developer\ ID\ Application:*) ;;
+            *) echo "::error::PUSHTEXT_SIGN_IDENTITY must be a Developer ID Application identity"; exit 1 ;;
+          esac
+          # Marketing version (CFBundleShortVersionString) = the tag minus its leading "v", so every
+          # release reports its own version — NOT build-app.sh's hardcoded default. CFBundleVersion
+          # (what Sparkle compares) stays the monotonic git rev-list count.
+          APP_PATH="$(SHORT_VERSION="${GITHUB_REF_NAME#v}" scripts/build-app.sh | tail -1)"
+          echo "app_path=${APP_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Smoke packaged app
+        env:
+          REQUIRE_STABLE_CODESIGN: "1"
+          REQUIRE_DEVELOPER_ID_CODESIGN: "1"
+          REQUIRE_SPARKLE_KEY: "1"
+          # Inherited from TermTile - same developer, same Apple team. UNVERIFIED against a
+          # PushText signing identity; confirm before the first release (backlog #17).
+          REQUIRE_CODESIGN_TEAM_ID: XG9SBNWNXT
+        run: scripts/test-packaged-app.sh "${{ steps.build.outputs.app_path }}"
+
+      - name: Notarize and staple .app
+        env:
+          PUSHTEXT_NOTARY_KEY_P8_BASE64: ${{ secrets.PUSHTEXT_NOTARY_KEY_P8_BASE64 }}
+          PUSHTEXT_NOTARY_KEY_ID: ${{ secrets.PUSHTEXT_NOTARY_KEY_ID }}
+          PUSHTEXT_NOTARY_ISSUER_ID: ${{ secrets.PUSHTEXT_NOTARY_ISSUER_ID }}
+          PUSHTEXT_NOTARY_TIMEOUT: 120m
+        run: |
+          set -euo pipefail
+          test -n "${PUSHTEXT_NOTARY_KEY_P8_BASE64}" || {
+            echo "::error::PUSHTEXT_NOTARY_KEY_P8_BASE64 is not set"; exit 1;
+          }
+          test -n "${PUSHTEXT_NOTARY_KEY_ID}" || {
+            echo "::error::PUSHTEXT_NOTARY_KEY_ID is not set"; exit 1;
+          }
+          test -n "${PUSHTEXT_NOTARY_ISSUER_ID}" || {
+            echo "::error::PUSHTEXT_NOTARY_ISSUER_ID is not set"; exit 1;
+          }
+          scripts/notarize-app.sh "${{ steps.build.outputs.app_path }}"
+
+      - name: Package + checksum
+        id: package
+        run: |
+          set -euo pipefail
+          APP_PATH="${{ steps.build.outputs.app_path }}"
+          ZIP="dist/PushText-${GITHUB_REF_NAME}.zip"
+          ditto -c -k --keepParent "${APP_PATH}" "${ZIP}"
+          # Checksum with a BASENAME-relative path (cd into dist/) so a user who downloads both
+          # files can verify with `env LC_ALL=C LANG=C shasum -a 256 -c PushText-<tag>.zip.sha256` — a dist/ prefix
+          # would make -c fail to find the file even though the hash is right.
+          ( cd dist && env LC_ALL=C LANG=C shasum -a 256 "PushText-${GITHUB_REF_NAME}.zip" | tee "PushText-${GITHUB_REF_NAME}.zip.sha256" )
+          echo "zip=${ZIP}" >> "${GITHUB_OUTPUT}"
+
+      # Single-source release notes (RememBar-audit §7): release-notes/<version>.md, authored before
+      # the tag, feeds BOTH the Sparkle "What's new" dialog (embedded below) AND the GitHub release
+      # body (last step). Stage it named to match the archive basename so generate_appcast attaches
+      # it to THIS item.
+      - name: Stage release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          SRC="release-notes/${VERSION}.md"
+          if [ -f "$SRC" ]; then
+            cp "$SRC" "dist/PushText-${GITHUB_REF_NAME}.md"   # matches PushText-<tag>.zip basename
+            echo "src=${SRC}" >> "${GITHUB_OUTPUT}"
+            echo "has_notes=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "has_notes=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::No ${SRC} — release ships without a 'What's new' section."
+          fi
+
+      # Sparkle appcast: sign the zip with the EdDSA private key (from the repo secret) and emit
+      # appcast.xml. The public key baked into Info.plist (SUPublicEDKey) verifies it on the client;
+      # an unsigned/tampered update is refused. `generate_appcast` scans the dist dir for the zip.
+      - name: Generate signed appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          # Fetch the Sparkle CLI tools (generate_appcast) — the tarball dist, not the SPM zip.
+          WORK="$(mktemp -d)"
+          curl -fsSL --max-time 180 \
+            "https://github.com/sparkle-project/Sparkle/releases/download/2.9.3/Sparkle-2.9.3.tar.xz" \
+            -o "$WORK/s.tar.xz"
+          tar -xf "$WORK/s.tar.xz" -C "$WORK"
+          GEN="$(find "$WORK" -name generate_appcast -type f | head -1)"
+          # Write the private key to a file for --ed-key-file, remove it immediately after.
+          KEYFILE="$WORK/ed_private.key"
+          printf '%s' "${SPARKLE_ED_PRIVATE_KEY}" > "$KEYFILE"
+          # --embed-release-notes inlines the staged PushText-<tag>.md into the item's <description>
+          # (markdown) so Sparkle's "What's new" shows it. Without it, a .md becomes an external
+          # releaseNotesLink pointing at an asset we don't upload — a 404.
+          "$GEN" --ed-key-file "$KEYFILE" \
+            --embed-release-notes \
+            --download-url-prefix "https://github.com/EvanCNavarro/PushText/releases/download/${GITHUB_REF_NAME}/" \
+            dist/
+          rm -f "$KEYFILE"
+          test -f dist/appcast.xml || { echo "appcast.xml not produced" >&2; exit 1; }
+          # The notes are embedded now — don't ship the loose .md as a release asset.
+          rm -f "dist/PushText-${GITHUB_REF_NAME}.md"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: ${{ steps.package.outputs.zip }}
+
+      # VirusTotal via the public API + curl (no unverified third-party action; secret stays in context).
+      # Non-blocking: skipped cleanly when VIRUSTOTAL_API_KEY isn't set, and never fails the release
+      # (checksum + provenance attestation already make the download verifiable). Attach the key
+      # whenever via `gh secret set VIRUSTOTAL_API_KEY`.
+      - name: VirusTotal scan
+        continue-on-error: true
+        env:
+          VT_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VT_API_KEY}" ]; then
+            echo "VirusTotal: VIRUSTOTAL_API_KEY not set — skipping scan." | tee -a "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          ZIP="${{ steps.package.outputs.zip }}"
+          RESP="$(curl -sS --fail-with-body \
+            --request POST 'https://www.virustotal.com/api/v3/files' \
+            --header "x-apikey: ${VT_API_KEY}" \
+            --form "file=@${ZIP}")"
+          ANALYSIS_ID="$(echo "${RESP}" | python3 -c 'import sys, json; print(json.load(sys.stdin)["data"]["id"])')"
+          echo "VirusTotal analysis: https://www.virustotal.com/gui/file-analysis/${ANALYSIS_ID}" \
+            | tee -a "${GITHUB_STEP_SUMMARY}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ZIP="${{ steps.package.outputs.zip }}"
+          # Same release-notes/<version>.md that fed Sparkle's "What's new" is the release body
+          # (single source). Fall back to auto-generated notes only when the file is absent.
+          if [ "${{ steps.notes.outputs.has_notes }}" = "true" ]; then
+            NOTES_ARGS=(--notes-file "${{ steps.notes.outputs.src }}")
+          else
+            NOTES_ARGS=(--generate-notes)
+          fi
+          gh release create "${GITHUB_REF_NAME}" \
+            "${ZIP}" "${ZIP}.sha256" dist/appcast.xml \
+            --title "${GITHUB_REF_NAME}" \
+            "${NOTES_ARGS[@]}"

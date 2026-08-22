@@ -917,7 +917,7 @@ author's own README says the end-to-end path is unverified by him too.
 12. **Read the author's blog post before we start** —
     https://www.aiformortals.co/blog/clone-wispr-flow-with-claude-code carries **both prompts
     verbatim**. `prompt-design.txt` in the repo is only the second one; the first (the architecture
-    prompt) exists only in the blog. Worth pulling in full as `research/04-*`.
+    prompt) exists only in the blog. Worth pulling in full as `docs/research/04-*`.
 
 ### Do differently
 
