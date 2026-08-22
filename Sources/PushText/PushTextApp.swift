@@ -34,13 +34,63 @@ final class AppModel {
     private(set) var machine = DictationMachine()
     private(set) var lastTranscript: String?
     private let engine: any TranscriptionEngine
+    private var captureWatchdog: Timer?
 
-    init(engine: any TranscriptionEngine) {
+    /// Longest a single utterance may hold the microphone before it is force-closed.
+    ///
+    /// This is the ONLY defence against the measured stuck-capture case. A stalled `.defaultTap` can
+    /// drop a modifier key-up so thoroughly that macOS's own `flagsState` stays latched — the event
+    /// stream and the live flag state are then both wrong, and every state-based recovery is blind.
+    /// Elapsed time is the one signal that cannot be corrupted that way.
+    ///
+    /// Generous on purpose: it exists to stop a stuck microphone, not to cut off a long sentence.
+    var maximumCaptureDuration: TimeInterval = 120
+
+    init(engine: any TranscriptionEngine, machine: DictationMachine = DictationMachine()) {
         self.engine = engine
+        self.machine = machine
     }
 
     var menuBarSymbol: String {
         machine.isCapturing ? "waveform.circle.fill" : "waveform"
+    }
+
+    /// Feeds one event into the dictation machine.
+    ///
+    /// The composition root routes hotkey edges here; keeping the mapping in one place means the
+    /// shell never decides what a key press MEANS, it only reports that one happened.
+    func apply(_ event: DictationEvent) {
+        let wasCapturing = machine.isCapturing
+        machine.apply(event)
+        guard machine.isCapturing != wasCapturing else { return }
+        if machine.isCapturing {
+            startCaptureWatchdog()
+        } else {
+            stopCaptureWatchdog()
+        }
+    }
+
+    private func startCaptureWatchdog() {
+        stopCaptureWatchdog()
+        guard maximumCaptureDuration > 0 else { return }
+        let timer = Timer(timeInterval: maximumCaptureDuration, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.apply(.watchdogExpired) }
+        }
+        captureWatchdog = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopCaptureWatchdog() {
+        captureWatchdog?.invalidate()
+        captureWatchdog = nil
+    }
+
+    /// Whether a capture-duration watchdog is currently armed.
+    var isCaptureWatchdogArmed: Bool { captureWatchdog != nil }
+
+    /// Maps a raw key edge to the dictation event it implies.
+    func handle(_ edge: HotkeyEdge) {
+        apply(edge == .pressed ? .hotkeyPressed : .hotkeyReleased)
     }
 
     var statusText: String {

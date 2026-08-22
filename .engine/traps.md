@@ -55,3 +55,48 @@ research that found them is not read on every cycle, and the trap is.
 - warning: never send a build script's stderr to /dev/null. Capture the app path from stdout
   (`APP=$(./scripts/build-app.sh 2>/dev/null | tail -1)`) and let stderr through, or check the exit
   code explicitly. A stale binary produces output that is internally consistent and entirely wrong.
+
+### TRAP-7: a declared test target with an EMPTY directory builds locally and fails every fresh clone
+- what happened: Package.swift declared `PushTextTests` while `Tests/PushTextTests/` held no files.
+  Git does not track empty directories, so the directory existed on the dev machine and nowhere else.
+  Every local `swift build`/`swift test` passed; CI failed on the first run with "Source files for
+  target PushTextTests should be located under 'Tests/PushTextTests'".
+- warning: a declared target needs a COMMITTED file, not a directory. Before trusting a green local
+  build, reproduce the way CI sees it: `git clone` to a temp dir and build there. `git ls-files
+  Tests/` shows what a fresh clone will actually get.
+
+### TRAP-8: a stalled LISTEN-ONLY event tap is never disabled by the OS
+- what happened: tried to exercise the tap-re-arm branch by stalling the callback 2.0s on a
+  `.listenOnly` tap, chosen so a slow callback could not delay the user's real input. reEnables
+  stayed 0. Nothing waits on a listen-only tap, so there is no timeout to breach.
+- warning: `kCGEventTapDisabledByTimeout` is only reachable on a `.defaultTap`. Testing it therefore
+  costs a real, brief, system-wide input stall - there is no safe shortcut. Measured: `.defaultTap`
+  with a 1.5s stall produces reEnables=1.
+
+### TRAP-9: a stalled defaultTap drops the key-up, and macOS's OWN flag state stays latched
+- what happened: fault injection (1.5s stall, `.defaultTap`) lost the key-release in 6 of 6 runs
+  (`pressed=1 released=0`), leaving ModifierGate latched down - microphone open. The first write-up
+  of this trap claimed the cause was the OS DISABLING the tap and dropping events in flight, based on
+  a single run showing `reEnables=1`. Re-sampled: 0 of 6 reproduced it, then 2 of 5. The disable is
+  intermittent; the dropped release is not.
+- the real mechanism, traced: `CGEventSource.flagsState(.combinedSessionState)` keeps reporting
+  `live=0x20080040` - the right-Option bit still SET - after the up event was dropped. A
+  `.defaultTap` sits AHEAD of the system's own event processing, so swallowing the key-up prevents
+  macOS itself from updating modifier state. The event stream and the live flag state are then both
+  wrong, in agreement.
+- warning: every state-based recovery is blind here. A 250ms poll of `flagsState` was built, measured
+  across 5 runs, shown to change nothing, and REMOVED - recovery correlated only with `reEnables=1`,
+  never with the poll. The only defence that works is elapsed time: `AppModel.maximumCaptureDuration`
+  force-closes the capture via `DictationMachine.watchdogExpired`, which depends on no flag state at
+  all. Resynchronising after a tap re-arm is still kept - it is correct for the intermittent disable
+  case - but it is not the primary protection.
+
+### TRAP-10: read the FIRST compiler error, not the last
+- what happened: a test file failed with three "cannot infer contextual base in reference to member"
+  errors on `.pressed` / `.transcribing`. Read from `tail`, they suggested the enums were somehow
+  not in scope and sent me looking at imports of the wrong modules. The FIRST error, further up, was
+  `cannot find type 'TimeInterval' in scope` - a missing `import Foundation`. Everything else
+  cascaded from it.
+- warning: `swift test 2>&1 | tail` shows the LAST errors, which in Swift are usually cascade
+  damage. Use `grep -E "error:" | head` first. The same applies to reading a failing test suite:
+  the first failure is the cause, the rest are often its shadow.
