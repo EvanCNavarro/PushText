@@ -40,9 +40,38 @@ Backlog items 1–3 predate the migration and collide with PR numbers 1–3 — 
 
 ---
 
-## 3. THE FIRST THING TO DO AFTER THE UPGRADE
+## 3. THE UPGRADE ITSELF — ORDER MATTERS, AND IT IS THE OPPOSITE OF THE OBVIOUS ONE
 
-Not "start coding". In order:
+**macOS FIRST, Xcode SECOND.** I initially told Bobby the reverse — "get Xcode 26 downloading before
+anything else, it's the long pole" — and that is impossible. Measured from the App Store's own
+metadata on 2026-08-22:
+
+```
+$ curl -s "https://itunes.apple.com/lookup?id=497799835&country=us"
+  version:          26.6
+  minimumOsVersion: 26.2      <-- Xcode 26 CANNOT be installed on macOS 15
+  fileSizeBytes:    2.4 GB
+```
+
+So Xcode 26 cannot be downloaded or installed until macOS 26 is already running. It is also only
+2.4 GB — the macOS update is the real long pole at **10.9 GB** (or 17.9 GB for the full installer).
+
+Target, from `softwareupdate --list-full-installers`: **macOS Tahoe 26.6.2, build 25G83**.
+
+### 3.0 Install macOS (needs a sudo password, reboots the machine)
+
+The download can be staged without a password and was started for Bobby on 2026-08-22:
+
+```sh
+softwareupdate --download "macOS Tahoe 26.6.2-25G83"     # no password needed
+softwareupdate --install  "macOS Tahoe 26.6.2-25G83" --restart   # password + reboot
+```
+
+Or just System Settings → General → Software Update, which is the same thing with a progress bar.
+
+**Note for the #11 spike: FB22149971 was reported against macOS 26.3, and 26.6.2 is six point
+releases later.** The streaming bug may simply be fixed. That does not remove the spike — it makes
+it cheap and likely to come back GO.
 
 ### 3.1 Confirm the toolchain actually moved
 
@@ -56,6 +85,9 @@ xcrun --show-sdk-version     # expect 26.x  — THIS is the one that matters
 with macOS. If `--show-sdk-version` still says 15.x, run
 `sudo xcode-select -switch /Applications/Xcode.app` and check again. Nothing below is possible until
 this reads 26.
+
+Install Xcode 26 from the App Store (2.4 GB) once macOS 26 is running — `mas` is installed on this
+machine, but it did not list Xcode pre-upgrade, so the App Store app is the reliable route.
 
 Then prove the frameworks are actually present, rather than assuming the version implies it:
 
