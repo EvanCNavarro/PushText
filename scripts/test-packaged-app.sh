@@ -8,10 +8,10 @@
 #
 # SAFETY: only ever `kill`s the ONE pid it spawned - never pkill/killall.
 #
-# DELIBERATE OMISSION vs TermTile: TermTile additionally asserts selftest stdout markers
-# ("GALLERY shown", "UPDATE_PROBE_SMOKE armed"). PushText has no selftest harness yet, so those
-# assertions are absent rather than faked. When one lands, add the marker assertions here - a
-# liveness poll alone cannot tell a working app from one that launched and did nothing.
+# Beyond liveness, this asserts the hotkey probe's stdout markers - a liveness poll alone cannot
+# tell a working app from one that launched and did nothing. The tap assertion is CONDITIONAL on
+# Accessibility trust, because a CI runner is never trusted and an unconditional assert would make
+# the gate permanently red there (and therefore ignored).
 set -euo pipefail
 
 APP="${1:-${APP:-dist/PushText.app}}"
@@ -175,4 +175,32 @@ stop_launched_app
 after="$(ls "$CRASH_DIR" 2>/dev/null | grep -c "^$APP_NAME" || true)"
 [ "$after" -le "$before" ] || fail "a new crash report appeared for $APP_NAME"
 
-echo "OK: $APP launched and stayed alive (alive=$alive/8, crash-reports ${before}->${after})"
+# --- Hotkey probe ------------------------------------------------------------------------------
+# Runs the real CGEvent tap path headlessly and reports machine-readable markers.
+PROBE_LOG="$WORK/probe.log"
+env HOME="$SMOKE_HOME" CFFIXED_USER_HOME="$SMOKE_HOME" \
+	PUSHTEXT_HOTKEY_PROBE=1 PUSHTEXT_HOTKEY_PROBE_SECONDS=2 \
+	"$BIN" >"$PROBE_LOG" 2>&1 || true
+
+grep -q "HOTKEY_PROBE binding=" "$PROBE_LOG" || {
+	sed 's/^/probe: /' "$PROBE_LOG" >&2 || true
+	fail "hotkey probe produced no binding marker"
+}
+grep -q "HOTKEY_PROBE finished" "$PROBE_LOG" || {
+	sed 's/^/probe: /' "$PROBE_LOG" >&2 || true
+	fail "hotkey probe did not finish"
+}
+
+PROBE_TRUSTED="$(sed -n 's/^HOTKEY_PROBE trusted=\(.*\)$/\1/p' "$PROBE_LOG")"
+if [ "$PROBE_TRUSTED" = "true" ]; then
+	grep -q "HOTKEY_PROBE tap=armed" "$PROBE_LOG" || {
+		sed 's/^/probe: /' "$PROBE_LOG" >&2 || true
+		fail "process is Accessibility-trusted but the event tap did not arm"
+	}
+	PROBE_NOTE="tap armed"
+else
+	# Not a failure: an untrusted process (CI, a fresh machine) legitimately cannot arm a tap.
+	PROBE_NOTE="not Accessibility-trusted, tap assertion skipped"
+fi
+
+echo "OK: $APP launched and stayed alive (alive=$alive/8, crash-reports ${before}->${after}); hotkey probe: ${PROBE_NOTE}"

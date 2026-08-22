@@ -18,11 +18,11 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   LICENSE/cwc.config.json, .engine living layer, .skills manifest, dependabot + PR template +
   semgrep + release workflows, install/notarize/notary-status/test-packaged scripts.)
 
-#3 - HotkeyMonitor: CGEventTap on .flagsChanged, held Right-Option - S0
-  blocked-by: none. Device-dependent flag bit 0x40 (NX_DEVICERALTKEYMASK), NOT
-  CGEventFlags.maskAlternate - the union mask makes a right-side release invisible while the left
-  side is held, and the microphone stays open. Needs the watchdog already modelled in
-  DictationMachine. Authority: docs/research/04 sec 1.
+#3 - HotkeyMonitor: CGEventTap on .flagsChanged, held Right-Option - DONE
+  (2026-08-22: ModifierGate in Core - 9 tests, red-first, 3 planted defects all caught including the
+  union-mask bug; CGEventTapHotkeyMonitor in Kit; proven on the real tap via HotkeyProbe - bound key
+  1 pressed / 1 released, LEFT Option negative control 0/0. Constants read from IOLLEvent.h and
+  Events.h. Evidence: docs/verification/task3-hotkey.md. Gaps tracked as #19, #20, #21.)
 
 #4 - AudioCapture: AVAudioSinkNode - S0
   blocked-by: none. `installTap` carries a documented 100-400 ms latency floor that appears in the
@@ -92,3 +92,23 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
 
 #18 - Context-aware formatting per frontmost app - S0
   blocked-by: #14.
+
+## Gaps left open by #3 - all need a human at the keyboard or a specific system state
+
+#19 - Confirm real hardware sets NX_DEVICERALTKEYMASK - S0
+  blocked-by: nothing technical; needs Bobby to physically hold Right Option during a probe run.
+  TRIGGER: run `PUSHTEXT_HOTKEY_PROBE=1 PUSHTEXT_HOTKEY_PROBE_SECONDS=10
+  dist/PushText.app/Contents/MacOS/PushText` and press the key. Every edge observed so far came from
+  a synthetic CGEvent whose device bit this code set itself; that real hardware sets the same bit is
+  READ from IOLLEvent.h, not OBSERVED. Cheap, and it closes the last inference in the hotkey path.
+
+#20 - Reproduce the Secure Input claim - S0
+  blocked-by: #19. TRIGGER: focus a password field, run the probe, press Right Option. The claim that
+  flagsChanged survives Secure Input while keyDown does not is the single strongest argument for the
+  bare-modifier binding (docs/research/04 sec 1) and is currently taken on the research's word.
+
+#21 - Exercise the tap re-arm branch - S0
+  blocked-by: none. TRIGGER: force kCGEventTapDisabledByTimeout by blocking the callback past the
+  OS timeout, and assert reEnableCount increments. The branch has never executed - reEnableCount was
+  0 in every run - so a tap that dies in the field would currently be indistinguishable from a user
+  who stopped pressing the key.

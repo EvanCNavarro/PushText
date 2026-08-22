@@ -46,3 +46,12 @@ research that found them is not read on every cycle, and the trap is.
   registry. Read literally, every domain looked identical.
 - warning: use `curl -sL` and read the FINAL status: 404 = unregistered, 200 = registered. More
   generally, any status-code probe against a redirector is measuring the redirector.
+
+### TRAP-6: silencing a build script's stderr turns a failed build into a stale-binary "pass"
+- what happened: ran `./scripts/build-app.sh >/dev/null 2>&1 && echo built` after adding a file that
+  did not compile (missing `import CoreGraphics`). The build failed, `&&` skipped the echo, and the
+  next command happily executed the PREVIOUS bundle still sitting in dist/. The probe then printed
+  the OLD code path's output, which looked like a plausible negative result rather than a stale run.
+- warning: never send a build script's stderr to /dev/null. Capture the app path from stdout
+  (`APP=$(./scripts/build-app.sh 2>/dev/null | tail -1)`) and let stderr through, or check the exit
+  code explicitly. A stale binary produces output that is internally consistent and entirely wrong.

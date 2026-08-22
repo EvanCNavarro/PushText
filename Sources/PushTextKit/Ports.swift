@@ -90,11 +90,6 @@ public protocol HotkeyMonitor: AnyObject, Sendable {
     func stop()
 }
 
-public enum HotkeyEdge: Equatable, Sendable {
-    case pressed
-    case released
-}
-
 /// Microphone capture.
 public protocol AudioCapture: AnyObject, Sendable {
     func start(onBuffer: @escaping @Sendable (AudioBuffer) -> Void) throws
