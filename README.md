@@ -3,6 +3,9 @@
 Hold a key, speak, and cleaned text appears in whatever app you're typing into.
 Entirely on-device: no account, no network, no per-token cost.
 
+> **Picking this up in a new session?** Read [HANDOFF.md](HANDOFF.md) first — current state, what is
+> proven versus assumed, and the exact first steps after the macOS 26 upgrade.
+
 **Status: Phase 0 scaffold.** The shell, the state machine and the packaging path are real and
 tested. Speech recognition is a mock — see [Why it doesn't transcribe yet](#why-it-doesnt-transcribe-yet).
 
