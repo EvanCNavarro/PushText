@@ -228,10 +228,20 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   view of it were not measured, because this machine has been warm ever since. Best done with #6,
   which needs the same non-blocking "not ready" state.
 
-#39 - The dictation pipeline is never assembled - the app cannot dictate - S0
-  blocked-by: none. AppModel stores the engine and never calls it; the composition root constructs
-  no hotkey monitor, no capture and no injector. Holding Right Option changes a menu-bar symbol and
-  arms a watchdog. Every component is independently proven and none is connected to another.
-  Ordering hazard: capture delivers on a serial queue while append is async on an actor, so a Task
-  per buffer would reorder and break bufferStartTime monotonicity - needs one serial channel.
-  Blocks #15, whose latency numbers mean nothing until holding the key produces text in a window.
+#39 - The dictation pipeline is never assembled - the app cannot dictate - DONE
+  (2026-08-22: AudioFeed carries capture buffers across the sync-to-async boundary in order via one
+  AsyncStream drained by one task; AppModel drives the effects from STATE changes rather than key
+  edges, so a duplicate key-down from the tap cannot start a second utterance; the composition root
+  builds the tap, capture and injector and surfaces a missing Accessibility grant in the menu
+  instead of crashing. Both hazards were planted and caught: Task-per-buffer reordered 200 buffers
+  to [0,2,1,3,...] and a bounded buffer dropped 65 of 200 (TRAP-26). Pipeline breaks planted too -
+  skipping injection failed 3 tests, dropping audio failed exactly the one asserting buffers reach
+  the engine. NOT proven: the real key-to-text loop on hardware, which needs a human (#42).)
+
+
+#42 - The key-to-text loop has never run on real hardware - S0
+  blocked-by: none; needs a human holding a key. Every hop is proven and the seams between them are
+  proven only against spies. TRIGGER: launch dist/PushText.app, focus a text field, hold Right
+  Option, speak, release. The interesting failure is not "nothing appears" but the PREVIOUS
+  clipboard contents appearing instead of the words - that is #27's settle-delay race, whose 0.12s
+  is the most aggressive value in the surveyed field.
