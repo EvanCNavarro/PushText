@@ -236,3 +236,19 @@ research that found them is not read on every cycle, and the trap is.
   `xcrun --show-sdk-version` is not 26.x, so "the engine compiled" cannot silently become "the
   engine was skipped". Same shape as the zero-checks-vs-all-green failure: absence and success must
   not render identically.
+
+### TRAP-25: a probe with its activation variable lost launches the UI and looks like a hang
+- what happened: a microphone verification run was launched as a single line that the terminal
+  WRAPPED, splitting it in two. A bare `NAME=value` on its own line is a shell assignment and is
+  NOT exported, so `PUSHTEXT_TRANSCRIBE_PROBE=1` never reached the process while
+  `PUSHTEXT_TRANSCRIBE_PROBE_SECONDS=6` did - it was a prefix assignment on the actual command.
+  `isRequested` was false, the app launched its normal menu-bar UI, and it sat in the run loop
+  printing nothing. Diagnosed only by reading the running process's environment (`ps eww`) and its
+  stack (`sample`, which showed NSApplicationMain rather than the probe).
+- warning: every behaviour here was correct, and the result was still indistinguishable from a slow
+  or hung probe - the third instance in one session of absence rendering identically to success
+  (see TRAP-24, and the zero-checks-vs-all-green case). `ProbeActivation.enforceOrExit()` now exits
+  78 with the cause when any probe's tuning variables are set without its activation variable. The
+  map of activation-to-companions is EXPLICIT, not prefix-derived: the injection probe's companions
+  are named PUSHTEXT_INJECT_TEXT rather than PUSHTEXT_INJECT_PROBE_TEXT, so a prefix rule would
+  have covered three probes of four while looking complete.
