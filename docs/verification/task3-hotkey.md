@@ -186,12 +186,37 @@ HOTKEY_PROBE secure=after enabled=false
 Edges arrive while Secure Input is confirmed active. The claim is reproduced on this machine.
 Secure Input is torn down in a `defer`, and `ioreg` afterwards shows no process holding it.
 
+## Hardware confirmation (#19)
+
+Every edge up to this point came from a synthesised `CGEvent` carrying the device bit *because this
+code set it*. Posted events enter at `.cghidEventTap`, the same level as hardware, which makes them a
+close proxy — but a proxy. The claim that real hardware sets the same bit was READ from
+`IOLLEvent.h`, not observed.
+
+Bobby pressed the physical Right Option key with the probe listening:
+
+```
+HOTKEY_PROBE binding=Right Option keyCode=61 deviceMask=0x40
+HOTKEY_PROBE trusted=true
+HOTKEY_PROBE tap=armed seconds=20.0
+HOTKEY_PROBE hold and release Right Option to produce edges
+HOTKEY_PROBE edge=pressed
+HOTKEY_PROBE edge=released
+HOTKEY_PROBE edge=pressed
+HOTKEY_PROBE finished pressed=2 released=1 reEnables=0
+```
+
+`ModifierGate` consults **only** `flags & 0x40`. No synthetic event was posted in this run. Real
+hardware therefore sets `NX_DEVICERALTKEYMASK`, and the last inference in the hotkey path is gone.
+
+Kept rather than tidied away: `pressed=2 released=1` — one press has no matching release inside the
+20-second window. That is consistent with the key still being held when the window closed, but the
+balancing release was not observed. Two later runs recorded 0 edges because no key was pressed
+during them; they are not counter-evidence.
+
 ## What this did NOT verify
 
-- **No physical keypress was ever observed** — #19, and it is the only one left. Every edge above
-  came from a synthesised `CGEvent` carrying the device bit because this code set it. Posted events
-  enter at `.cghidEventTap`, the same level as hardware, so it is a close proxy but not identical.
-  That real hardware sets the same bit is read from `IOLLEvent.h`.
+- ~~No physical keypress was ever observed~~ — **closed, see below.**
 - **`tapDisabledByUserInput` specifically was never seen.** The re-arm branch is proven via
   `tapDisabledByTimeout`; both disable reasons take the identical code path, so this is covered by
   construction rather than by observation.

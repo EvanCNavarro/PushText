@@ -95,14 +95,14 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
 
 ## Gaps left open by #3
 
-#19 - Confirm real hardware sets NX_DEVICERALTKEYMASK - S0
-  blocked-by: a physical keypress, which is the one thing no amount of code can supply. Everything
-  around it has since been proven: the tap arms, edges flow, side-discrimination holds, the branch
-  re-arms, and Secure Input does not block flagsChanged - all with synthetic HID-level events.
-  TRIGGER: run `PUSHTEXT_HOTKEY_PROBE=1 PUSHTEXT_HOTKEY_PROBE_SECONDS=10
-  dist/PushText.app/Contents/MacOS/PushText` and press the key. Every edge observed so far came from
-  a synthetic CGEvent whose device bit this code set itself; that real hardware sets the same bit is
-  READ from IOLLEvent.h, not OBSERVED. Cheap, and it closes the last inference in the hotkey path.
+#19 - Confirm real hardware sets NX_DEVICERALTKEYMASK - DONE
+  (2026-08-22: Bobby pressed the physical key with the probe listening. pressed=2 released=1, from a
+  gate that reads ONLY bit 0x40 - nothing else could have produced those edges, so real hardware does
+  set NX_DEVICERALTKEYMASK. This was the last inference in the hotkey path; every earlier edge came
+  from a synthetic CGEvent whose device bit this code had set itself. Caveat kept rather than tidied
+  away: one press had no matching release inside the 20s window, consistent with the key still being
+  held at expiry, but the balancing release was never OBSERVED. Two later runs recorded 0 edges - no
+  keys were pressed during them, so they are not counter-evidence.)
 
 #20 - Reproduce the Secure Input claim - DONE
   (2026-08-22: reproduced directly rather than waiting on a password field. The probe calls
