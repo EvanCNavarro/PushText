@@ -44,3 +44,33 @@ jobs:
         run: brew install swiftlint
       - name: Lint
         run: swiftlint --strict
+
+  # The macos-15 job above builds with the macOS 15 SDK, where SpeechAnalyzer does not exist and
+  # AppleSpeechEngine is compiled OUT by `#if canImport(FoundationModels)`. Without this job the
+  # engine - the most consequential code in the repo - would never be compiled by CI at all, and the
+  # gate that hides it would look like coverage. This job builds against the macOS 26 SDK so the
+  # engine and its tests actually run.
+  check-macos26:
+    runs-on: macos-26
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Report Swift and SDK versions
+        run: |
+          swift --version
+          xcrun --show-sdk-version
+      - name: Vendor Sparkle
+        run: scripts/fetch-sparkle.sh
+      # Fails the job if the engine was silently compiled out - a green build proves nothing about
+      # AppleSpeechEngine if the SDK gate excluded it, and the two are indistinguishable otherwise.
+      - name: Assert the macOS 26 SDK is actually in use
+        run: |
+          sdk="$(xcrun --show-sdk-version)"
+          case "$sdk" in
+            26.*) echo "SDK $sdk - AppleSpeechEngine will be compiled" ;;
+            *) echo "SDK $sdk is not 26.x; this job exists to compile the macOS 26 engine" >&2; exit 1 ;;
+          esac
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
