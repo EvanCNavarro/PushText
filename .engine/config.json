@@ -1,0 +1,14 @@
+{
+  "test_command": "swift test",
+  "test_command_timeout": 600,
+  "build_command": "swift build",
+  "build_command_timeout": 600,
+  "stack_facets": ["runtime", "deps", "test-harness", "tooling", "process"],
+  "llm_node_globs": [],
+  "sse_event_globs": [],
+  "frontend_globs": [],
+  "subprocess_globs": ["Sources/*.swift", "Sources/**/*.swift", "scripts/*.sh", "scripts/**/*.sh"],
+  "cost_budget_usd": 0.5,
+  "lint_command": "swiftlint --strict",
+  "lint_command_timeout": 120
+}

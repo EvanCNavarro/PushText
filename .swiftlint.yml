@@ -1,0 +1,11 @@
+# SwiftLint config — the CI lint gate. Tuned to this codebase's real conventions, never to
+# silence a real defect. Production safety rules stay strict on shipped code.
+excluded:
+  - .build
+  - Tests             # the gate protects SHIPPED code
+disabled_rules:
+  - trailing_comma    # Swift 6 permits trailing commas; the codebase uses them in collection literals
+identifier_name:
+  min_length:
+    warning: 2
+    error: 2

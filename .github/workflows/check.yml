@@ -1,0 +1,35 @@
+name: Check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: macos-15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Select Xcode (Swift 6 toolchain)
+        run: sudo xcode-select -switch /Applications/Xcode.app
+      - name: Report Swift version
+        run: swift --version
+      # Sparkle is a local binaryTarget vendored into gitignored Vendor/ — fetch it before ANY
+      # swift build/test, or the binary target has no artifact and the build fails.
+      - name: Vendor Sparkle
+        run: scripts/fetch-sparkle.sh
+      - name: Core purity (ADR-0001)
+        run: .engine/checks/core-purity.sh
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint --strict

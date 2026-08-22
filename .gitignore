@@ -1,0 +1,12 @@
+.env
+.env.*
+.engine/state/*
+!.engine/state/.gitkeep
+.engine/events.jsonl
+dist/
+build/
+.build/
+
+# Sparkle (vendored by scripts/fetch-sparkle.sh)
+Vendor/
+.sparkle-tools/
