@@ -48,9 +48,14 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   the way (TRAP-14, TRAP-15) and one semantic bug the concurrency test exposed (TRAP-16).
   Evidence: docs/verification/task4-audio.md. Gaps: #24.)
 
-#5 - TextInjector: pasteboard + synthetic Command-V, change-count-guarded restore - S0
-  blocked-by: none. Resolve the V keycode through UCKeyTranslate WITH Command applied; hard-coding
-  keycode 9 breaks on Dvorak-QWERTY-Command. Authority: docs/research/04 sec 3.
+#5 - TextInjector: pasteboard + synthetic Command-V, change-count-guarded restore - DONE
+  (2026-08-22: ClipboardRestore policy in Core, red-first; PasteboardTextInjector in Kit. Paste
+  keycode resolved via UCKeyTranslate WITH cmdKey rather than hard-coded, because Dvorak-QWERTY-Cmd
+  reverts to QWERTY only while Command is held. Proven end to end into TextEdit - marker arrived
+  intact AND the clipboard was restored - plus both policy branches exercised against the live
+  NSPasteboard. The settle delay was PLANTED to 0.0 and the run then pasted the restored sentinel
+  instead of the text, so the delay is load-bearing by measurement. Evidence:
+  docs/verification/task5-injection.md. Gaps: #27.)
 
 #6 - Permission probes + three-state recovery UX - S0
   blocked-by: #3, #5 (nothing to probe for until they exist). Microphone, Accessibility, PostEvent.

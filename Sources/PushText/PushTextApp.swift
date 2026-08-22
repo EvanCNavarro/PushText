@@ -16,6 +16,9 @@ struct PushTextApp: App {
         if AudioProbe.isRequested {
             AudioProbe.runAndExit()
         }
+        if InjectionProbe.isRequested {
+            InjectionProbe.runAndExit()
+        }
         // Phase 0 wiring: the mock engine stands in for Apple's SpeechAnalyzer, which cannot be
         // compiled until Xcode 26 is installed. Swapped at Phase 2 — see PLAN.md §4.
         model = AppModel(engine: MockTranscriptionEngine())
