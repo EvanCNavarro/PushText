@@ -30,6 +30,8 @@ jobs:
       - name: Core purity (ADR-0001)
         run: .engine/checks/core-purity.sh
       # Fail-open without gh auth, so a fork PR cannot be blocked by it.
+      - name: Cited docs exist
+        run: .engine/checks/cited-docs-exist.sh
       - name: Backlog ids resolve to issues
         run: .engine/checks/backlog-ids-resolve.sh
         env:
