@@ -1,15 +1,15 @@
 import Foundation
 import PushTextCore
 
-/// The system boundary. Every OS-touching capability enters the app through one of these, so
-/// `PushTextCore` never imports a framework and every adapter is swappable for a fake in tests.
-///
-/// These exist from commit one rather than being extracted later, for two concrete reasons:
-/// the transcription engine cannot be built on this machine at all until Xcode 26 is installed
-/// (so Phase 0 runs against `MockTranscriptionEngine`), and the streaming path we intend to use
-/// has an open bug on macOS 26.3 — FB22149971, `start(inputSequence:)` failing with
-/// `_GenericObjCError` — which may force a pivot to chunked file-based transcription. A protocol
-/// makes that pivot a new conformer instead of surgery. See PLAN.md §2.7 and research/01.
+// The system boundary. Every OS-touching capability enters the app through one of these, so
+// PushTextCore never imports a framework and every adapter is swappable for a fake in tests.
+//
+// These exist from commit one rather than being extracted later, for two concrete reasons: the
+// transcription engine cannot be built on this machine at all until Xcode 26 is installed (so
+// Phase 0 runs against MockTranscriptionEngine), and the streaming path we intend to use has an
+// open bug on macOS 26.3 — FB22149971, start(inputSequence:) failing with _GenericObjCError —
+// which may force a pivot to chunked file-based transcription. A protocol makes that pivot a new
+// conformer instead of surgery. See PLAN.md §2.7 and research/01.
 
 // MARK: - Transcription
 
