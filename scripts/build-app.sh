@@ -127,7 +127,9 @@ ditto "$SPARKLE_FRAMEWORK" "$SPARKLE_DST"
 DEFAULT_DEV_IDENTITY="PushText Dev Signing"
 if [ -n "${PUSHTEXT_SIGN_IDENTITY:-}" ]; then
 	SIGN_IDENTITY="$PUSHTEXT_SIGN_IDENTITY"
-elif security find-identity -v -p codesigning 2>/dev/null | grep -q "$DEFAULT_DEV_IDENTITY"; then
+# No -v: a self-signed dev identity is untrusted (CSSMERR_TP_NOT_TRUSTED) and -v hides it, which
+# silently dropped us back to ad-hoc signing and reset every TCC grant on each build.
+elif security find-identity -p codesigning 2>/dev/null | grep -q "$DEFAULT_DEV_IDENTITY"; then
 	SIGN_IDENTITY="$DEFAULT_DEV_IDENTITY"
 else
 	SIGN_IDENTITY="-"

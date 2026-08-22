@@ -118,3 +118,37 @@ research that found them is not read on every cycle, and the trap is.
 - warning: "the event might not arrive" was an assumption, and the poll would have been permanent
   complexity guarding a case that has never been observed. Run the disproof BEFORE building the
   workaround - the missing piece was a TRIGGER for the existing branch, not a second mechanism.
+
+### TRAP-13: `swift test --filter` matches the FUNCTION name, and a miss reports "0 tests passed"
+- what happened: re-sampling a flaky test with `--filter "Concurrent producer"` (its display name)
+  printed `Test run with 0 tests passed` five times. Read quickly that is five greens; it is five
+  runs of nothing. The filter matches the Swift function identifier
+  (`concurrentProducerConsumer`), not the `@Test("...")` string.
+- warning: a filtered run must report a NON-ZERO test count or it proved nothing. This is the
+  vacuous-green shape in miniature: absence and success look identical in the output.
+
+### TRAP-14: openssl-generated PKCS#12 will not import into the macOS keychain by default
+- what happened: `scripts/setup-dev-signing.sh`, inherited from TermTile, died on
+  `security: SecKeychainItemImport: MAC verification failed during PKCS12 import (wrong password?)`.
+  Measured on OpenSSL 3.6.3: the default (AES-256-CBC keys, SHA-256 MAC) fails, and `-legacy` also
+  fails because it uses RC2 for the certificate bag, which modern macOS rejects outright.
+- warning: export with 3DES for BOTH bags and a SHA-1 MAC, and use a NON-EMPTY password - an empty
+  one fails independently of the algorithms:
+  `-keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 -passout pass:<something>`.
+
+### TRAP-15: `security find-identity -v` hides a self-signed identity that codesign accepts
+- what happened: after the import above finally succeeded, the script still reported failure. `-v`
+  lists only TRUSTED identities; a self-signed cert shows as `CSSMERR_TP_NOT_TRUSTED` and is filtered
+  out. codesign signs with it perfectly well - measured, `Authority=PushText Dev Signing`, exit 0.
+  `build-app.sh` carried the same `-v` in its auto-detection, so it had been silently falling back to
+  ad-hoc signing and resetting every TCC grant on every build.
+- warning: drop the `-v` when detecting a local dev identity, and verify the real post-condition by
+  actually signing a scratch file. Presence in a keychain is not proof that codesign will accept it.
+
+### TRAP-16: a ring buffer cannot know whether a short write is a LOSS
+- what happened: `AudioRingBuffer.write` counted the unwritten remainder as dropped. A test producer
+  that RETRIES then reported 320 dropped frames on a run where every frame was delivered intact -
+  and it was intermittent, so it looked like flakiness rather than a semantic bug.
+- warning: a short write means "the ring was full", nothing more. Whether those frames are lost
+  depends on whether the caller can retry, which only the caller knows - on the audio thread it
+  cannot, in a loop it can. Return the count; let the caller call `recordDropped`.
