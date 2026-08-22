@@ -163,3 +163,12 @@ research that found them is not read on every cycle, and the trap is.
   including counts already committed to a doc or a comment, because those are the ones nobody
   re-checks. Better still, phrase a durable claim so it does not carry a count at all ("the suite
   passes") and keep the number only where it is freshly measured.
+
+### TRAP-18: restoring the clipboard too early pastes the OLD contents, silently
+- what happened: a pasteboard-based injector must wait after sending Command-V before restoring the
+  user's clipboard, because the target app reads the pasteboard asynchronously when it processes the
+  key event. Planting `pasteSettleDelay = 0.0` made TextEdit receive `PUSHTEXT-SENTINEL-A` - the
+  restored old clipboard - instead of the injected text. Nothing errors; the wrong text just lands.
+- warning: the delay is a RACE, not a guarantee, and there is no observable "target has read it"
+  signal. Never tune it down on the grounds that it "seems to work"; the failure is invisible to the
+  injector and only visible in the destination app. Tracked as #27.
