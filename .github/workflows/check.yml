@@ -25,6 +25,11 @@ jobs:
         run: scripts/fetch-sparkle.sh
       - name: Core purity (ADR-0001)
         run: .engine/checks/core-purity.sh
+      # Fail-open without gh auth, so a fork PR cannot be blocked by it.
+      - name: Backlog ids resolve to issues
+        run: .engine/checks/backlog-ids-resolve.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Build
         run: swift build
       - name: Test
