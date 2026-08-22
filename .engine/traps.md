@@ -152,3 +152,14 @@ research that found them is not read on every cycle, and the trap is.
 - warning: a short write means "the ring was full", nothing more. Whether those frames are lost
   depends on whether the caller can retry, which only the caller knows - on the audio thread it
   cannot, in a loop it can. Return the count; let the caller call `recordDropped`.
+
+### TRAP-17: a test COUNT written into prose goes stale the moment the suite changes
+- what happened: the AudioRingBuffer suite was 8 tests when the memory-ordering plant was measured.
+  Fixing the drop semantics added `callerReportsLoss`, making it 9 - and the "all 8 passed" claim
+  survived into the source comment, the verification doc and the closing report. The `evidence-check`
+  Stop hook caught it. The tests HAD run; the code changed underneath them and the old number was
+  quoted, which is the exact defect that hook exists for.
+- warning: when a claim depends on a count, re-run and re-read it in the same turn you write it -
+  including counts already committed to a doc or a comment, because those are the ones nobody
+  re-checks. Better still, phrase a durable claim so it does not carry a count at all ("the suite
+  passes") and keep the number only where it is freshly measured.

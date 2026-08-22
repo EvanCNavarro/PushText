@@ -6,7 +6,8 @@ import Synchronization
 /// WHAT THIS SUITE CANNOT SEE, measured rather than assumed. Four defects were planted; three were
 /// caught (overwrite-on-full, an off-by-one in the wrap, a read that ignores availability - the last
 /// one also tripped the 30s watchdog rather than hanging). The fourth was NOT: weakening
-/// `writeIndex`'s store from `.releasing` to `.relaxed` passed all 8 tests. Memory-ordering
+/// `writeIndex`'s store from `.releasing` to `.relaxed` passed the whole suite - re-measured after
+/// this file grew to 9 tests, 3 runs, 9 passed each time. Memory-ordering
 /// correctness here rests on the acquire/release PAIRING argument in the implementation, not on a
 /// green suite, and a future edit that weakens it will not be caught by these tests.
 @Suite("AudioRingBuffer")
