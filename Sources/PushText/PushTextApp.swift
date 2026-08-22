@@ -26,6 +26,9 @@ struct PushTextApp: App {
             TranscriptionProbe.runAndExit()
         }
         #endif
+        // No probe took over, so any probe-tuning variable still set is a misconfiguration that
+        // would otherwise launch the UI and look like a hung probe.
+        ProbeActivation.enforceOrExit()
         // Phase 1 wiring (#12): Apple's on-device SpeechAnalyzer, now that Xcode 26 ships the SDK
         // and #11 confirmed the streaming path works on this OS build. Systems that cannot run it
         // get an engine that REFUSES rather than the mock, whose canned phrases would otherwise be
