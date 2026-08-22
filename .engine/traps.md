@@ -172,3 +172,14 @@ research that found them is not read on every cycle, and the trap is.
 - warning: the delay is a RACE, not a guarantee, and there is no observable "target has read it"
   signal. Never tune it down on the grounds that it "seems to work"; the failure is invisible to the
   injector and only visible in the destination app. Tracked as #27.
+
+### TRAP-19: a blocked compound command runs NONE of its parts, including the harmless ones
+- what happened: one command both wrote `docs/verification/task5-injection.md` (heredoc) and filed a
+  GitHub issue. The `search-before-file-check` PreToolUse hook blocked it for the issue half - and a
+  PreToolUse block prevents the WHOLE command, so the doc was never written. The citation to it had
+  already been drafted, and shipped in BACKLOG.md, the commit message and the PR body, pointing at
+  a file that did not exist.
+- warning: never bundle a file write with a remote/gated action in one command; the gate cannot
+  block half of it. And after any blocked command, re-check what you assumed it had done - the block
+  message names the offending part, not the collateral. Caught only by reading the merge diff and
+  noticing the file absent. `.engine/checks/cited-docs-exist.sh` now fails closed on it.
