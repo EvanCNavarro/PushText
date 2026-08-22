@@ -45,6 +45,19 @@ public enum HotkeyProbe {
         print("HOTKEY_PROBE tap=armed seconds=\(seconds)")
         fflush(stdout)
 
+        // #22: kill the tap the way the OS would, and see whether the monitor notices.
+        if env["PUSHTEXT_HOTKEY_PROBE_KILLTAP"] == "1" {
+            print("HOTKEY_PROBE killtap=before enabled=\(monitor.isTapEnabled)")
+            monitor.forceDisableTapForTesting()
+            print("HOTKEY_PROBE killtap=killed enabled=\(monitor.isTapEnabled)")
+            fflush(stdout)
+            RunLoop.main.run(until: Date().addingTimeInterval(3.0))
+            let reason = monitor.lastDisableReason.map { String($0.rawValue) } ?? "none"
+            print("HOTKEY_PROBE killtap=after enabled=\(monitor.isTapEnabled) "
+                + "reEnables=\(monitor.reEnableCount) reason=\(reason)")
+            fflush(stdout)
+        }
+
         if env["PUSHTEXT_HOTKEY_PROBE_SECURE"] == "1" {
             runSecureInputExperiment(binding: binding, counter: counter)
         } else {

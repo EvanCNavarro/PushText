@@ -122,8 +122,14 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   disable case, plus AppModel.maximumCaptureDuration - a time-based force-close, the only signal
   that cannot be corrupted this way. 4 tests; both planted defects caught.)
 
-#22 - Make the tap-disable fault injection deterministic - S0
-  blocked-by: none. TRIGGER: reEnables=1 reproduced in only 2 of 11 stall runs, so the
-  resynchronise-after-re-arm path is exercised by luck rather than by the harness. Find a
-  deterministic trigger (longer stall, event burst, or CGEvent.tapEnable(false) plus an injected
-  synthetic tapDisabled event) so the branch is covered on every run instead of intermittently.
+#22 - Make the tap-disable fault injection deterministic - DONE
+  (2026-08-22: solved by finding the right TRIGGER, not by building recovery machinery. Two
+  hypotheses died first: raising event pressure with a 12-event burst reached the disable branch in
+  0/5 runs; and I was about to add a tapIsEnabled health poll when the red-first run showed the
+  monitor ALREADY recovered 3/3 - calling CGEvent.tapEnable(enable:false) on our own tap makes the
+  OS deliver kCGEventTapDisabledByUserInput to the callback, so the existing branch was reachable
+  all along (TRAP-12). Landed forceDisableTapForTesting() + isTapEnabled + lastDisableReason; 5/5
+  deterministic. Now a permanent gate in test-packaged-app.sh asserting enabled=true rather than
+  reEnables - a planted no-op re-arm still reports reEnables=1 while the tap stays dead, so the
+  counter cannot tell recovery from a corpse (TRAP-11). Both plants caught. The health poll was NOT
+  built: no evidence it is needed.)

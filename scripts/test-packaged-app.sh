@@ -197,7 +197,22 @@ if [ "$PROBE_TRUSTED" = "true" ]; then
 		sed 's/^/probe: /' "$PROBE_LOG" >&2 || true
 		fail "process is Accessibility-trusted but the event tap did not arm"
 	}
-	PROBE_NOTE="tap armed"
+	# Deterministic recovery check: kill the tap the way the OS would, and require the monitor to
+	# bring it back. Asserts enabled=true, NOT reEnables - a planted no-op re-arm still reports
+	# reEnables=1, so the counter alone cannot tell recovery from a dead tap.
+	KILL_LOG="$WORK/killtap.log"
+	env HOME="$SMOKE_HOME" CFFIXED_USER_HOME="$SMOKE_HOME" \
+		PUSHTEXT_HOTKEY_PROBE=1 PUSHTEXT_HOTKEY_PROBE_KILLTAP=1 PUSHTEXT_HOTKEY_PROBE_SECONDS=1 \
+		"$BIN" >"$KILL_LOG" 2>&1 || true
+	grep -q "HOTKEY_PROBE killtap=killed enabled=false" "$KILL_LOG" || {
+		sed 's/^/killtap: /' "$KILL_LOG" >&2 || true
+		fail "fault injection did not actually disable the tap - the recovery check proves nothing"
+	}
+	grep -q "HOTKEY_PROBE killtap=after enabled=true" "$KILL_LOG" || {
+		sed 's/^/killtap: /' "$KILL_LOG" >&2 || true
+		fail "tap was disabled and never came back"
+	}
+	PROBE_NOTE="tap armed, recovered from forced disable"
 else
 	# Not a failure: an untrusted process (CI, a fresh machine) legitimately cannot arm a tap.
 	PROBE_NOTE="not Accessibility-trusted, tap assertion skipped"

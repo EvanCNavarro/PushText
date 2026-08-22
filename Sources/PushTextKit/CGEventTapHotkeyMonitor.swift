@@ -38,6 +38,8 @@ public final class CGEventTapHotkeyMonitor: HotkeyMonitor, @unchecked Sendable {
     /// Counts how many times the OS disabled our tap and we re-armed it. Surfaced because a tap that
     /// silently dies is indistinguishable from a user who stopped pressing the key.
     public private(set) var reEnableCount = 0
+    /// Which disable reason last re-armed the tap, for diagnostics.
+    public private(set) var lastDisableReason: CGEventType?
 
     /// - Parameter tapOptions: `.defaultTap` (the shipping value) can suppress events and therefore
     ///   BLOCKS event delivery while the callback runs. `.listenOnly` cannot suppress but also cannot
@@ -55,6 +57,25 @@ public final class CGEventTapHotkeyMonitor: HotkeyMonitor, @unchecked Sendable {
     /// decides when to fire it, and it never fires during normal operation. An unexecuted recovery
     /// path is indistinguishable from a working one until the day it matters. Zero in production.
     public var stallInCallback: TimeInterval = 0
+
+    /// Whether the OS still considers our tap live.
+    ///
+    /// A tap can be disabled without us being told: the notification is itself an event, and events
+    /// are exactly what a disabled tap stops delivering.
+    public var isTapEnabled: Bool {
+        guard let tap else { return false }
+        return CGEvent.tapIsEnabled(tap: tap)
+    }
+
+    /// Fault-injection seam: disables the tap the way the OS would, without waiting for the OS.
+    ///
+    /// The OS-triggered disable proved uncontrollable - a 1.5s stall reached it in roughly 2 of 11
+    /// runs, and a 12-event burst reached it in 0 of 5. Triggering the same real state deliberately
+    /// is what makes the recovery path testable at all.
+    public func forceDisableTapForTesting() {
+        guard let tap else { return }
+        CGEvent.tapEnable(tap: tap, enable: false)
+    }
 
     /// Whether this process may create a functioning event tap.
     ///
@@ -148,6 +169,7 @@ public final class CGEventTapHotkeyMonitor: HotkeyMonitor, @unchecked Sendable {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap {
                 reEnableCount += 1
+                lastDisableReason = type
                 CGEvent.tapEnable(tap: tap, enable: true)
                 resynchronise()
             }
