@@ -19,9 +19,14 @@ struct PushTextApp: App {
         if InjectionProbe.isRequested {
             InjectionProbe.runAndExit()
         }
-        // Phase 0 wiring: the mock engine stands in for Apple's SpeechAnalyzer, which cannot be
-        // compiled until Xcode 26 is installed. Swapped at Phase 2 — see PLAN.md §4.
-        model = AppModel(engine: MockTranscriptionEngine())
+        if TranscriptionProbe.isRequested {
+            TranscriptionProbe.runAndExit()
+        }
+        // Phase 1 wiring (#12): Apple's on-device SpeechAnalyzer, now that Xcode 26 ships the SDK
+        // and #11 confirmed the streaming path works on this OS build. Systems that cannot run it
+        // get an engine that REFUSES rather than the mock, whose canned phrases would otherwise be
+        // typed into a real document — see TranscriptionEngineFactory.
+        model = AppModel(engine: TranscriptionEngineFactory.makeDefault())
     }
 
     var body: some Scene {

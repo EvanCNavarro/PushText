@@ -98,9 +98,24 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   long sessions. Evidence: docs/verification/task11-streaming-spike.md; re-runnable spike at
   docs/verification/spikes/11-streaming/.)
 
-#12 - AppleSpeechEngine conforming to TranscriptionEngine - S0
-  blocked-by: #11 (DONE - GO). Must convert capture buffers to bestAvailableAudioFormat before
-  constructing AnalyzerInput; a mismatch is a SIGTRAP, not an error (#32, TRAP-20). Volatile results must REPLACE, never append - they duplicate the tail of the last
+#12 - AppleSpeechEngine conforming to TranscriptionEngine - DONE
+  (2026-08-22: AppleSpeechEngine actor on the streaming path, wired into PushTextApp via
+  TranscriptionEngineFactory. The conversion boundary #32 demands is its own tested type,
+  AudioFormatConverter, because the gap is wider than a resample: capture emits mono Float32 at the
+  hardware rate (48 kHz) and bestAvailableAudioFormat returned 16 kHz mono INT16 - commonFormat 3
+  per AVAudioFormat.h - so a rate-only fix would still trap. Red-first: the suite was run against a
+  non-converting stub and failed on sampleRate 48000!=16000, commonFormat 1!=3 and frameLength
+  24000!=~8000, which is the assertions failing rather than the harness. Two plants confirmed the
+  suite is not vacuous - emitting silence failed ONLY the signal test (peak 0 > 8000), proving the
+  format assertions are blind to silence on their own, and a 'rates match, nothing to do' shortcut
+  failed only the same-rate test; restoration verified byte-identical by diff.
+  Proven on the real SpeechAnalyzer through TranscriptionProbe with file audio, at production
+  pacing: 77 buffers, 183296 frames at 48 kHz in, delivered 3.82s, engine=ok, exit 0.
+  The mock is NOT the fallback for unsupported systems - it returns canned phrases and this app
+  types its output into whatever window has focus, so UnsupportedTranscriptionEngine refuses
+  instead. Volatile results are dropped rather than accumulated; only isFinal text is kept.
+  NOT established: the real microphone path (#35) and cold-start model download (#36).
+  Gaps: #35, #36.) Volatile results must REPLACE, never append - they duplicate the tail of the last
   finalized result. Wrap `transcriber.results` in a timeout; the stream hangs in the field.
 
 #13 - SPIKE: contextualStrings with SpeechTranscriber - S0
@@ -184,3 +199,19 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   is present in the SDK and compiles; whether SystemLanguageModel.availability returns .available
   here was NOT measured - it was read off a crash report, not called. Probe it before writing #14,
   or the cleanup stage ships untestable.
+
+## Gaps left open by #12
+
+#35 - AppleSpeechEngine has never been driven by the real microphone - S0
+  blocked-by: none; needs a human at the machine. The engine is proven end to end against the real
+  SpeechAnalyzer, but only with file-sourced audio. Live capture differs in device format
+  negotiation, drain-timer chunk boundaries, leading/trailing silence and the ring buffer's drop
+  path. TRIGGER: PUSHTEXT_TRANSCRIBE_PROBE=1 with no _FILE set, and speak. Accuracy on a human
+  voice is #15, not this.
+
+#36 - First utterance can block on a model download inside beginUtterance - S0
+  blocked-by: none. ensureModelInstalled awaits downloadAndInstall on a machine where the asset is
+  absent, and push-to-talk means the user is already speaking. The download path was OBSERVED
+  during the #11 spike (status supported -> installed inside one run); its DURATION and the user's
+  view of it were not measured, because this machine has been warm ever since. Best done with #6,
+  which needs the same non-blocking "not ready" state.
