@@ -25,8 +25,9 @@ Allocation and locking are both blocking calls, which is why `AudioRingBuffer` e
 
 ## AudioRingBuffer — red first
 
-Stubbed to return `0`/`[]`, then the suite run: 8 tests, every failure an `Expectation failed` with
-the actual value (`→ 0`, `→ []`). Assertions failing, not the harness.
+Stubbed to return `0`/`[]`, then the suite run: every failure an `Expectation failed` carrying the
+actual value (`→ 0`, `→ []`). Assertions failing, not the harness. The suite was 8 tests at that
+point and is 9 now — `callerReportsLoss` was added when the drop semantics changed, below.
 
 Four defects were then planted:
 
@@ -35,10 +36,16 @@ Four defects were then planted:
 | overwrite-on-full instead of dropping | yes — 5 issues |
 | off-by-one in the write wrap | yes — 3 issues |
 | read ignores available frames | yes — 9 issues, and it tripped the 30s watchdog rather than hanging |
-| `writeIndex` store weakened `.releasing` → `.relaxed` | **NO — all 8 passed** |
+| `writeIndex` store weakened `.releasing` → `.relaxed` | **NO — the suite passes** |
 
-That last row is the honest limit. The suite catches torn logic; it is not sensitive enough to prove
-memory ordering. Correctness there rests on the acquire/release pairing argument in the source, not
+That last row is the honest limit, and it was **re-measured after the suite changed**: with the store
+weakened to `.relaxed`, 3 runs each reported 9 tests passed. The suite catches torn logic; it is not
+sensitive enough to prove memory ordering.
+
+The first write-up of this table said "all 8 passed" — a number taken from before `callerReportsLoss`
+was added. The `evidence-check` hook caught it in the closing report. A stale count is exactly the
+defect that hook exists for: the tests had run, the code changed underneath them, and the old number
+got quoted. Correctness there rests on the acquire/release pairing argument in the source, not
 on a green run, and a future edit that weakens it will not be caught by these tests.
 
 The concurrency test uses `DispatchQueue`, not `Task`, deliberately: the real producer is a C
