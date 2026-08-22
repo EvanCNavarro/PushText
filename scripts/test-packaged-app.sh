@@ -218,4 +218,38 @@ else
 	PROBE_NOTE="not Accessibility-trusted, tap assertion skipped"
 fi
 
-echo "OK: $APP launched and stayed alive (alive=$alive/8, crash-reports ${before}->${after}); hotkey probe: ${PROBE_NOTE}"
+# --- Audio probe -------------------------------------------------------------------------------
+# Conditional on the microphone grant for the same reason as the hotkey tap: a CI runner has none,
+# and an unconditional assert would make the gate permanently red and therefore ignored.
+AUDIO_LOG="$WORK/audio.log"
+env HOME="$SMOKE_HOME" CFFIXED_USER_HOME="$SMOKE_HOME" \
+	PUSHTEXT_AUDIO_PROBE=1 PUSHTEXT_AUDIO_PROBE_SECONDS=2 \
+	"$BIN" >"$AUDIO_LOG" 2>&1 || true
+
+grep -q "AUDIO_PROBE micAuthorized=" "$AUDIO_LOG" || {
+	sed 's/^/audio: /' "$AUDIO_LOG" >&2 || true
+	fail "audio probe produced no authorization marker"
+}
+
+if grep -q "AUDIO_PROBE micAuthorized=true" "$AUDIO_LOG"; then
+	grep -q "AUDIO_PROBE capture=started" "$AUDIO_LOG" || {
+		sed 's/^/audio: /' "$AUDIO_LOG" >&2 || true
+		fail "microphone is authorized but capture never started"
+	}
+	# Monotonic AND contiguous timestamps: non-monotonic bufferStartTime is one of the suspected
+	# causes of FB22149971, so it is asserted at the source rather than discovered on Tahoe.
+	grep -q "AUDIO_PROBE timestampsMonotonic=true contiguous=true" "$AUDIO_LOG" || {
+		sed 's/^/audio: /' "$AUDIO_LOG" >&2 || true
+		fail "capture produced non-monotonic or non-contiguous buffer timestamps"
+	}
+	# Frames must actually have arrived - "started" plus silence is a dead capture path.
+	grep -qE "AUDIO_PROBE buffers=[1-9][0-9]* frames=[1-9]" "$AUDIO_LOG" || {
+		sed 's/^/audio: /' "$AUDIO_LOG" >&2 || true
+		fail "capture started but delivered no audio frames"
+	}
+	AUDIO_NOTE="capture verified, timestamps monotonic+contiguous"
+else
+	AUDIO_NOTE="microphone not authorized, capture assertions skipped"
+fi
+
+echo "OK: $APP launched and stayed alive (alive=$alive/8, crash-reports ${before}->${after}); hotkey probe: ${PROBE_NOTE}; audio probe: ${AUDIO_NOTE}"

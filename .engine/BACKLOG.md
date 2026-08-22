@@ -38,10 +38,15 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   1 pressed / 1 released, LEFT Option negative control 0/0. Constants read from IOLLEvent.h and
   Events.h. Evidence: docs/verification/task3-hotkey.md. Gaps tracked as #19, #20, #21.)
 
-#4 - AudioCapture: AVAudioSinkNode - S0
-  blocked-by: none. `installTap` carries a documented 100-400 ms latency floor that appears in the
-  SDK header and not in the web docs. Do not keep the engine warm: the orange microphone indicator
-  tracks "engine is running", so a warm engine lights it permanently. Authority: docs/research/04 sec 5.
+#4 - AudioCapture: AVAudioSinkNode - DONE
+  (2026-08-22: AudioRingBuffer in Core - lock-free SPSC, red-first, 4 planted defects of which 3
+  caught and the memory-ordering one explicitly NOT, recorded rather than implied.
+  AVAudioEngineCapture in Kit on AVAudioSinkNode, chosen because installTapOnBus's own header caps
+  bufferSize at [100, 400] ms. Proven on the real mic: 80 buffers, 192000 frames at 48 kHz in 4.0s
+  = exactly 4.0s, dropped=0, silent=false, timestamps monotonic AND contiguous by construction.
+  Both timestamp assertions planted and caught independently. Fixed two inherited signing bugs on
+  the way (TRAP-14, TRAP-15) and one semantic bug the concurrency test exposed (TRAP-16).
+  Evidence: docs/verification/task4-audio.md. Gaps: #24.)
 
 #5 - TextInjector: pasteboard + synthetic Command-V, change-count-guarded restore - S0
   blocked-by: none. Resolve the V keycode through UCKeyTranslate WITH Command applied; hard-coding

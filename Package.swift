@@ -17,7 +17,11 @@ let package = Package(
         // behind `#if canImport(FoundationModels)` + `@available(macOS 26, *)`, and bump this
         // single line to .v26 in Phase 2 once Xcode 26 is installed. Info.plist's
         // LSMinimumSystemVersion moves with it. See PLAN.md §2.5.
-        .macOS(.v14)
+        // v15, not v14: AudioRingBuffer uses Synchronization.Atomic (macOS 15+) for a lock-free
+        // producer/consumer handoff, because AVAudioSinkNode's block runs on the realtime thread
+        // where a lock is a blocking call. The shipped floor is still macOS 26 (PLAN.md sec 2.5);
+        // v14 was only ever a Phase 0 convenience and nothing depends on it.
+        .macOS(.v15)
     ],
     products: [
         .executable(name: "PushText", targets: ["PushText"])
