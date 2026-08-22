@@ -252,3 +252,19 @@ research that found them is not read on every cycle, and the trap is.
   map of activation-to-companions is EXPLICIT, not prefix-derived: the injection probe's companions
   are named PUSHTEXT_INJECT_TEXT rather than PUSHTEXT_INJECT_PROBE_TEXT, so a prefix rule would
   have covered three probes of four while looking complete.
+
+### TRAP-26: a Task per callback does not preserve order across the sync-to-async boundary
+- what happened: `AudioCapture.start(onBuffer:)` delivers on a serial drain queue - synchronous -
+  while `TranscriptionEngine.append` is async on an actor. The obvious bridge, `Task { await
+  engine.append(buffer) }` per callback, was written deliberately first and measured: 200 buffers
+  arrived as `[0, 2, 1, 3, ... 34, 36, 37, 35 ...]`. Ordering is a property that exists only DURING
+  the operation and leaves no trace in the end state, so a test that checks the result afterwards
+  cannot see it - the assertion had to race it, with a suspension point inside the spy's `append`
+  and enough buffers to make interleaving certain rather than lucky.
+- warning: `AnalyzerInput.bufferStartTime` must be monotonic, and non-monotonic timestamps are one
+  of the three suspected causes of FB22149971 - so this defect would have shown up as the streaming
+  bug we spiked to rule out, and would have been blamed on Apple. `AudioFeed` uses one AsyncStream
+  drained by exactly one task; order becomes a property of the single consumer instead of the
+  scheduler. Its buffering is `.unbounded` for the same class of reason: planting
+  `.bufferingNewest(10)` silently dropped 65 of 200 buffers, and dropped buffers in dictation are
+  dropped words - a short transcript reads as bad recognition, not as a broken pipeline.
