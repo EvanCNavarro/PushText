@@ -3,6 +3,20 @@
 Taxonomy: `#N - title - S0|S1|S2|DONE` (S0 captured, S1 stoke-planned, S2 brutally audited).
 Dependencies are explicit; do not start a task whose `blocked-by` is not DONE.
 
+**`#N` IS THE GITHUB ISSUE NUMBER.** Every id from #4 up was filed as a real issue on
+`EvanCNavarro/PushText` and the numbers align exactly. GitHub is the STATE authority (open/closed);
+this file is the narrative record — the reasoning, the measurements, the disproved hypotheses. Keep
+them consistent; when they disagree, GitHub is right about state and this file is right about why.
+
+**#1, #2 and #3 predate that migration and COLLIDE with PRs #1, #2 and #3.** They are done and must
+never be cited bare — write "backlog item 3", not "#3". `.engine/checks/backlog-ids-resolve.sh`
+enforces the rest.
+
+*Why this exists:* these ids were originally file-local, and stayed file-local after the repo gained
+a GitHub remote — at which point `#19` silently became a claim about a GitHub issue that did not
+exist. Three merged PR bodies shipped literal `Closes #19` auto-close syntax pointing at nothing.
+Caught by the `citation-resolve-check` Stop hook, not by me.
+
 Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behind them),
 `.engine/MEMORY.md` (PROVE semantics: live surface = a real app receiving real text).
 
