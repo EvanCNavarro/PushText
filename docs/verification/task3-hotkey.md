@@ -141,7 +141,29 @@ What landed instead:
   `DictationMachine.watchdogExpired`. Elapsed time is the one signal a dropped event cannot corrupt.
   Four tests; both planted defects (never-arms, never-fires) caught.
 
-The fault injection reaching the disable branch only ~2 in 11 runs is tracked as #22.
+### Making the disable branch deterministic (#22)
+
+Two hypotheses died before the answer appeared.
+
+Raising event pressure — a 12-event burst during the stall — reached the branch in **0 of 5** runs.
+(`pressed=1` across all 12 pairs also confirms the system stays latched after the first down.)
+
+I then designed a `CGEvent.tapIsEnabled` health-poll timer, on the assumption that the disable
+notification might never arrive. The red-first run — fault injection with **no poll** — recovered
+**3/3** already:
+
+```
+HOTKEY_PROBE killtap=killed enabled=false
+HOTKEY_PROBE killtap=after  enabled=true reEnables=1 reason=4294967295
+```
+
+`4294967295` is `kCGEventTapDisabledByUserInput`. Disabling your own tap makes the OS deliver the
+notification to your callback, so the existing branch was reachable all along — what was missing was
+a trigger, not a second mechanism. The health poll was **not built**.
+
+Deterministic at **5/5**. Now a permanent gate in `test-packaged-app.sh`, which asserts
+`enabled=true` rather than `reEnables` — a planted no-op re-arm still reports `reEnables=1` while the
+tap stays dead, so the counter cannot tell recovery from a corpse (TRAP-11).
 
 ### Secure Input (#20)
 

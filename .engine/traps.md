@@ -100,3 +100,21 @@ research that found them is not read on every cycle, and the trap is.
 - warning: `swift test 2>&1 | tail` shows the LAST errors, which in Swift are usually cascade
   damage. Use `grep -E "error:" | head` first. The same applies to reading a failing test suite:
   the first failure is the cause, the rest are often its shadow.
+
+### TRAP-11: a counter is not proof of recovery - assert the STATE it was supposed to restore
+- what happened: the tap-recovery gate was nearly written as `reEnables >= 1`. Planting a no-op
+  re-arm (increment the counter, never call `CGEvent.tapEnable(enable:true)`) still printed
+  `reEnables=1` while the tap stayed dead - `enabled=false`. The counter records that the branch RAN,
+  which is a different claim from the branch WORKING.
+- warning: assert the post-condition, not the attempt. Here that is `isTapEnabled == true`. The
+  general form: any "we handled it" counter passes on a handler that does nothing.
+
+### TRAP-12: before building recovery machinery, check whether the existing path already fires
+- what happened: the OS-triggered tap disable looked uncontrollable (roughly 2 of 11 stall runs,
+  0 of 5 with a 12-event burst), so a `tapIsEnabled` health-poll timer was designed to catch a
+  disable without relying on the notification event. The red-first run - fault injection with NO
+  poll - showed the monitor recovering 3/3 already: disabling your own tap makes the OS deliver
+  `kCGEventTapDisabledByUserInput` to your callback.
+- warning: "the event might not arrive" was an assumption, and the poll would have been permanent
+  complexity guarding a case that has never been observed. Run the disproof BEFORE building the
+  workaround - the missing piece was a TRIGGER for the existing branch, not a second mechanism.
