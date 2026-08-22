@@ -99,8 +99,12 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   docs/verification/spikes/11-streaming/.)
 
 #12 - AppleSpeechEngine conforming to TranscriptionEngine - DONE
-  (2026-08-22: AppleSpeechEngine actor on the streaming path, wired into PushTextApp via
-  TranscriptionEngineFactory. The conversion boundary #32 demands is its own tested type,
+  (2026-08-22: AppleSpeechEngine actor on the streaming path, CONSTRUCTED in PushTextApp via
+  TranscriptionEngineFactory - constructed, not invoked. An earlier version of this entry said
+  "wired into PushTextApp", which overstated it: AppModel holds the engine and never calls
+  beginUtterance/append/finishUtterance, and the app builds no capture, hotkey or injector at all.
+  Assembling the pipeline is #39. Corrected rather than left standing, because a wrong fact reads
+  as truth and this one would have made the next session think the app dictates. The conversion boundary #32 demands is its own tested type,
   AudioFormatConverter, because the gap is wider than a resample: capture emits mono Float32 at the
   hardware rate (48 kHz) and bestAvailableAudioFormat returned 16 kHz mono INT16 - commonFormat 3
   per AVAudioFormat.h - so a rate-only fix would still trap. Red-first: the suite was run against a
@@ -207,12 +211,15 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
 
 ## Gaps left open by #12
 
-#35 - AppleSpeechEngine has never been driven by the real microphone - S0
-  blocked-by: none; needs a human at the machine. The engine is proven end to end against the real
-  SpeechAnalyzer, but only with file-sourced audio. Live capture differs in device format
-  negotiation, drain-timer chunk boundaries, leading/trailing silence and the ring buffer's drop
-  path. TRIGGER: PUSHTEXT_TRANSCRIBE_PROBE=1 with no _FILE set, and speak. Accuracy on a human
-  voice is #15, not this.
+#35 - AppleSpeechEngine has never been driven by the real microphone - DONE
+  (2026-08-22: Bobby spoke into the probe. 100 buffers, 239616 frames at 48 kHz = 4.992s delivered,
+  transcribed in 0.27s, engine=ok, non-empty text from a human voice. No TCC prompt appeared, so
+  the microphone grant survived the macOS 26 upgrade on a path that actually transcribes. The
+  conversion boundary held on live hardware audio. Accuracy NOT asserted - that is #15. The
+  converter was separately checked as a suspect for poor text and exonerated: chunked per-buffer
+  conversion and whole-file conversion returned byte-identical transcripts on identical audio.
+  What this did NOT prove moved to #39: the probe collects buffers then feeds them (realtime=false),
+  so appending WHILE capture runs has still never executed.)
 
 #36 - First utterance can block on a model download inside beginUtterance - S0
   blocked-by: none. ensureModelInstalled awaits downloadAndInstall on a machine where the asset is
@@ -220,3 +227,11 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   during the #11 spike (status supported -> installed inside one run); its DURATION and the user's
   view of it were not measured, because this machine has been warm ever since. Best done with #6,
   which needs the same non-blocking "not ready" state.
+
+#39 - The dictation pipeline is never assembled - the app cannot dictate - S0
+  blocked-by: none. AppModel stores the engine and never calls it; the composition root constructs
+  no hotkey monitor, no capture and no injector. Holding Right Option changes a menu-bar symbol and
+  arms a watchdog. Every component is independently proven and none is connected to another.
+  Ordering hazard: capture delivers on a serial queue while append is async on an actor, so a Task
+  per buffer would reorder and break bufferStartTime monotonicity - needs one serial channel.
+  Blocks #15, whose latency numbers mean nothing until holding the key produces text in a window.
