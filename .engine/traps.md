@@ -183,3 +183,31 @@ research that found them is not read on every cycle, and the trap is.
   block half of it. And after any blocked command, re-check what you assumed it had done - the block
   message names the offending part, not the collateral. Caught only by reading the merge diff and
   noticing the file absent. `.engine/checks/cited-docs-exist.sh` now fails closed on it.
+
+### TRAP-20: a wrong audio format into SpeechAnalyzer is a SIGTRAP, not a catchable error
+- what happened: the #11 spike planted a format mismatch on purpose - 48 kHz buffers fed to an
+  analyzer whose `bestAvailableAudioFormat` was 16 kHz mono. It did not throw and it did not
+  degrade. The process died with `EXIT=133` (SIGTRAP), trapping inside Apple's own
+  `Speech.SpeechRecognizerWorker.preRunRecognition()`. A separate planted failure had already
+  proven the spike's `catch` reports thrown errors correctly, so this is genuinely uncatchable
+  rather than a hole in the harness.
+- warning: `AVAudioEngineCapture` delivers the device's native rate and the analyzer picks its own;
+  they differ by default on this machine. Convert at the boundary and assert the format there, so a
+  mismatch fails a test instead of killing a user's dictation. You cannot assert "did not crash"
+  in-process - the assertion has to be on the converted format. Tracked as #32.
+
+### TRAP-21: `installedLocales` says installed while `status(forModules:)` says otherwise
+- what happened: `SpeechTranscriber.installedLocales` listed `en_US` among nine installed English
+  locales, so the model looked ready. `AssetInventory.status(forModules:)` for the actual
+  transcriber returned `.supported`, and an explicit `assetInstallationRequest(supporting:)` +
+  `downloadAndInstall()` was still required before the first transcription would run.
+- warning: the locale list and the module status answer different questions. Gate readiness on
+  `status(forModules:)` with the real module instance. Had the spike trusted the locale list, the
+  install-time failure would have surfaced from deep inside the analyzer and read exactly like the
+  FB22149971 streaming bug it was there to test for - a false NO-GO on the whole architecture.
+
+### TRAP-22: `AssetInventory.reserve(locale:)` returns false while succeeding
+- what happened: `reserve(locale:)` returned `false`, and reading `AssetInventory.reservedLocales`
+  back on the very next line showed `["en_US"]`. The reservation had taken effect.
+- warning: do not branch on that Bool. Read `reservedLocales` back and assert the post-condition -
+  the same shape as TRAP-11 (assert the post-condition, not the attempt).

@@ -81,15 +81,26 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
 
 ## Phase 1 - requires macOS 26 AND Xcode 26
 
-#11 - SPIKE: does start(inputSequence:) work on this Tahoe build? - S0
-  blocked-by: the upgrade. GO/NO-GO for the whole architecture. FB22149971 reports
-  `_GenericObjCError ... nilError` on macOS 26.3 for the streaming path, while file-based
-  transcription works on identical audio. If it reproduces, #12 becomes chunked file transcription
-  and the latency budget is rewritten. Do not build on the streaming path before this runs.
-  Authority: docs/research/01.
+#11 - SPIKE: does start(inputSequence:) work on this Tahoe build? - DONE
+  (2026-08-22: GO. FB22149971 does NOT reproduce on macOS 26.6.2 / Xcode 26.6 / SDK macosx26.5 -
+  the radar was filed against 26.3. A standalone spike ran an A/B over identical audio holding
+  locale, preset, buffers and chunk size constant, varying ONLY the entry point:
+  analyzeSequence(_:) and start(inputSequence:) both returned the same final text, with volatile
+  partials arriving during the feed. 10/10 streaming runs succeeded across 512/1024/2048/4096/8192
+  frames per buffer - including both sub-4096 sizes the radar suspects. The verdict was
+  battle-tested before it was believed: a planted missing-file failure proved the failure path
+  prints, so STREAMING_OK is not a never-exercised default. #12 is therefore a conformer against
+  the streaming path, not a pivot to chunked file transcription.
+  Found on the way: a format mismatch is an uncatchable SIGTRAP inside Speech.framework (#32);
+  Apple Intelligence reports restricted/assetIsNotReady, which gates #14 (#33);
+  installedLocales disagreed with status(forModules:) (TRAP-21); reserve(locale:) returned false
+  while succeeding (TRAP-22). NOT established: the real-microphone path, transcription accuracy,
+  long sessions. Evidence: docs/verification/task11-streaming-spike.md; re-runnable spike at
+  docs/verification/spikes/11-streaming/.)
 
 #12 - AppleSpeechEngine conforming to TranscriptionEngine - S0
-  blocked-by: #11. Volatile results must REPLACE, never append - they duplicate the tail of the last
+  blocked-by: #11 (DONE - GO). Must convert capture buffers to bestAvailableAudioFormat before
+  constructing AnalyzerInput; a mismatch is a SIGTRAP, not an error (#32, TRAP-20). Volatile results must REPLACE, never append - they duplicate the tail of the last
   finalized result. Wrap `transcriber.results` in a timeout; the stream hangs in the field.
 
 #13 - SPIKE: contextualStrings with SpeechTranscriber - S0
@@ -157,3 +168,19 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   reEnables - a planted no-op re-arm still reports reEnables=1 while the tap stays dead, so the
   counter cannot tell recovery from a corpse (TRAP-11). Both plants caught. The health poll was NOT
   built: no evidence it is needed.)
+
+## Gaps left open by #11
+
+#32 - Format mismatch into SpeechAnalyzer is an uncatchable SIGTRAP, not an error - S0
+  blocked-by: none; constraint on #12. Planted deliberately during the #11 spike: 48 kHz buffers fed
+  to an analyzer whose bestAvailableAudioFormat was 16 kHz mono produced EXIT=133 (SIGTRAP) inside
+  Speech.SpeechRecognizerWorker.preRunRecognition(), with no throw to catch. AVAudioEngineCapture
+  delivers the device's native rate, so the two differ by default - #12 must convert at the boundary
+  and assert the format there. TRAP-20.
+
+#33 - Apple Intelligence reports restricted/assetIsNotReady - S0
+  blocked-by: none; GO/NO-GO input for #14 the way #11 was for #12. The crash report from the #11
+  spike carried appleIntelligenceStatus state=restricted reasons=[assetIsNotReady]. FoundationModels
+  is present in the SDK and compiles; whether SystemLanguageModel.availability returns .available
+  here was NOT measured - it was read off a crash report, not called. Probe it before writing #14,
+  or the cleanup stage ships untestable.
