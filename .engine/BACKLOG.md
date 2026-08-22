@@ -93,22 +93,37 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
 #18 - Context-aware formatting per frontmost app - S0
   blocked-by: #14.
 
-## Gaps left open by #3 - all need a human at the keyboard or a specific system state
+## Gaps left open by #3
 
 #19 - Confirm real hardware sets NX_DEVICERALTKEYMASK - S0
-  blocked-by: nothing technical; needs Bobby to physically hold Right Option during a probe run.
+  blocked-by: a physical keypress, which is the one thing no amount of code can supply. Everything
+  around it has since been proven: the tap arms, edges flow, side-discrimination holds, the branch
+  re-arms, and Secure Input does not block flagsChanged - all with synthetic HID-level events.
   TRIGGER: run `PUSHTEXT_HOTKEY_PROBE=1 PUSHTEXT_HOTKEY_PROBE_SECONDS=10
   dist/PushText.app/Contents/MacOS/PushText` and press the key. Every edge observed so far came from
   a synthetic CGEvent whose device bit this code set itself; that real hardware sets the same bit is
   READ from IOLLEvent.h, not OBSERVED. Cheap, and it closes the last inference in the hotkey path.
 
-#20 - Reproduce the Secure Input claim - S0
-  blocked-by: #19. TRIGGER: focus a password field, run the probe, press Right Option. The claim that
-  flagsChanged survives Secure Input while keyDown does not is the single strongest argument for the
-  bare-modifier binding (docs/research/04 sec 1) and is currently taken on the research's word.
+#20 - Reproduce the Secure Input claim - DONE
+  (2026-08-22: reproduced directly rather than waiting on a password field. The probe calls
+  EnableSecureEventInput() itself, asserts IsSecureEventInputEnabled()==true as the control - without
+  it the run would prove nothing - posts a bare modifier, and observes 1 pressed / 1 released while
+  Secure Input is ACTIVE. Secure Input released cleanly afterwards. Evidence:
+  docs/verification/task3-hotkey.md. Residual: synthetic HID-level events, not hardware - folded
+  into #19.)
 
-#21 - Exercise the tap re-arm branch - S0
-  blocked-by: none. TRIGGER: force kCGEventTapDisabledByTimeout by blocking the callback past the
-  OS timeout, and assert reEnableCount increments. The branch has never executed - reEnableCount was
-  0 in every run - so a tap that dies in the field would currently be indistinguishable from a user
-  who stopped pressing the key.
+#21 - Exercise the tap re-arm branch - DONE
+  (2026-08-22: built a stallInCallback fault-injection seam and drove the branch. Findings all
+  re-sampled rather than taken from one run: a LISTEN-ONLY stalled tap is never disabled (TRAP-8);
+  a stalled .defaultTap drops the key-release in 6/6 runs while the OS disable is INTERMITTENT
+  (0/6, then 2/5); and macOS's own flagsState stays latched at 0x20080040, so every state-based
+  recovery is blind (TRAP-9). A 250ms flagsState poll was built, measured over 5 runs, shown to
+  change nothing, and REMOVED. Landed instead: resynchronise-after-re-arm for the intermittent
+  disable case, plus AppModel.maximumCaptureDuration - a time-based force-close, the only signal
+  that cannot be corrupted this way. 4 tests; both planted defects caught.)
+
+#22 - Make the tap-disable fault injection deterministic - S0
+  blocked-by: none. TRIGGER: reEnables=1 reproduced in only 2 of 11 stall runs, so the
+  resynchronise-after-re-arm path is exercised by luck rather than by the harness. Find a
+  deterministic trigger (longer stall, event burst, or CGEvent.tapEnable(false) plus an injected
+  synthetic tapDisabled event) so the branch is covered on every run instead of intermittently.

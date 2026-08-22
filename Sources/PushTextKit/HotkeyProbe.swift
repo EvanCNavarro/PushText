@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import Carbon
 import PushTextCore
 
 /// Headless proof that the event tap is real.
@@ -20,13 +21,13 @@ public enum HotkeyProbe {
     public static func runAndExit() -> Never {
         let env = ProcessInfo.processInfo.environment
         let seconds = Double(env["PUSHTEXT_HOTKEY_PROBE_SECONDS"] ?? "") ?? 8
-
         let binding = HotkeyBinding.rightOption
+
         print("HOTKEY_PROBE binding=\(binding.name) keyCode=\(binding.keyCode) "
             + "deviceMask=0x\(String(binding.deviceMask, radix: 16))")
         print("HOTKEY_PROBE trusted=\(CGEventTapHotkeyMonitor.isTrusted)")
 
-        let monitor = CGEventTapHotkeyMonitor(binding: binding)
+        let monitor = makeMonitor(binding: binding, env: env)
         let counter = EdgeCounter()
 
         do {
@@ -44,37 +45,95 @@ public enum HotkeyProbe {
         print("HOTKEY_PROBE tap=armed seconds=\(seconds)")
         fflush(stdout)
 
-        // Optional self-drive: post a bare modifier down/up through the HID event stream so the tap
-        // is proven WITHOUT a human at the keyboard. This is a real CGEvent traversing the real tap
-        // chain, not a direct call into the gate - the point is to prove the wiring, so short-
-        // circuiting it would defeat the exercise. Off by default: it posts into the live session.
-        // "1" drives the BOUND key (expect 1/1). "other" drives a DIFFERENT physical key that
-        // shares the same union mask (expect 0/0) - the negative control proving side-discrimination
-        // survives the real tap, not just the unit tests.
-        let syntheticMode = env["PUSHTEXT_HOTKEY_PROBE_SYNTHETIC"]
-        if syntheticMode == "1" || syntheticMode == "other" {
-            let driven = syntheticMode == "other" ? HotkeyBinding.leftOption : binding
-            print("HOTKEY_PROBE synthetic=posting driving=\(driven.name) "
-                + "expect=\(driven == binding ? "1/1" : "0/0")")
-            fflush(stdout)
-            DispatchQueue.global().asyncAfter(deadline: .now() + 0.4) {
-                postSyntheticModifier(binding: driven, down: true)
-                Thread.sleep(forTimeInterval: 0.08)
-                postSyntheticModifier(binding: driven, down: false)
-            }
+        if env["PUSHTEXT_HOTKEY_PROBE_SECURE"] == "1" {
+            runSecureInputExperiment(binding: binding, counter: counter)
         } else {
-            print("HOTKEY_PROBE hold and release \(binding.name) to produce edges")
-            fflush(stdout)
+            driveOrWait(binding: binding, env: env)
+            // Pump the REAL main run loop - the tap delivers through it, so a sleep proves nothing.
+            RunLoop.main.run(until: Date().addingTimeInterval(seconds))
         }
-
-        // Pump the real main run loop - the tap delivers through it, so a sleep would prove nothing.
-        RunLoop.main.run(until: Date().addingTimeInterval(seconds))
 
         monitor.stop()
         print("HOTKEY_PROBE finished pressed=\(counter.pressed) released=\(counter.released) "
             + "reEnables=\(monitor.reEnableCount)")
         fflush(stdout)
         exit(0)
+    }
+
+    /// Builds the monitor, applying the fault-injection stall when one is configured.
+    ///
+    /// A stalled LISTEN-ONLY tap is never disabled by the OS - nothing waits on it, so there is no
+    /// timeout to breach (measured: a 2.0s stall gave reEnables=0). Reaching the re-arm branch needs
+    /// a `.defaultTap`, which DOES hold up event delivery while the callback runs. Default to the
+    /// safe one and require `PUSHTEXT_HOTKEY_PROBE_TAP=default` to opt into the disruptive one.
+    private static func makeMonitor(
+        binding: HotkeyBinding,
+        env: [String: String]
+    ) -> CGEventTapHotkeyMonitor {
+        let stall = Double(env["PUSHTEXT_HOTKEY_PROBE_STALL"] ?? "") ?? 0
+        let wantsDefaultTap = (env["PUSHTEXT_HOTKEY_PROBE_TAP"] ?? "") == "default"
+        let options: CGEventTapOptions = (stall > 0 && !wantsDefaultTap) ? .listenOnly : .defaultTap
+        let monitor = CGEventTapHotkeyMonitor(binding: binding, tapOptions: options)
+        monitor.stallInCallback = stall
+        if stall > 0 {
+            print("HOTKEY_PROBE stall=\(stall) "
+                + "tapOptions=\(options == .listenOnly ? "listenOnly" : "defaultTap")")
+        }
+        return monitor
+    }
+
+    /// Enables Secure Input, drives the bound key, and reports whether edges still arrived.
+    ///
+    /// docs/research/04 sec 1 claims `flagsChanged` keeps flowing under Secure Input while
+    /// `keyDown`/`keyUp` do not - the strongest argument for binding a BARE MODIFIER over a chord.
+    ///
+    /// The control matters more than the result: if `IsSecureEventInputEnabled()` were false the run
+    /// would prove nothing, so it is asserted and printed rather than assumed.
+    private static func runSecureInputExperiment(binding: HotkeyBinding, counter: EdgeCounter) {
+        print("HOTKEY_PROBE secure=before enabled=\(IsSecureEventInputEnabled())")
+        let status = EnableSecureEventInput()
+        defer {
+            _ = DisableSecureEventInput()
+            print("HOTKEY_PROBE secure=after enabled=\(IsSecureEventInputEnabled())")
+            fflush(stdout)
+        }
+        print("HOTKEY_PROBE secure=enabled status=\(status) "
+            + "confirmed=\(IsSecureEventInputEnabled())")
+        fflush(stdout)
+
+        postSyntheticModifier(binding: binding, down: true)
+        Thread.sleep(forTimeInterval: 0.10)
+        postSyntheticModifier(binding: binding, down: false)
+        // Pump the run loop so the callback can fire BEFORE Secure Input is torn down.
+        RunLoop.main.run(until: Date().addingTimeInterval(1.0))
+
+        print("HOTKEY_PROBE secure=result pressed=\(counter.pressed) "
+            + "released=\(counter.released)")
+        fflush(stdout)
+    }
+
+    /// Optionally self-drives the tap, otherwise waits for a human.
+    ///
+    /// The synthetic events are real `CGEvent`s traversing the real tap chain, not direct calls into
+    /// the gate - short-circuiting that would defeat the exercise. `"1"` drives the BOUND key
+    /// (expect 1/1); `"other"` drives a different physical key sharing the same union mask
+    /// (expect 0/0), the negative control for side-discrimination.
+    private static func driveOrWait(binding: HotkeyBinding, env: [String: String]) {
+        let mode = env["PUSHTEXT_HOTKEY_PROBE_SYNTHETIC"]
+        guard mode == "1" || mode == "other" else {
+            print("HOTKEY_PROBE hold and release \(binding.name) to produce edges")
+            fflush(stdout)
+            return
+        }
+        let driven = mode == "other" ? HotkeyBinding.leftOption : binding
+        print("HOTKEY_PROBE synthetic=posting driving=\(driven.name) "
+            + "expect=\(driven == binding ? "1/1" : "0/0")")
+        fflush(stdout)
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.4) {
+            postSyntheticModifier(binding: driven, down: true)
+            Thread.sleep(forTimeInterval: 0.08)
+            postSyntheticModifier(binding: driven, down: false)
+        }
     }
 }
 

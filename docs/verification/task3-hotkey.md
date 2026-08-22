@@ -80,15 +80,98 @@ HOTKEY_PROBE finished pressed=0 released=0 reEnables=0
 A union-mask implementation returns 1/1 here. Side-discrimination therefore holds through the live
 tap, not only in unit tests.
 
+## Fault injection — forcing the branches that never run
+
+### Tap re-arm (#21)
+
+`CGEventTapHotkeyMonitor.stallInCallback` sleeps inside the tap callback so the OS disables the tap
+and delivers `kCGEventTapDisabledByTimeout`, which is otherwise unreachable — the OS decides when it
+fires, and it never fires in normal use.
+
+First attempt used a `.listenOnly` tap, chosen so a slow callback could not delay real input:
+
+```
+HOTKEY_PROBE stall=2.0 tapOptions=listenOnly
+HOTKEY_PROBE finished pressed=1 released=1 reEnables=0
+```
+
+**Hypothesis disproved.** A listen-only tap is never disabled — nothing waits on it, so there is no
+timeout to breach. Reaching the branch costs a real, brief, system-wide input stall; there is no safe
+shortcut (TRAP-8). Retried on a `.defaultTap`:
+
+```
+HOTKEY_PROBE stall=1.5 tapOptions=defaultTap
+HOTKEY_PROBE edge=pressed
+HOTKEY_PROBE finished pressed=1 released=0 reEnables=1
+```
+
+The branch executed — **and exposed a live bug**. `released=0`: the key release was lost.
+`ModifierGate` stayed latched down, meaning the microphone open with nothing but a watchdog to close
+it.
+
+**That first write-up was wrong, and re-sampling is what caught it.** The `reEnables=1` above came
+from a single run. Re-run n=3 at stall 1.5s and n=3 at 3.0s: **0 of 6 reproduced it**, and all six
+still showed `released=0`. A later batch gave 2 of 5. So the OS disable is intermittent; the dropped
+release is not.
+
+Tracing the resynchronise path showed why no state-based recovery can work:
+
+```
+HOTKEY_TRACE watchdog start interval=0.25
+HOTKEY_TRACE resync live=0x20080040 mask=0x40 gateDown=true heldNow=true
+HOTKEY_TRACE resync live=0x20080040 mask=0x40 gateDown=true heldNow=true
+   ... every 250ms, unchanged ...
+HOTKEY_PROBE finished pressed=1 released=0 reEnables=0
+```
+
+`CGEventSource.flagsState` keeps reporting the right-Option bit SET. A `.defaultTap` sits ahead of
+the system's own event processing, so swallowing the key-up stops **macOS itself** from updating
+modifier state. The event stream and the live flag state are both wrong, in agreement — there is
+nothing to resynchronise against.
+
+A 250 ms `flagsState` poll was built to fix this, measured across 5 runs, shown to change nothing
+(recovery correlated with `reEnables=1` exactly, never with the poll), and **removed**. Unproven code
+is worse than none.
+
+What landed instead:
+
+- `resynchronise()` after a tap re-arm — correct for the intermittent disable case, kept, but not the
+  primary protection.
+- **`AppModel.maximumCaptureDuration`** — a time-based force-close driving
+  `DictationMachine.watchdogExpired`. Elapsed time is the one signal a dropped event cannot corrupt.
+  Four tests; both planted defects (never-arms, never-fires) caught.
+
+The fault injection reaching the disable branch only ~2 in 11 runs is tracked as #22.
+
+### Secure Input (#20)
+
+docs/research/04 sec 1 claims `flagsChanged` keeps flowing while Secure Input is active, unlike
+`keyDown`/`keyUp` — the strongest argument for binding a bare modifier instead of a chord. Rather
+than wait for a password field, the probe enables Secure Input itself.
+
+The control is the load-bearing part: if `IsSecureEventInputEnabled()` were false the run would prove
+nothing, so it is asserted and printed rather than assumed.
+
+```
+HOTKEY_PROBE secure=before enabled=false
+HOTKEY_PROBE secure=enabled status=0 confirmed=true
+HOTKEY_PROBE edge=pressed
+HOTKEY_PROBE edge=released
+HOTKEY_PROBE secure=result pressed=1 released=1
+HOTKEY_PROBE secure=after enabled=false
+```
+
+Edges arrive while Secure Input is confirmed active. The claim is reproduced on this machine.
+Secure Input is torn down in a `defer`, and `ioreg` afterwards shows no process holding it.
+
 ## What this did NOT verify
 
-- **No physical keypress was ever observed.** Every edge above came from a synthesised `CGEvent`
-  carrying the device bit because this code set it. That real hardware also sets that bit is read
-  from `IOLLEvent.h`, not observed — tracked as #19.
-- **Secure Input was not tested.** The claim that `flagsChanged` survives it while `keyDown` does not
-  comes from docs/research/04 sec 1 and has not been reproduced here — tracked as #20.
-- **Tap re-arming was not exercised.** `reEnableCount` stayed 0; neither
-  `tapDisabledByTimeout` nor `tapDisabledByUserInput` occurred in a 2-second run, so that branch has
-  never executed — tracked as #21.
+- **No physical keypress was ever observed** — #19, and it is the only one left. Every edge above
+  came from a synthesised `CGEvent` carrying the device bit because this code set it. Posted events
+  enter at `.cghidEventTap`, the same level as hardware, so it is a close proxy but not identical.
+  That real hardware sets the same bit is read from `IOLLEvent.h`.
+- **`tapDisabledByUserInput` specifically was never seen.** The re-arm branch is proven via
+  `tapDisabledByTimeout`; both disable reasons take the identical code path, so this is covered by
+  construction rather than by observation.
 - The probe ran Accessibility-trusted by inheriting the terminal's grant. A first-run,
   untrusted launch has not been walked (that is #6).
