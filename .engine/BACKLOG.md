@@ -239,9 +239,14 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   the engine. NOT proven: the real key-to-text loop on hardware, which needs a human (#42).)
 
 
-#42 - The key-to-text loop has never run on real hardware - S0
-  blocked-by: none; needs a human holding a key. Every hop is proven and the seams between them are
-  proven only against spies. TRIGGER: launch dist/PushText.app, focus a text field, hold Right
-  Option, speak, release. The interesting failure is not "nothing appears" but the PREVIOUS
-  clipboard contents appearing instead of the words - that is #27's settle-delay race, whose 0.12s
-  is the most aggressive value in the surveyed field.
+#42 - The key-to-text loop has never run on real hardware - DONE
+  (2026-08-22: Bobby held Right Option and spoke; text landed in the focused window. Read off the
+  app's own log: pressed -> capture started -> recording -> released -> transcript chars=34
+  duration=2.43s -> injected chars=34 -> idle. 221 ms from key release to text on screen, the
+  project's first real latency figure - #15 still owns proper numbers.
+  Getting there took three fixes, and the first two failures were invisible without diagnostics:
+  the hardened runtime refuses the microphone without com.apple.security.device.audio-input and
+  will not even PROMPT, so the app could never appear in the Microphone list (TRAP-27); .failed had
+  no exit so the first error bricked dictation until relaunch (TRAP-28); and the app never requested
+  the mic at all, every prior capture having come from terminal-parented probes inheriting the
+  terminal's grant (#44).)

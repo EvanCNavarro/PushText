@@ -155,20 +155,32 @@ case "$DISABLE_LIBRARY_VALIDATION" in
 		;;
 esac
 
-ENTITLEMENTS=""
+# Entitlements are ALWAYS written now, because we always sign with --options runtime and the
+# hardened runtime REFUSES the microphone without an explicit entitlement. Measured, from tccd:
+#
+#   Prompting policy for hardened runtime; service: kTCCServiceMicrophone requires entitlement
+#   com.apple.security.device.audio-input but it is missing
+#
+# The consequence is worse than a denial: TCC will not even PROMPT, so the app can never appear in
+# System Settings > Privacy & Security > Microphone, and there is no manual way to add it there the
+# way Accessibility allows. The app is then permanently unable to record with no user-visible cause.
+ENTITLEMENTS="$APP/Contents/Resources/PushText.entitlements"
+{
+	echo '<?xml version="1.0" encoding="UTF-8"?>'
+	echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+	echo '<plist version="1.0">'
+	echo '<dict>'
+	echo '	<key>com.apple.security.device.audio-input</key>'
+	echo '	<true/>'
+	if [ "$DISABLE_LIBRARY_VALIDATION" = "1" ]; then
+		echo '	<key>com.apple.security.cs.disable-library-validation</key>'
+		echo '	<true/>'
+	fi
+	echo '</dict>'
+	echo '</plist>'
+} > "$ENTITLEMENTS"
+plutil -lint "$ENTITLEMENTS" >&2
 if [ "$DISABLE_LIBRARY_VALIDATION" = "1" ]; then
-	ENTITLEMENTS="$APP/Contents/Resources/PushText.entitlements"
-	cat > "$ENTITLEMENTS" <<ENTITLEMENTS_EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>com.apple.security.cs.disable-library-validation</key>
-	<true/>
-</dict>
-</plist>
-ENTITLEMENTS_EOF
-	plutil -lint "$ENTITLEMENTS" >&2
 	echo "build-app.sh: disabling library validation for local embedded Sparkle load" >&2
 else
 	echo "build-app.sh: keeping hardened-runtime library validation enabled" >&2

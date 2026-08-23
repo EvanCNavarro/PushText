@@ -268,3 +268,33 @@ research that found them is not read on every cycle, and the trap is.
   scheduler. Its buffering is `.unbounded` for the same class of reason: planting
   `.bufferingNewest(10)` silently dropped 65 of 200 buffers, and dropped buffers in dictation are
   dropped words - a short transcript reads as bad recognition, not as a broken pipeline.
+
+### TRAP-27: the hardened runtime silently refuses the microphone without an explicit entitlement
+- what happened: the packaged app could never record. `AVCaptureDevice.requestAccess` returned false
+  in 5 ms without showing a prompt, status went notDetermined -> denied, and PushText never appeared
+  in System Settings > Privacy & Security > Microphone. Two hypotheses were wrong before the log
+  settled it - TCC responsibility inherited from the launching terminal, and the request being made
+  too early in `App.init()`. `tccd` states the real cause verbatim:
+  "Prompting policy for hardened runtime; service: kTCCServiceMicrophone requires entitlement
+  com.apple.security.device.audio-input but it is missing". `build-app.sh` signs with
+  `--options runtime` always, but only wrote an entitlements file when library validation was being
+  disabled, and that file never carried the audio entitlement.
+- warning: this failure mode is worse than a denial. TCC does not merely refuse access, it refuses to
+  PROMPT - and Microphone, unlike Accessibility, cannot be granted manually in System Settings, so
+  the app can never appear in that list and the user has nothing to click. The app is permanently
+  mute with no visible cause. Any hardened-runtime capability needs its entitlement present at
+  signing time; check the tccd log rather than guessing, because the app-side API just returns
+  false. Entitlements are now written unconditionally.
+
+### TRAP-28: `.failed` with no way out turns one bad utterance into a dead app
+- what happened: the first real key press failed with `permissionDenied`, and every subsequent press
+  logged `hotkey edge=pressed` with NO state change, because `DictationMachine` had no transition
+  out of `.failed`. Bobby reported it as "I don't think it works" - which was right, but the cause
+  was that it had stopped working, not that it never started. Diagnosis was only possible because
+  the app had just gained os_log diagnostics; before that, a working hotkey and a dead one produced
+  identical evidence (nothing).
+- warning: a terminal state needs an exit or it is a trap for the user, not just for the code. A key
+  that silently stops working is worse than one that fails every time, because the user cannot tell
+  which state they are in. `(.failed, .hotkeyPressed) -> .arming` now retries. And: a menu-bar app
+  with no console, no window and no HUD (#7) is undiagnosable from the outside - diagnostics are not
+  a nicety there, they are the only observability that exists.
