@@ -95,7 +95,11 @@ struct PushTextApp: App {
     /// already speaking. Requires `com.apple.security.device.audio-input` in the entitlements or
     /// the hardened runtime refuses to even PROMPT, which is unrecoverable because Microphone
     /// cannot be granted manually in System Settings the way Accessibility can (TRAP-27).
-    private static func requestMicrophone(for model: AppModel) {
+    /// `nonisolated` because it is called from the launch delegate's closure, which is not
+    /// main-actor isolated. It hops to the main actor internally, so the isolation belongs on the
+    /// body rather than on the entry point. Swift 6.3.3 accepted the isolated form; CI's macos-15
+    /// toolchain rejected it, which is precisely why that job exists.
+    private nonisolated static func requestMicrophone(for model: AppModel) {
         Task { @MainActor in
             guard !AVAudioEngineCapture.isMicrophoneAuthorized else {
                 dictationLog.info("microphone already authorized")
