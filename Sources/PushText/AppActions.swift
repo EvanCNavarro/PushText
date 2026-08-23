@@ -64,10 +64,23 @@ final class AppActions {
         JSONLHistoryStore(url: url).clear()
     }
 
+    /// Opens the dictionary file for editing, creating a self-documenting one if it is missing.
+    ///
+    /// The file IS the editor. A 320pt menu cannot hold a table, and every Mac already has a text
+    /// editor that opens `.jsonl` - building a worse one inside the panel would be the wrong trade.
+    func editDictionary() {
+        guard let url = JSONLDictionaryStore.defaultURL() else { return }
+        JSONLDictionaryStore(url: url).createWithExampleIfMissing()
+        NSWorkspace.shared.open(url)
+    }
+
     func menuActions() -> [MenuAction] {
         [
             MenuAction(title: "Check for Updates", systemImage: "arrow.triangle.2.circlepath") { [weak self] in
                 self?.checkForUpdates()
+            },
+            MenuAction(title: "Edit Dictionary", systemImage: "character.book.closed") { [weak self] in
+                self?.editDictionary()
             },
             MenuAction(title: "Show History File", systemImage: "clock.arrow.circlepath") { [weak self] in
                 self?.revealHistory()

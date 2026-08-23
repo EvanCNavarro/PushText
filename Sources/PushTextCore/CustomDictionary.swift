@@ -1,7 +1,7 @@
 import Foundation
 
 /// One rewrite: what the recognizer tends to hear, and what should actually be typed.
-public struct DictionaryEntry: Equatable, Sendable {
+public struct DictionaryEntry: Equatable, Sendable, Codable {
     /// The spoken form, as prose. Matched case-insensitively and across separator variants.
     public let spoken: String
     /// The exact text to type. Written verbatim, never interpreted.
