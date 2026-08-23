@@ -266,4 +266,81 @@ struct CaptureHealthTests {
         }
     }
 
+    /// A stub whose rewrite is VISIBLE in the output, so "cleanup ran" and "cleanup was skipped"
+    /// cannot produce the same text. A stub returning its input would pass whether or not the
+    /// provider is wired, which is the whole defect #94 describes.
+    private actor StubCleanup: CleanupProvider {
+        private let transform: @Sendable (String) -> String
+        init(_ transform: @escaping @Sendable (String) -> String) { self.transform = transform }
+        var isAvailable: Bool { true }
+        func clean(_ transcript: Transcript) async throws -> String { transform(transcript.text) }
+    }
+
+    @Test("Cleanup runs and its result is what gets injected")
+    func cleanupResultReachesTheInjector() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["hello there"],
+                                                                  latency: .milliseconds(1)))
+        let capture = LossyCapture(health: CaptureHealth())
+        let injector = SpyInjector()
+        let model = AppModel(engine: engine, capture: capture, injector: injector,
+                             cleanup: StubCleanup { $0 + " [cleaned]" })
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        capture.deliver()
+        model.handle(.released, at: 0.2)
+
+        _ = await settle { !injector.injected.isEmpty }
+        #expect(injector.injected == ["hello there [cleaned]"])
+    }
+
+    /// ORDERING. The dictionary is the user's explicit configuration; the model is a guess. If
+    /// cleanup ran last it could undo a rewrite the user asked for by name, and nothing would say
+    /// so. This stub undoes it deliberately.
+    @Test("The user's dictionary wins over cleanup")
+    func dictionaryIsAppliedAfterCleanup() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["open push text now"],
+                                                                  latency: .milliseconds(1)))
+        let capture = LossyCapture(health: CaptureHealth())
+        let injector = SpyInjector()
+        let model = AppModel(engine: engine, capture: capture, injector: injector,
+                             dictionary: StubDictionary(entries: [
+                                DictionaryEntry(spoken: "push text", written: "PushText")]),
+                             cleanup: StubCleanup { $0.replacingOccurrences(of: "PushText",
+                                                                           with: "push text") })
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        capture.deliver()
+        model.handle(.released, at: 0.2)
+
+        _ = await settle { !injector.injected.isEmpty }
+        #expect(injector.injected == ["open PushText now"],
+                "cleanup undid the dictionary - it must run BEFORE the user's rules, not after")
+    }
+
+    /// The invariant `historyRecordsWhatWasInjected` states but cannot see: it compares history to
+    /// the dictionary result, which stays equal to the injected text even when cleanup is skipped.
+    /// Comparing history to what the INJECTOR actually received is what makes it load-bearing.
+    @Test("History matches the injected text when cleanup rewrites it")
+    func historyMatchesInjectedTextUnderCleanup() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["hello there"],
+                                                                  latency: .milliseconds(1)))
+        let capture = LossyCapture(health: CaptureHealth())
+        let history = SpyHistory()
+        let injector = SpyInjector()
+        let model = AppModel(engine: engine, capture: capture, injector: injector,
+                             history: history,
+                             cleanup: StubCleanup { $0 + " [cleaned]" })
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        capture.deliver()
+        model.handle(.released, at: 0.2)
+
+        _ = await settle { !injector.injected.isEmpty && !history.load().isEmpty }
+        #expect(history.load().map(\.text) == injector.injected,
+                "history must record what the user actually got")
+    }
+
 }
