@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import MacFaceKit
 import PushTextCore
+import PushTextKit
 
 /// The menu-bar popover, built from MacFaceKit rather than raw SwiftUI (#47).
 ///
@@ -73,23 +74,7 @@ struct MenuContent: View {
             }
 
             if let transcript = model.lastTranscript, !transcript.isEmpty {
-                SectionCard("LAST TRANSCRIPT") {
-                    // Beside the transcript, not in NEEDS ATTENTION: this describes THIS utterance
-                    // and stops being true at the next one, whereas that section is for conditions
-                    // that persist until the user fixes them (#71).
-                    if let warning = model.lastCaptureWarning {
-                        Text(warning)
-                            .font(Tokens.caption)
-                            .foregroundStyle(Tokens.warning)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Text(transcript)
-                        .font(Tokens.body)
-                        .foregroundStyle(Tokens.text)
-                        .lineLimit(4)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                }
+                LastTranscriptCard(transcript: transcript, warning: model.lastCaptureWarning)
             }
         }
         .frame(width: 320)
@@ -144,5 +129,71 @@ private struct LabeledLine: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The last transcript, with a control that copies it and says so (#106).
+///
+/// Its own view because it owns STATE - the confirmation has to revert on its own - and `MenuContent`
+/// is otherwise stateless. Putting an `@State` there would make the whole menu a stateful view for
+/// the sake of one icon.
+private struct LastTranscriptCard: View {
+    let transcript: String
+    let warning: String?
+
+    @State private var copied = false
+
+    var body: some View {
+        SectionCard("LAST TRANSCRIPT") {
+            // Beside the transcript, not in NEEDS ATTENTION: this describes THIS utterance and stops
+            // being true at the next one, whereas that section is for conditions that persist until
+            // the user fixes them (#71).
+            if let warning {
+                Text(warning)
+                    .font(Tokens.caption)
+                    .foregroundStyle(Tokens.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // Top-aligned: the transcript wraps to four lines and the control belongs beside its
+            // FIRST line, not floating against the vertical centre of a paragraph.
+            HStack(alignment: .top, spacing: Tokens.space) {
+                Text(transcript)
+                    .font(Tokens.body)
+                    .foregroundStyle(Tokens.text)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                copyControl
+            }
+        }
+    }
+
+    /// `IconButton`, the same control the `...` overflow uses - `controlButton` size, `row` fill,
+    /// `line` border, and the hover treatment already defined by `IconButtonStyle`. Not
+    /// `GhostIconButton`: that is the borderless variant, and using it here made the copy control a
+    /// different size and hover behaviour from the only other icon control in the menu.
+    ///
+    /// `IconButton`'s own docstring names this exact trap - it owns its hover state "so callers
+    /// never re-wire it (the bug where the `...` was styled by hand)".
+    private var copyControl: some View {
+        IconButton(systemImage: copied ? "checkmark" : "doc.on.doc",
+                   size: 11,
+                   active: copied,
+                   accessibilityHint: copied ? "Copied" : "Copy this transcript",
+                   action: copy)
+            .help(copied ? "Copied" : "Copy this transcript")
+            .accessibilityLabel(Text(copied ? "Copied" : "Copy this transcript"))
+    }
+
+    /// PLAIN text, not the concealed form injection uses: pressing copy IS the user asking for this
+    /// in their clipboard history, and `stage`'s markers tell clipboard managers to discard it.
+    private func copy() {
+        PasteboardTextInjector.copy(transcript, on: .general)
+        copied = true
+        Task {
+            try? await Task.sleep(for: .milliseconds(1600))
+            copied = false
+        }
     }
 }

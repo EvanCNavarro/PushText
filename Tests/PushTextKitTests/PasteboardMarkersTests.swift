@@ -84,3 +84,45 @@ struct PasteboardMarkersTests {
         #expect(after == pasteboard.changeCount)
     }
 }
+
+extension PasteboardMarkersTests {
+
+    /// An explicit COPY is the opposite intent to an injection (#106).
+    ///
+    /// `stage` marks dictated text transient/concealed so a clipboard manager will not archive it -
+    /// correct, because the user never asked for that text to enter their clipboard history. A user
+    /// who presses a copy button is asking for exactly that, and reusing `stage` would hand them
+    /// text their own clipboard manager is instructed to discard: a button that appears to work and
+    /// silently does not.
+    @Test("Copying for the user writes plain, UNMARKED text")
+    func copyIsNotConcealed() {
+        let pasteboard = makePasteboard("copy")
+        PasteboardTextInjector.copy("keep this one", on: pasteboard)
+
+        #expect(pasteboard.string(forType: .string) == "keep this one")
+
+        let types = pasteboard.pasteboardItems?.first?.types.map(\.rawValue) ?? []
+        for marker in PasteboardTextInjector.concealMarkers.map(\.rawValue) {
+            #expect(!types.contains(marker),
+                    "copy must not conceal: found \(marker) in \(types)")
+        }
+    }
+
+    /// The discriminator. Both write the same string, so asserting only on the text would pass with
+    /// `copy` implemented as a call to `stage` - which is the mistake worth preventing.
+    @Test("Copy and inject differ in exactly the markers")
+    func copyAndStageDifferOnlyInMarkers() {
+        let copied = makePasteboard("diff-copy")
+        let staged = makePasteboard("diff-stage")
+        PasteboardTextInjector.copy("same text", on: copied)
+        PasteboardTextInjector.stage("same text", on: staged)
+
+        #expect(copied.string(forType: .string) == staged.string(forType: .string))
+
+        let copiedTypes = Set(copied.pasteboardItems?.first?.types.map(\.rawValue) ?? [])
+        let stagedTypes = Set(staged.pasteboardItems?.first?.types.map(\.rawValue) ?? [])
+        #expect(stagedTypes.subtracting(copiedTypes)
+                    == Set(PasteboardTextInjector.concealMarkers.map(\.rawValue)),
+                "the only difference between them must be the conceal markers")
+    }
+}

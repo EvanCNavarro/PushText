@@ -108,6 +108,25 @@ public final class PasteboardTextInjector: TextInjector {
         return pasteboard.changeCount
     }
 
+    /// Puts `text` on `pasteboard` as PLAIN, unmarked text, for a user who explicitly asked to copy
+    /// it (#106).
+    ///
+    /// **Deliberately not `stage`.** Those two write the same string and differ in exactly the
+    /// conceal markers, which is the whole point: `stage` tells clipboard managers to discard
+    /// dictated text the user never chose to put there, and a COPY is that choice being made. Reusing
+    /// `stage` would produce a button that appears to work while the user's own clipboard manager is
+    /// instructed to throw the result away.
+    ///
+    /// Kept beside `stage` rather than in another file so the contrast is visible at the point where
+    /// someone would otherwise call the wrong one.
+    /// `public` where `stage` is internal: this is the one the APP layer calls, from the menu.
+    @discardableResult
+    public static func copy(_ text: String, on pasteboard: NSPasteboard) -> Int {
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        return pasteboard.changeCount
+    }
+
     // MARK: - Keyboard layout
 
     /// The keycode that produces "v" **with Command held**, on the CURRENT layout.
