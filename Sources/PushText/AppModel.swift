@@ -77,9 +77,12 @@ private let engine: any TranscriptionEngine
     /// Where completed dictations are kept (#10). Optional so the state-machine tests can run with
     /// no filesystem at all.
     /// The user's rewrite rules (#82). Loaded per utterance, never cached - the file is hand-edited.
-    private let dictionary: (any DictionaryStore)?
-
-    private let history: (any HistoryStore)?
+    /// Cleanup, the user's dictionary and the history record, in the one order that is correct -
+    /// see TranscriptFinisher.
+    private let finisher: TranscriptFinisher
+    /// Held between `.transcribing` and `.cleaning` because the history record needs the DURATION,
+    /// and the machine's event carries only text.
+    private var pendingTranscript: Transcript?
 
     /// What the last utterance lost, phrased for a human, or nil when it lost nothing (#71).
     private(set) var lastCaptureWarning: String?
@@ -108,13 +111,14 @@ private let engine: any TranscriptionEngine
          indicator: (any DictationIndicator)? = nil,
          history: (any HistoryStore)? = nil,
          dictionary: (any DictionaryStore)? = nil,
+         cleanup: (any CleanupProvider)? = nil,
          machine: DictationMachine = DictationMachine()) {
         self.engine = engine
         self.capture = capture
         self.injector = injector
         self.hud = HUDDriver(indicator: indicator)
-        self.history = history
-        self.dictionary = dictionary
+        self.finisher = TranscriptFinisher(cleanup: cleanup, dictionary: dictionary,
+                                           history: history)
         self.feed = AudioFeed(engine: engine)
         self.machine = machine
     }
@@ -188,15 +192,8 @@ private let engine: any TranscriptionEngine
             Task { await self.closeUtterance() }
 
         case .cleaning:
-            // No CleanupProvider is WIRED yet (#94). One exists - `FoundationModelsCleanup`,
-            // implemented and measured - but nothing constructs it here, so the machine's required
-            // transition passes the transcript through unchanged. The comment this replaces said
-            // "no CleanupProvider yet (#14)", which was wrong twice over: the type exists, and #14
-            // is closed.
-            if case .transcriptFinalized(let text) = event {
-                pendingText = text
-                lastTranscript = text
-                apply(.cleanupFinished(text))
+            if case .transcriptFinalized = event {
+                Task { await self.finishText() }
             }
 
         case .injecting:
@@ -288,26 +285,23 @@ private let engine: any TranscriptionEngine
         do {
             let transcript = try await feed.finish(token)
             dictationLog.info("transcript chars=\(transcript.text.count) duration=\(transcript.duration)")
-            // The user's own vocabulary, applied before anything else sees the text (#82). #13
-            // measured that the engine cannot be biased at all, so this post-pass is the only
-            // mechanism there is for proper nouns.
-            let text = dictionary.map { CustomDictionary(entries: $0.load()).apply(to: transcript.text) }
-                ?? transcript.text
-
-            // Recorded here rather than after injection: the dictation happened whether or not the
-            // paste lands, and losing the transcript to an injection failure is the one case where
-            // a user most wants to go back and find it. Stores the REWRITTEN text, so the history
-            // agrees with the document the user pasted into.
-            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                history?.append(HistoryRecord(text: text,
-                                              recordedAt: Date(),
-                                              durationSeconds: transcript.duration))
-            }
-            apply(.transcriptFinalized(text))
+            // RAW. Cleanup, the user's dictionary and the history record all happen in `.cleaning`,
+            // in that order - see `finishText`.
+            pendingTranscript = transcript
+            apply(.transcriptFinalized(transcript.text))
         } catch {
             dictationLog.error("finishUtterance FAILED: \(String(describing: error), privacy: .public)")
             apply(.failure(.transcriptionFailed))
         }
+    }
+
+    private func finishText() async {
+        let transcript = pendingTranscript ?? Transcript(text: "", duration: 0)
+        pendingTranscript = nil
+        let text = await finisher.finish(transcript)
+        pendingText = text
+        lastTranscript = text
+        apply(.cleanupFinished(text))
     }
 
     private func injectText(_ text: String) async {

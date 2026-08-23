@@ -58,6 +58,10 @@ struct PushTextApp: App {
         // The user's rewrite rules (#82). #13 measured that the engine cannot be biased, so this
         // post-pass is the only mechanism there is for proper nouns like "PushText".
         let dictionary = JSONLDictionaryStore.defaultURL().map { JSONLDictionaryStore(url: $0) }
+        // On-device polish (#94). Implemented and measured since #14 but never constructed here,
+        // so every release up to and including 0.1.0 shipped raw transcripts. Safe to skip by
+        // contract: `clean` returns the raw text on every failure path, so an unavailable or
+        // rate-limited model costs a check, not a dictation.
         let model = AppModel(engine: engine,
                              capture: AVAudioEngineCapture(),
                              injector: PasteboardTextInjector(),
