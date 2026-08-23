@@ -31,8 +31,24 @@ public actor FoundationModelsCleanup: CleanupProvider {
         the cleaned text only.
         """
 
-    private let respond: Responder
+    private let injectedRespond: Responder?
     private let model: SystemLanguageModel?
+    private let instructions: String
+
+    /// A session built and warmed at key-down, spent by the next `clean`.
+    ///
+    /// **One session per UTTERANCE, deliberately not one for the process.** The usual advice is to
+    /// reuse a session because construction is not free - but `LanguageModelSession` carries its
+    /// transcript, so a long-lived one grows toward the context window and lets a previous
+    /// dictation influence the next cleanup. Cleanup is a pure function of one utterance; sharing
+    /// state across them would be a correctness bug bought with latency. The probe shows a fresh
+    /// session answering in 259 ms once the model is warm, so warmth is the thing worth keeping,
+    /// not the session.
+    private var warmSession: LanguageModelSession?
+
+    /// Only reachable if a production instance somehow has no model; `clean` turns every throw into
+    /// "use the raw transcript", so this degrades to no polish rather than to an error.
+    private struct NoModel: Error {}
 
     /// The most recent drift rejection, for shadow-mode calibration (#8). The thresholds are read
     /// off a 1-star repo and need tuning against real dictation, which is impossible if the reason
@@ -46,21 +62,41 @@ public actor FoundationModelsCleanup: CleanupProvider {
     /// ordinary speech is worse than no cleanup, because it fails on exactly the content the user
     /// most wanted tidied.
     public init(instructions: String = FoundationModelsCleanup.defaultInstructions) {
-        let model = SystemLanguageModel(useCase: .general,
-                                        guardrails: .permissiveContentTransformations)
-        self.model = model
-        self.respond = { prompt in
-            let session = LanguageModelSession(model: model, instructions: instructions)
-            // `respond`, not `streamResponse`: nothing consumes partial cleanup - the text is
-            // injected in one paste - so streaming would add complexity for no user-visible gain.
-            return try await session.respond(to: prompt).content
-        }
+        self.model = SystemLanguageModel(useCase: .general,
+                                         guardrails: .permissiveContentTransformations)
+        self.instructions = instructions
+        self.injectedRespond = nil
+    }
+
+    /// Builds and warms the session the next `clean` will use.
+    ///
+    /// Called at key-down, so the warm-up overlaps the user's speech instead of their wait. Cheap
+    /// to call when already warmed, and safe to never call at all - `respond` builds a session on
+    /// demand if this did not run.
+    public func prewarm() async {
+        guard let model, warmSession == nil else { return }
+        let session = LanguageModelSession(model: model, instructions: instructions)
+        session.prewarm()
+        warmSession = session
+    }
+
+    private func respond(_ prompt: String) async throws -> String {
+        if let injectedRespond { return try await injectedRespond(prompt) }
+        guard let model else { throw NoModel() }
+        // Spend the warmed session, then drop it, so the next utterance starts from a clean
+        // transcript rather than inheriting this one.
+        let session = warmSession ?? LanguageModelSession(model: model, instructions: instructions)
+        warmSession = nil
+        // `respond`, not `streamResponse`: nothing consumes partial cleanup - the text is injected
+        // in one paste - so streaming would add complexity for no user-visible gain.
+        return try await session.respond(to: prompt).content
     }
 
     /// Test seam.
     public init(respond: @escaping Responder) {
         self.model = nil
-        self.respond = respond
+        self.instructions = ""
+        self.injectedRespond = respond
     }
 
     public var isAvailable: Bool {

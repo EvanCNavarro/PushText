@@ -96,6 +96,17 @@ public protocol CleanupProvider: Actor {
     /// backgrounded processes on battery — which describes this app permanently, since a menu-bar
     /// utility is *always* backgrounded. See PLAN.md §2.8, §2.9.
     func clean(_ transcript: Transcript) async throws -> String
+
+    /// Optional warm-up, called when the user starts speaking rather than when the text arrives.
+    ///
+    /// Default no-op so an implementation that needs nothing warmed ignores it. Push-to-talk is an
+    /// unusually good fit for this: key-down precedes the prompt by the whole length of the
+    /// utterance, which measured 4-8 s here, and the warm-up guidance asks for about one.
+    func prewarm() async
+}
+
+public extension CleanupProvider {
+    func prewarm() async {}
 }
 
 // MARK: - Input

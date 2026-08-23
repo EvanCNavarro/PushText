@@ -58,15 +58,17 @@ struct PushTextApp: App {
         // The user's rewrite rules (#82). #13 measured that the engine cannot be biased, so this
         // post-pass is the only mechanism there is for proper nouns like "PushText".
         let dictionary = JSONLDictionaryStore.defaultURL().map { JSONLDictionaryStore(url: $0) }
-        // NO cleanup provider is constructed here, deliberately (#94). `AppModel` takes one and
-        // `TranscriptFinisher` is tested with one; passing `FoundationModelsCleanup()` below is the
-        // single line that would switch it on.
+        // STILL no cleanup provider here (#94), now for a sharper reason than before.
         //
-        // It is off because it was measured, not because it is unfinished: release-to-text goes
-        // from a mean of 206 ms to 4182 ms across four dictations per arm, and a hotkey press
-        // arriving during the cleaning stage is swallowed outright, losing the utterance. See
-        // docs/verification/task94-cleanup-latency.md - section 3 is the thing to fix first, since
-        // the model itself answers in ~260 ms once warm.
+        // Prewarming at key-down works - when it lands, cleanup costs ~624 ms instead of ~4182 ms.
+        // It lands 43% of the time (n=21). The other 57% pay 3957 ms, which is the unwarmed cost,
+        // so prewarm either completes or buys nothing. Prewarming is documented as not guaranteeing
+        // asset loading while an app is BACKGROUNDED, and a menu-bar LSUIElement app is backgrounded
+        // permanently - so that caveat describes this app's normal state, not an edge case.
+        //
+        // Passing `FoundationModelsCleanup()` below is still the one line that switches it on, and
+        // the prewarm plumbing is in place for whatever fixes the 57%. See
+        // docs/verification/task94-cleanup-latency.md.
         let model = AppModel(engine: engine,
                              capture: AVAudioEngineCapture(),
                              injector: PasteboardTextInjector(),

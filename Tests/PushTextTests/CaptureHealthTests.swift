@@ -271,9 +271,47 @@ struct CaptureHealthTests {
     /// provider is wired, which is the whole defect #94 describes.
     private actor StubCleanup: CleanupProvider {
         private let transform: @Sendable (String) -> String
+        /// A lock-guarded box rather than actor state, so `settle`'s synchronous closure can read
+        /// it without hopping onto this actor.
+        let calls = Calls()
         init(_ transform: @escaping @Sendable (String) -> String) { self.transform = transform }
         var isAvailable: Bool { true }
-        func clean(_ transcript: Transcript) async throws -> String { transform(transcript.text) }
+        func prewarm() async { calls.recordPrewarm() }
+        func clean(_ transcript: Transcript) async throws -> String {
+            calls.recordClean()
+            return transform(transcript.text)
+        }
+    }
+
+    final class Calls: @unchecked Sendable {
+        private let lock = NSLock()
+        private var prewarms = 0
+        private var cleans = 0
+        func recordPrewarm() { lock.lock(); prewarms += 1; lock.unlock() }
+        func recordClean() { lock.lock(); cleans += 1; lock.unlock() }
+        var prewarmCount: Int { lock.lock(); defer { lock.unlock() }; return prewarms }
+        var cleanCount: Int { lock.lock(); defer { lock.unlock() }; return cleans }
+    }
+
+    /// Prewarm has to happen at KEY-DOWN. Warming when the transcript arrives would be warming at
+    /// exactly the moment the user is already waiting, which is the cost it exists to remove - and
+    /// a test that only checked "prewarm was called eventually" would pass on that broken version.
+    @Test("Cleanup is prewarmed when speech starts, before any transcript exists")
+    func cleanupIsPrewarmedAtKeyDown() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["hello there"],
+                                                                  latency: .milliseconds(1)))
+        let capture = LossyCapture(health: CaptureHealth())
+        let cleanup = StubCleanup { $0 }
+        let model = AppModel(engine: engine, capture: capture, injector: SpyInjector(),
+                             cleanup: cleanup)
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+
+        #expect(await settle { cleanup.calls.prewarmCount > 0 },
+                "no prewarm by the time recording started")
+        #expect(cleanup.calls.cleanCount == 0,
+                "prewarmed only - nothing has been transcribed yet")
     }
 
     @Test("Cleanup runs and its result is what gets injected")

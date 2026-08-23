@@ -179,6 +179,9 @@ private let engine: any TranscriptionEngine
 
         switch state {
         case .arming:
+            // Key-down. Warming here overlaps the model's start-up with the user's speech, which
+            // is the entire latency argument: 4-8 s of talking against a warm-up that wants ~1 s.
+            Task { await self.finisher.prewarm() }
             armingEpoch += 1
             let epoch = armingEpoch
             let previous = openTask

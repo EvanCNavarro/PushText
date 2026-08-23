@@ -15,6 +15,14 @@ struct TranscriptFinisher {
     let dictionary: (any DictionaryStore)?
     let history: (any HistoryStore)?
 
+    /// Warms whatever the cleanup stage will need, at key-down rather than at transcript time.
+    ///
+    /// Separate from `finish` because the whole point is that it happens EARLIER: warming inside
+    /// `finish` would warm at exactly the moment the user has stopped speaking and started waiting.
+    func prewarm() async {
+        await cleanup?.prewarm()
+    }
+
     /// The order is load-bearing, and a naive wiring breaks both invariants it protects:
     ///
     /// 1. **The user's dictionary beats the model.** Cleanup is a guess; the dictionary is
