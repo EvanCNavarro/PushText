@@ -200,10 +200,29 @@ jobs:
             dist/appcast.xml \
             "${{ steps.package.outputs.zip }}"
 
+      # Attestation is UNAVAILABLE on user-owned private repositories: the API answers
+      # "Feature not available for user-owned private repositories" and fails the step. It runs
+      # AFTER notarization, so an unconditional call burns a real Apple notary submission and then
+      # kills the release before it is created - which is exactly what v0.1.0's first run did.
+      #
+      # Skipped rather than removed: the moment this repo becomes public the control comes back on
+      # its own. The skip is announced in the job summary, because a supply-chain control that
+      # disappears silently is indistinguishable from one nobody added.
       - name: Attest build provenance
+        # `== false`, not `!`: if the field were ever absent, `!null` is TRUTHY and the
+        # attestation would run and kill the release again. This way unknown means SKIP,
+        # and the worst case is a shipped release missing one control rather than no release.
+        if: ${{ github.event.repository.private == false }}
         uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ steps.package.outputs.zip }}
+
+      - name: Note that provenance attestation was skipped
+        if: ${{ github.event.repository.private != false }}
+        run: |
+          echo "Build provenance attestation SKIPPED - unavailable for user-owned private" \
+            "repositories. The release still ships a SHA-256 checksum and a notarized," \
+            "Developer ID signed app." | tee -a "${GITHUB_STEP_SUMMARY}"
 
       # VirusTotal via the public API + curl (no unverified third-party action; secret stays in context).
       # Non-blocking: skipped cleanly when VIRUSTOTAL_API_KEY isn't set, and never fails the release
