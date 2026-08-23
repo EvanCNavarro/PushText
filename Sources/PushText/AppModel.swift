@@ -345,7 +345,10 @@ private let engine: any TranscriptionEngine
                 let elapsed = ContinuousClock.now - releasedAt
                 let millis = Double(elapsed.components.seconds) * 1000
                     + Double(elapsed.components.attoseconds) / 1_000_000_000_000_000
-                dictationLog.info("injected chars=\(text.count) releaseToText=\(String(format: "%.0f", millis))ms")
+                // `privacy: .public` or os_log redacts this to <private> - which is exactly what
+                // the first real dictation after #15 shipped logged. This line exists to be read.
+                let ms = String(format: "%.0f", millis)
+                dictationLog.info("injected chars=\(text.count) releaseToText=\(ms, privacy: .public)ms")
             } else {
                 dictationLog.info("injected chars=\(text.count)")
             }
