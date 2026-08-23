@@ -52,6 +52,15 @@ public enum DictationFailure: Equatable, Sendable {
 public enum DictationEvent: Equatable, Sendable {
     case hotkeyPressed
     case hotkeyReleased
+    /// Two presses in quick succession: start a LATCHED utterance that outlives the key release.
+    case hotkeyDoublePressed
+    /// Stop and transcribe. What releasing the key does in hold mode, as an explicit request the
+    /// HUD's confirm control can also send.
+    case endRequested
+    /// Stop and DISCARD. Deliberately distinct from `endRequested`: nothing is transcribed and
+    /// nothing is injected. Without it, an utterance the user regrets is typed into their document
+    /// regardless.
+    case cancelRequested
     case audioStarted
     case transcriptFinalized(String)
     case cleanupFinished(String)
@@ -65,30 +74,111 @@ public enum DictationEvent: Equatable, Sendable {
     case watchdogExpired
 }
 
+/// How the current utterance was started, which decides what the key release means.
+public enum DictationInputMode: Equatable, Sendable {
+    /// Recording lasts as long as the key is held. The fast path for a short phrase.
+    case hold
+    /// Recording continues after the key is released, until ended or cancelled. Exists because
+    /// holding a modifier through a long dictation is uncomfortable and makes the key unusable for
+    /// anything else while held.
+    case latched
+}
+
 /// The legal transitions. Anything not listed here is ignored, and ignoring is deliberate:
 /// duplicate key-down events from an event tap are normal, not exceptional.
 public struct DictationMachine: Sendable {
     public private(set) var state: DictationState
+    /// How the CURRENT utterance was started. Meaningless outside one, and reset on every start so
+    /// a latched utterance cannot leak its mode into the next hold.
+    public private(set) var inputMode: DictationInputMode = .hold
 
     public init(state: DictationState = .idle) {
         self.state = state
     }
 
+    /// Forces latched mode for tests that start from a mid-utterance state.
+    mutating func startLatchedForTesting() {
+        inputMode = .latched
+    }
+
     /// Applies an event. Returns `true` if the state actually changed.
     @discardableResult
     public mutating func apply(_ event: DictationEvent) -> Bool {
-        let next = Self.transition(from: state, on: event)
+        let next = Self.transition(from: state, on: event, mode: inputMode)
         guard let next, next != state else { return false }
+
+        // Set the mode as the utterance STARTS, not when the event arrives, so a press that merely
+        // ends a latched utterance cannot silently re-arm it as a hold.
+        if next == .arming {
+            inputMode = (event == .hotkeyDoublePressed) ? .latched : .hold
+        }
         state = next
         return true
     }
 
     /// Pure transition function — the whole machine, in one place, testable without a machine.
-    public static func transition(from state: DictationState, on event: DictationEvent) -> DictationState? {
-        // Split from the main table purely to keep this function within the complexity limit; the
-        // rules themselves stay in one place to read top to bottom.
+    public static func transition(
+        from state: DictationState,
+        on event: DictationEvent,
+        mode: DictationInputMode = .hold
+    ) -> DictationState? {
+        // Split from the main table purely to keep each function within the complexity limit; the
+        // rules still read top to bottom in one file.
         if let recovery = recoveryTransition(from: state, on: event) { return recovery }
-        return progressTransition(from: state, on: event)
+        switch latchTransition(from: state, on: event, mode: mode) {
+        case .to(let next): return next
+        case .ignore: return nil
+        case .unhandled: return progressTransition(from: state, on: event)
+        }
+    }
+
+    /// Three outcomes, not two. `ignore` and `unhandled` are different answers and collapsing them
+    /// into `nil` is a live defect: a latched utterance's key release must be IGNORED, and returning
+    /// nil for it fell through to the mode-independent table, which ended the utterance - exactly
+    /// the behaviour latching exists to prevent.
+    private enum LatchOutcome {
+        case to(DictationState)
+        case ignore
+        case unhandled
+    }
+
+    /// Everything that depends on HOW the utterance was started, plus the explicit end/cancel
+    /// requests the HUD sends. Consulted before the mode-independent table so a latched utterance
+    /// can suppress the key-release rule rather than inherit it.
+    private static func latchTransition(
+        from state: DictationState,
+        on event: DictationEvent,
+        mode: DictationInputMode
+    ) -> LatchOutcome {
+        switch (state, event) {
+        case (.idle, .hotkeyDoublePressed), (.failed, .hotkeyDoublePressed):
+            return .to(.arming)
+
+        // A latched utterance ignores the release entirely - both the one following the starting
+        // double-press and the one following the ending press.
+        case (.arming, .hotkeyReleased), (.recording, .hotkeyReleased):
+            return mode == .latched ? .ignore : .unhandled
+
+        case (.transcribing, .hotkeyReleased):
+            return .ignore
+
+        // Press again to end, but only when latched: in hold mode a press while recording is a
+        // duplicate key-down from the tap, which must stay ignored.
+        case (.recording, .hotkeyPressed):
+            return mode == .latched ? .to(.transcribing) : .ignore
+
+        case (.arming, .endRequested), (.recording, .endRequested):
+            return .to(.transcribing)
+
+        // Cancel reaches idle WITHOUT passing through transcribing: anything that reaches
+        // transcribing eventually injects, and the point of cancel is that nothing is typed. It is
+        // not routed through `.failed` either - the user did exactly what they meant to.
+        case (.arming, .cancelRequested), (.recording, .cancelRequested):
+            return .to(.idle)
+
+        default:
+            return .unhandled
+        }
     }
 
     /// Ends an utterance: failures, the watchdog, and retrying after a failure.
