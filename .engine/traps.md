@@ -383,3 +383,16 @@ research that found them is not read on every cycle, and the trap is.
   existed for a good reason - a CI runner has no grant - but "cannot tell" and "legitimately absent"
   had been collapsed into the same path, which is what let a parse break masquerade as an untrusted
   machine.
+
+### TRAP-35: a negation check that only handles the spaced form catches nothing real
+- what happened: `CleanupDriftGuard`'s tokeniser split on non-alphanumerics, so "don't" became
+  "don" + "t" - neither of which is in the negation set. The inversion check, the single most
+  valuable thing the guard does, was blind to every CONTRACTION. It passed its tests because those
+  tests used "do not" and "should not", the spaced forms, which nobody dictates. One case looked
+  caught but was rejected for the wrong reason entirely: an added "shouldn't" tripped
+  `ungroundedContent(token: "shouldn")`, so the suite was green while the mechanism was dead.
+- warning: when a check keys on a WORD LIST, test the form people actually produce, not the form
+  that is convenient to write. The generic question - what would still be true if the property were
+  absent? - has a specific version here: would this test pass if the tokeniser mangled the word? It
+  did. Apostrophes are now stripped before splitting, both typewriter and typographic, because
+  dictation output and cleaned output do not agree on which to use.
