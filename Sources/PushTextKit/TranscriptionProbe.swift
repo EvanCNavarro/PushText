@@ -79,19 +79,34 @@ public enum TranscriptionProbe {
         buffers: [PushTextKit.AudioBuffer],
         realtime: Bool
     ) async -> Int32 {
+        // Timed with `ContinuousClock`, which does not jump when the wall clock is adjusted.
+        // `finalize` is the number #15 exists to publish: with realtime pacing, everything before
+        // it happened while the user was still speaking, so it is what they wait for AFTER letting
+        // go of the key. `deliver` is the harness's own self-check - under pacing it must come out
+        // close to the audio duration, and if it does not, the clock is not measuring what the
+        // other two numbers claim.
+        let clock = ContinuousClock()
         do {
+            let started = clock.now
             try await engine.beginUtterance()
+            let begun = clock.now
             for buffer in buffers {
                 try await engine.append(buffer)
                 if realtime, buffer.sampleRate > 0 {
                     try await Task.sleep(for: .seconds(Double(buffer.samples.count) / buffer.sampleRate))
                 }
             }
+            let appended = clock.now
             let delivered = await engine.deliveredSeconds
             let transcript = try await engine.finishUtterance()
+            let finished = clock.now
 
             print("TRANSCRIBE_PROBE delivered=\(String(format: "%.2f", delivered))s "
                   + "duration=\(String(format: "%.2f", transcript.duration))s")
+            print("TRANSCRIBE_PROBE begin=\(ms(started, begun))ms "
+                  + "deliver=\(ms(begun, appended))ms "
+                  + "finalize=\(ms(appended, finished))ms "
+                  + "total=\(ms(started, finished))ms")
             print("TRANSCRIBE_PROBE text=\"\(transcript.text)\"")
             fflush(stdout)
 
@@ -107,6 +122,17 @@ public enum TranscriptionProbe {
             print("TRANSCRIBE_PROBE engine=failed error=\(error)")
             return 5
         }
+    }
+
+    /// Milliseconds between two clock readings, to one decimal.
+    ///
+    /// `Duration` has no lossless `Double` accessor; `components` is the documented way out, and
+    /// attoseconds are 1e-18 so the divisor for milliseconds is 1e15.
+    private static func ms(_ from: ContinuousClock.Instant, _ to: ContinuousClock.Instant) -> String {
+        let span = to - from
+        let value = Double(span.components.seconds) * 1000
+            + Double(span.components.attoseconds) / 1_000_000_000_000_000
+        return String(format: "%.1f", value)
     }
 
     /// Returns capture-shaped buffers plus a label for the source they came from.

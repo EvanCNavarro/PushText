@@ -26,6 +26,14 @@ final class AppModel {
     /// Text waiting to be injected, held between `transcriptFinalized` and `injectionFinished`.
     private var pendingText: String?
 
+    /// When the user stopped speaking, for the release-to-text figure the app logs (#15).
+    ///
+    /// The first such number this project had was subtracted by hand from two os_log timestamps,
+    /// which is not a measurement anyone can re-read later. Emitting the elapsed value makes every
+    /// real dictation a data point. `ContinuousClock` because it does not jump when the wall clock
+    /// is adjusted mid-utterance.
+    private var releasedAt: ContinuousClock.Instant?
+
     /// Longest a single utterance may hold the microphone before it is force-closed.
     ///
     /// This is the ONLY defence against the measured stuck-capture case. A stalled `.defaultTap` can
@@ -210,6 +218,7 @@ final class AppModel {
     }
 
     private func closeUtterance() async {
+        releasedAt = ContinuousClock.now
         // Stop the microphone FIRST: everything already submitted is still in the feed's queue, and
         // leaving it open would keep appending audio the user did not intend to dictate.
         capture?.stop()
@@ -230,7 +239,18 @@ final class AppModel {
         }
         do {
             try await injector.inject(text)
-            dictationLog.info("injected chars=\(text.count)")
+            // This spans mic teardown, finalize, injection AND the injector's post-paste settle
+            // wait, so it is strictly larger than the engine's own finalize time - the probe
+            // measures that part alone (docs/verification/task15-latency.md).
+            if let releasedAt {
+                let elapsed = ContinuousClock.now - releasedAt
+                let millis = Double(elapsed.components.seconds) * 1000
+                    + Double(elapsed.components.attoseconds) / 1_000_000_000_000_000
+                dictationLog.info("injected chars=\(text.count) releaseToText=\(String(format: "%.0f", millis))ms")
+            } else {
+                dictationLog.info("injected chars=\(text.count)")
+            }
+            releasedAt = nil
             pendingText = nil
             apply(.injectionFinished)
         } catch {
