@@ -78,27 +78,36 @@ struct DictationHUDView: View {
     }
 
     private var active: some View {
-        HStack(spacing: Tokens.inset) {
-            control(symbol: "xmark", help: "Discard this dictation",
-                    destructive: true, action: onCancel)
-
-            levels
-                .frame(width: 96, height: 26)
-                .accessibilityLabel(Text("\(phase.label), input level \(Int(level * 100)) percent"))
-
-            control(symbol: "checkmark", help: "Finish and insert the text", action: onConfirm)
-        }
-        .padding(.horizontal, Tokens.inset + 2)
-        .padding(.vertical, Tokens.space + 1)
-        // Same surface as the overflow dropdown - `Tokens.field` on a `Tokens.line` hairline - so the
-        // HUD reads as part of the app's menu rather than as a foreign floating widget.
-        .background(
-            RoundedRectangle(cornerRadius: Tokens.radius + 4, style: .continuous)
+        VStack(spacing: 0) {
+            // The pointer, so the panel reads as hanging FROM the menu-bar item - the same shape the
+            // `···` overflow popover has. Without it the pill floats near the icon rather than
+            // belonging to it.
+            Pointer()
                 .fill(Tokens.field)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Tokens.radius + 4, style: .continuous)
-                        .strokeBorder(Tokens.line, lineWidth: 1))
-        )
+                .frame(width: 16, height: 7)
+
+            HStack(spacing: Tokens.inset) {
+                control(symbol: "xmark", help: "Discard this dictation",
+                        destructive: true, action: onCancel)
+
+                levels
+                    .frame(width: 96, height: 26)
+                    .accessibilityLabel(Text("\(phase.label), input level \(Int(level * 100)) percent"))
+
+                control(symbol: "checkmark", help: "Finish and insert the text", action: onConfirm)
+            }
+            .padding(.horizontal, Tokens.inset + 2)
+            .padding(.vertical, Tokens.space + 1)
+            // Same surface as the `···` dropdown: Tokens.field on a Tokens.line hairline, at the
+            // design system's radius. The HUD is that component, not a lookalike.
+            .background(
+                RoundedRectangle(cornerRadius: Tokens.radius + 2, style: .continuous)
+                    .fill(Tokens.field)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Tokens.radius + 2, style: .continuous)
+                            .strokeBorder(Tokens.line, lineWidth: 1))
+            )
+        }
         .shadow(color: .black.opacity(0.4), radius: 16, y: 5)
     }
 
@@ -272,6 +281,18 @@ final class DictationHUDController {
             return NSPoint(x: frame.midX, y: frame.minY)
         }
         return nil
+    }
+}
+
+/// The little triangle that points at the menu-bar item, matching the `···` popover's arrow.
+private struct Pointer: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }
 
