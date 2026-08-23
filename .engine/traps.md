@@ -368,3 +368,18 @@ research that found them is not read on every cycle, and the trap is.
   was one line of log away and would have caught it immediately. A tool that fakes hardware must
   match what the hardware actually sends, not merely what makes the down-event work: `sebsto/wispr`
   and `slovo` both key off the device bit for exactly this reason (docs/research/04 sec 1).
+
+### TRAP-34: changing a probe's output line silently disabled the gate that parses it
+- what happened: adding `selfResponsible=` and `parent=` to the hotkey probe's `trusted=` line broke
+  `test-packaged-app.sh`, whose extractor was `sed 's/^HOTKEY_PROBE trusted=\(.*\)$/\1/p'` - a greedy
+  capture that swallowed the new fields, so `PROBE_TRUSTED` became
+  "true selfResponsible=false parent=zsh(59474)", compared unequal to "true", and the tap assertion
+  was SKIPPED. The gate then printed OK: "not Accessibility-trusted, tap assertion skipped" on a
+  machine that is trusted. A permanent gate stopped asserting and still reported success.
+- warning: a parser is a coupling, and the thing it parses is an interface. Two fixes, both needed:
+  capture one token (`\([^ ]*\)`) rather than the rest of the line, and FAIL when the value is
+  neither `true` nor `false` instead of falling through to the skip branch. Planting a renamed field
+  now produces "could not parse 'HOTKEY_PROBE trusted=' - refusing to skip silently". The skip branch
+  existed for a good reason - a CI runner has no grant - but "cannot tell" and "legitimately absent"
+  had been collapsed into the same path, which is what let a parse break masquerade as an untrusted
+  machine.

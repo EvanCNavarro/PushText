@@ -25,7 +25,13 @@ public enum HotkeyProbe {
 
         print("HOTKEY_PROBE binding=\(binding.name) keyCode=\(binding.keyCode) "
             + "deviceMask=0x\(String(binding.deviceMask, radix: 16))")
-        print("HOTKEY_PROBE trusted=\(CGEventTapHotkeyMonitor.isTrusted)")
+        // Report HOW we were launched alongside trust. A terminal-parented run inherits the
+        // terminal's Accessibility grant, so `trusted=true` there says nothing about the app's own
+        // identity - and a green from an inherited grant is byte-identical to a real one (#44).
+        let provenance = LaunchProvenance.current()
+        print("HOTKEY_PROBE trusted=\(CGEventTapHotkeyMonitor.isTrusted) "
+            + "selfResponsible=\(provenance.isSelfResponsible) "
+            + "parent=\(provenance.parentName)(\(provenance.parentProcessID))")
 
         let monitor = makeMonitor(binding: binding, env: env)
         let counter = EdgeCounter()
