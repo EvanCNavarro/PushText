@@ -87,11 +87,58 @@ transcript before cleanup ever saw it.
 Recorded because the wrong version of this story - "the LLM invented a name" - is far more memorable
 than the right one, and would have sent the next reader to fix the wrong component.
 
+## 4b. Prewarming: it works, and it lands 43% of the time
+
+`LanguageModelSession.prewarm()` is now called at key-down (`.arming`), so the warm-up overlaps the
+user's speech instead of their wait. Re-measured across 21 dictations through the packaged app.
+
+| arm | n | mean | median | min | max |
+| --- | --- | --- | --- | --- | --- |
+| no cleanup | 4 | 206 ms | 196 ms | 158 | 275 |
+| cleanup, no prewarm | 4 | 4182 ms | 4162 ms | 4113 | 4289 |
+| cleanup + prewarm | 21 | 2529 ms | 3590 ms | 452 | 7564 |
+
+**The mean is the wrong summary - the distribution is bimodal**, which is why the median is worse
+than the mean:
+
+- **fast mode**, n=9, mean **624 ms**: 452, 463, 507, 581, 582, 603, 756, 829, 846
+- **slow mode**, n=12, mean **3957 ms**: 1857, 3590, 3613, 3637, 3644, 3656, 3673, 3683, 3804,
+  3855, 4913, 7564
+
+The slow mode's mean (3957 ms) is the unwarmed cost (4182 ms) within noise. So prewarm does not
+shave time off a cold start - it either completes before the transcript arrives, giving ~624 ms
+against the probe's 259 ms warm figure, or it contributes nothing. **Fast share: 43%.**
+
+### The likely cause, named before it was measured
+
+Prewarming is documented as not guaranteeing asset loading **while the app is backgrounded**.
+PushText is an `LSUIElement` menu-bar app, so backgrounded is not an edge case here - it is the only
+state the app is ever in. This was written down as a risk before the measurement and the measurement
+is consistent with it. INFERRED: nothing here attributes a single slow sample to a refused prewarm.
+
+### What was ruled out
+
+Utterance length does not explain the split. One clean run had 5 s and 4 s holds slow (3683,
+3637 ms) with 8 s and 7 s holds fast (582, 463 ms), which looks decisive - and an earlier run
+contradicts it outright, with a 5 s hold at 756 ms and a 7 s hold at 3590 ms.
+
+A dedicated hold-duration sweep (3/5/7/9/11/13 s, same phrase) failed to control its own variable:
+transcript lengths came back 17, 58, 59, 16, 83 and 40 characters for what should have been one
+constant phrase, because ambient audio entered the capture. Those six samples are included in the
+totals above but cannot answer the question they were designed for.
+
+### Measurement hygiene
+
+Two of the four runs were contaminated by the machine's owner dictating concurrently - visible as
+more `hotkey edge=pressed` lines than the harness issued (5 and 6 against an expected 4). Runs are
+now checked with a press count. The 21 samples include those runs; the press-count check is what
+makes that disclosable rather than invisible.
+
 ## 5. What ships
 
 `TranscriptFinisher` and the ordering it enforces (cleanup, then the user's dictionary, then
-history). `PushTextApp` does **not** construct a cleanup provider, so behaviour is unchanged and
-transcripts still ship as the recognizer produced them.
+history), plus the key-down prewarm. `PushTextApp` still does **not** construct a cleanup provider,
+so behaviour is unchanged and transcripts ship as the recognizer produced them.
 
-Enabling it is one line. What has to be true first is section 3: keep the model warm, or accept
-~4 s. Tracked in #94.
+Enabling it is one line. What has to be true first is section 4b: make the prewarm land more than
+43% of the time, or accept that most dictations cost ~4 s. Tracked in #94.
