@@ -197,6 +197,18 @@ final class DictationHUDController {
     func update(phase: HUDPhase, level: Double) {
         model.phase = phase
         model.level = phase.isActive ? level : 0
+
+        // Re-anchor when the icon MOVES, which it does mid-utterance: macOS inserts its orange
+        // recording indicator into the menu bar the moment capture starts, shifting every item
+        // right. Anchoring only at show() left the pill a few points off-centre for the rest of
+        // that utterance. Guarded on an actual change rather than repositioning on every 20 Hz
+        // tick, so a still menu bar costs nothing.
+        guard let panel, panel.isVisible, let anchor = statusItemAnchor() else { return }
+        let wanted = origin(for: anchor, size: panel.frame.size)
+        if abs(panel.frame.origin.x - wanted.x) > 0.5 || abs(panel.frame.origin.y - wanted.y) > 0.5 {
+            dictationLog.info("HUD re-anchored \(panel.frame.origin.x) -> \(wanted.x)")
+            panel.setFrameOrigin(wanted)
+        }
     }
 
     /// Drops back up out of sight. The HUD exists only while an utterance does - it hangs from the
@@ -259,9 +271,7 @@ final class DictationHUDController {
         let anchor = statusItemAnchor()
         dictationLog.info("HUD anchor=\(anchor.map { "\($0.x),\($0.y)" } ?? "none (fallback)", privacy: .public)")
         if let anchor {
-            panel.setFrameOrigin(NSPoint(
-                x: min(max(anchor.x - size.width / 2, full.minX + 8), full.maxX - size.width - 8),
-                y: anchor.y - size.height - 4))
+            panel.setFrameOrigin(origin(for: anchor, size: size))
             return
         }
 
@@ -269,6 +279,15 @@ final class DictationHUDController {
         panel.setFrameOrigin(NSPoint(
             x: full.maxX - size.width - 24,
             y: screen.visibleFrame.maxY - size.height - 4))
+    }
+
+    /// Where the panel's origin has to be for its pointer to sit under `anchor`, clamped so a pill
+    /// hanging from an icon near the screen edge is not pushed off it.
+    private func origin(for anchor: NSPoint, size: NSSize) -> NSPoint {
+        let full = NSScreen.main?.frame ?? .zero
+        return NSPoint(
+            x: min(max(anchor.x - size.width / 2, full.minX + 8), full.maxX - size.width - 8),
+            y: anchor.y - size.height - 4)
     }
 
     /// Centre-bottom of our status-item window, in screen coordinates.

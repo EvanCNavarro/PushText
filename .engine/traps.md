@@ -352,3 +352,19 @@ research that found them is not read on every cycle, and the trap is.
   `DispatchSemaphore` from the main thread, so the new main-actor hop could never be serviced and
   reported as `inject=failed error=timeout`. It now pumps the run loop instead. A blocking wait on
   the main thread is incompatible with any main-actor work the awaited task needs.
+
+### TRAP-33: I nearly filed an app bug caused by my own test instrument
+- what happened: a synthetic Right Option poster, written to drive the real app, cleared
+  `maskAlternate` on release but LEFT the right-side device bit `0x40` set. `ModifierGate` is
+  edge-triggered and reads that bit, so it never saw a release, stayed latched down, and emitted
+  nothing for subsequent presses. The symptom was that the app received no hotkey edges at all after
+  the first hold - indistinguishable from the CGEventTap having been disabled by the system. I had
+  written "the event tap has gone deaf", confirmed a fresh launch worked, and was about to file it
+  as a serious runtime defect. Correcting the poster to clear both bits produced a complete
+  pressed -> recording -> released -> transcript -> injected cycle with no app change at all.
+- warning: the throwaway instrument gets trusted instantly BECAUSE you wrote it, and it is the one
+  nobody plants a failure in. Before believing what a tool reports about the system, run it against
+  a state whose answer you already know - here, "does a synthetic release produce a released edge?"
+  was one line of log away and would have caught it immediately. A tool that fakes hardware must
+  match what the hardware actually sends, not merely what makes the down-event work: `sebsto/wispr`
+  and `slovo` both key off the device bit for exactly this reason (docs/research/04 sec 1).
