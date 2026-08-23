@@ -152,3 +152,42 @@ struct PermissionRowSnapshotTests {
     }
 
 }
+
+extension PermissionRowSnapshotTests {
+
+    /// The HUD in every phase (#107, FL-9). Rendered rather than asserted, because the claim is
+    /// "during processing the pill shows a spinner where the controls were, and does not change
+    /// size" - and neither half of that is visible to a string assertion. A test that checked
+    /// `phase == .working` would pass on a version that resized the pill, dropped the waveform, or
+    /// rendered the spinner invisible against `Tokens.row`.
+    @Test("Render the HUD in resting, recording and working phases",
+          .enabled(if: PermissionRowSnapshotTests.outputDirectory != nil))
+    func renderHUDPhases() throws {
+        guard let directory = Self.outputDirectory else { return }
+
+        let phases: [(String, HUDPhase, Double)] = [
+            ("resting", .resting, 0),
+            ("recording", .recording, 0.7),
+            ("working", .working, 0)
+        ]
+        for (name, phase, level) in phases {
+            let view = DictationHUDView(phase: phase, level: level, isPresented: true,
+                                        onCancel: {}, onConfirm: {})
+                .frame(width: 260, height: 90)
+                .background(Tokens.panel)
+
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            guard let image = renderer.nsImage,
+                  let tiff = image.tiffRepresentation,
+                  let rep = NSBitmapImageRep(data: tiff),
+                  let png = rep.representation(using: .png, properties: [:]) else {
+                Issue.record("ImageRenderer produced nothing for \(name)")
+                return
+            }
+            let url = URL(fileURLWithPath: directory).appendingPathComponent("hud-\(name).png")
+            try png.write(to: url)
+            print("SNAPSHOT \(url.path) bytes=\(png.count)")
+        }
+    }
+}
