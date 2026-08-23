@@ -40,9 +40,13 @@ private let engine: any TranscriptionEngine
     private let capture: (any AudioCapture)?
     private let injector: (any TextInjector)?
     private let feed: AudioFeed
-    private let indicator: (any DictationIndicator)?
-    private let levels = LevelSink()
-    private var levelTimer: Timer?
+    /// The HUD, owned by its own type - see HUDDriver.
+    private let hud: HUDDriver
+
+    /// The level the HUD waveform is currently drawing. Exposed for tests: planting a broken
+    /// sample feed left every suite green, which meant nothing asserted that captured audio ever
+    /// reaches the meter - a break there shows up only as a HUD that sits flat while recording.
+    var currentAudioLevel: Double { hud.levels.current }
     /// Turns raw edges into events, so a double press can start a latched utterance (#46).
     private var pressPattern = PressPatternRecognizer()
     private let watchdog = CaptureWatchdog()
@@ -108,7 +112,7 @@ private let engine: any TranscriptionEngine
         self.engine = engine
         self.capture = capture
         self.injector = injector
-        self.indicator = indicator
+        self.hud = HUDDriver(indicator: indicator)
         self.history = history
         self.dictionary = dictionary
         self.feed = AudioFeed(engine: engine)
@@ -211,42 +215,11 @@ private let engine: any TranscriptionEngine
         }
     }
 
-    /// The HUD follows STATE, so it cannot disagree with the machine about whether we are
-    /// recording - the failure that would make the indicator a lie rather than a readout.
     private func updateIndicator(for state: DictationState) {
-        guard let indicator else { return }
-        switch state {
-        case .arming, .recording:
-            indicator.show(
-                phase: .recording,
-                onCancel: { [weak self] in self?.apply(.cancelRequested) },
-                onConfirm: { [weak self] in self?.apply(.endRequested) })
-            startLevelTimer()
-        case .transcribing, .cleaning, .injecting:
-            stopLevelTimer()
-            indicator.update(phase: .working, level: 0)
-        case .idle, .failed:
-            stopLevelTimer()
-            indicator.hide()
-        }
-    }
-
-    /// 20 Hz: fast enough that the bars track speech, slow enough that it is not a per-buffer hop.
-    private func startLevelTimer() {
-        guard levelTimer == nil else { return }
-        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self, self.machine.isCapturing else { return }
-                self.indicator?.update(phase: .recording, level: self.levels.current)
-            }
-        }
-        levelTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
-    }
-
-    private func stopLevelTimer() {
-        levelTimer?.invalidate()
-        levelTimer = nil
+        hud.update(for: state,
+                   isCapturing: { [weak self] in self?.machine.isCapturing ?? false },
+                   onCancel: { [weak self] in self?.apply(.cancelRequested) },
+                   onConfirm: { [weak self] in self?.apply(.endRequested) })
     }
 
     private func openUtterance(epoch: Int) async {
@@ -272,7 +245,10 @@ private let engine: any TranscriptionEngine
             utterance = token
 
             // Capture starts AFTER the engine is ready, so no buffer can arrive with nowhere to go.
-            levels.reset()
+            hud.levels.reset()
+            // `levels` captured directly, not through `hud`: it is nonisolated precisely so this
+            // drain-queue callback needs no main-actor hop per buffer.
+            let levels = hud.levels
             try capture?.start { [feed, levels] buffer in
                 feed.submit(buffer)
                 levels.record(buffer.samples)
