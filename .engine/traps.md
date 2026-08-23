@@ -324,3 +324,16 @@ research that found them is not read on every cycle, and the trap is.
   watchdog first - the plant did not create the failure condition. Removing the disarm did fail
   them. A plant that does not reproduce the defect proves nothing about the test, and stopping at
   the first plant would have left a false sense of coverage.
+
+### TRAP-31: an async start finishing after its utterance ended reopens the microphone
+- what happened: `openUtterance` awaits the engine before starting capture. A quick tap goes
+  arming -> idle in that window, and a cancel can land at any moment - so the in-flight task then
+  opened the microphone for an utterance that no longer existed, and its capture handler clobbered
+  the NEXT utterance. Surfaced as a latch test where the second utterance never produced text; the
+  visible symptom was nothing to do with the cause.
+- warning: any `await` between "decide to start" and "actually start" needs a re-check of the state
+  it was started for. `openUtterance` now re-reads `machine.state == .arming` after the await and
+  abandons otherwise. Same shape as the cancel path: `capture?.stop()` is called SYNCHRONOUSLY on
+  cancel and failure rather than inside the async teardown, because a microphone left open is the
+  worst outcome this app has, and "it closes a moment later, once a Task is scheduled" is not
+  closing it.

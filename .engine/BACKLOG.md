@@ -253,7 +253,17 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
 
 ## Requested 2026-08-22 after the first working dictation
 
-#46 - Double-press to latch recording, with a HUD that can cancel or commit - S1
+#46 - Double-press to latch recording, with a HUD that can cancel or commit - DONE
+  (2026-08-22: latch/cancel/end modelled in Core; PressPatternRecognizer turns edges into a double
+  press with the thresholds as testable parameters (0.4s window, 0.3s tap limit - the tap limit is
+  what stops a dictation followed by a quick correction from silently latching); AudioLevelMeter
+  drives the waveform from REAL samples, verified by planting a constant 0.5 which the monotonicity
+  test caught; DictationHUDPanel is a non-activating NSPanel proven not to take focus - with the HUD
+  on screen, frontmost was still iTerm2 and PushText's AXFocusedWindow was `missing value`, which is
+  what keeps the synthetic Command-V landing in the user's document. Two races found by the
+  integration tests: cancel closed the mic asynchronously, and an in-flight openUtterance reopened
+  it for an utterance that had already ended (TRAP-31). Screenshot-verified against Bobby's
+  reference.)
   blocked-by: none. Supersedes #7, whose non-activating NSPanel mechanics remain the hard part - the
   panel must not take key focus or the injected Command-V lands in the HUD instead of the document.
   Order: interaction model in Core (DONE) -> double-press recogniser (pure, testable: the timing is a

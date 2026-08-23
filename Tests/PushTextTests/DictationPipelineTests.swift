@@ -74,6 +74,34 @@ struct DictationPipelineTests {
         }
     }
 
+
+    /// Records what the HUD was told, so "the indicator appeared" is assertable without a window.
+    @MainActor
+    final class SpyIndicator: DictationIndicator {
+        private(set) var shown = 0
+        private(set) var hidden = 0
+        private(set) var phases: [HUDPhase] = []
+        private(set) var levels: [Double] = []
+        var onCancel: () -> Void = {}
+        var onConfirm: () -> Void = {}
+
+        var isVisible: Bool { shown > hidden }
+
+        func show(phase: HUDPhase, onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void) {
+            shown += 1
+            phases.append(phase)
+            self.onCancel = onCancel
+            self.onConfirm = onConfirm
+        }
+
+        func update(phase: HUDPhase, level: Double) {
+            phases.append(phase)
+            levels.append(level)
+        }
+
+        func hide() { hidden += 1 }
+    }
+
     /// Waits for a condition rather than sleeping a fixed time. Fails CLOSED: if the condition
     /// never holds, this returns false and the caller's assertion fails - it never reports success
     /// for having run out of patience.
@@ -213,14 +241,97 @@ struct DictationPipelineTests {
         let injector = SpyInjector()
         let model = makeModel(engine: engine, capture: capture, injector: injector)
 
-        for _ in 0..<2 {
-            model.handle(.pressed)
+        // Explicit timestamps, ten seconds apart. With a wall clock these two utterances land
+        // inside the 0.4 s double-press window, so the second press LATCHES and the release no
+        // longer ends it - correct behaviour, and a reminder that a test racing a real clock is
+        // testing the clock.
+        for index in 0..<2 {
+            let base = Double(index) * 10
+            model.handle(.pressed, at: base)
             #expect(await settle { model.machine.state == .recording })
             capture.deliver(1)
-            model.handle(.released)
+            model.handle(.released, at: base + 1)
             #expect(await settle { model.machine.state == .idle })
         }
 
         #expect(injector.injected == ["first", "second"])
+    }
+
+    // MARK: - Latching and cancel (#46)
+
+    @Test("A double press latches: the utterance survives the key release")
+    func doublePressLatches() async {
+        let engine = MockTranscriptionEngine(
+            configuration: .init(phrases: ["latched words"], latency: .milliseconds(1)))
+        let capture = SpyCapture()
+        let injector = SpyInjector()
+        let model = AppModel(engine: engine, capture: capture, injector: injector)
+
+        model.handle(.pressed, at: 0)      // first tap
+        model.handle(.released, at: 0.05)
+        model.handle(.pressed, at: 0.20)   // second tap, inside the window -> latch
+        #expect(await settle { model.machine.state == .recording })
+
+        model.handle(.released, at: 0.25)
+        capture.deliver(3)
+        // THE point: still recording with the key up.
+        #expect(model.machine.state == .recording)
+        #expect(injector.injected.isEmpty)
+
+        model.handle(.pressed, at: 1.0)    // press again to end
+        #expect(await settle { injector.injected == ["latched words"] })
+    }
+
+    @Test("Cancel discards the utterance and injects nothing")
+    func cancelInjectsNothing() async {
+        let engine = MockTranscriptionEngine(
+            configuration: .init(phrases: ["should never appear"], latency: .milliseconds(1)))
+        let capture = SpyCapture()
+        let injector = SpyInjector()
+        let model = AppModel(engine: engine, capture: capture, injector: injector)
+
+        model.handle(.pressed, at: 0)
+        #expect(await settle { model.machine.state == .recording })
+        capture.deliver(3)
+
+        model.apply(.cancelRequested)
+
+        #expect(await settle { model.machine.state == .idle })
+        #expect(injector.injected.isEmpty, "cancel must not type anything")
+        #expect(capture.isRunning == false, "cancel must close the microphone")
+    }
+
+    @Test("The indicator is shown while recording and hidden when the utterance ends")
+    func indicatorFollowsState() async {
+        let indicator = SpyIndicator()
+        let engine = MockTranscriptionEngine(
+            configuration: .init(phrases: ["some text"], latency: .milliseconds(1)))
+        let capture = SpyCapture()
+        let model = AppModel(engine: engine, capture: capture,
+                             injector: SpyInjector(), indicator: indicator)
+
+        model.handle(.pressed, at: 0)
+        #expect(await settle { indicator.isVisible })
+        #expect(await settle { model.machine.state == .recording })
+
+        model.handle(.released, at: 0.5)
+
+        #expect(await settle { indicator.hidden > 0 }, "the HUD stayed up after the utterance ended")
+    }
+
+    @Test("The HUD's cancel control discards, exactly as the event does")
+    func indicatorCancelControlWorks() async {
+        let indicator = SpyIndicator()
+        let injector = SpyInjector()
+        let model = AppModel(engine: MockTranscriptionEngine(configuration: .init(latency: .milliseconds(1))),
+                             capture: SpyCapture(), injector: injector, indicator: indicator)
+
+        model.handle(.pressed, at: 0)
+        #expect(await settle { model.machine.state == .recording })
+
+        indicator.onCancel()
+
+        #expect(await settle { model.machine.state == .idle })
+        #expect(injector.injected.isEmpty)
     }
 }

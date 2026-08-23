@@ -1,0 +1,314 @@
+import SwiftUI
+import AVFoundation
+import OSLog
+import PushTextCore
+import PushTextKit
+
+/// Observable app state. Thin on purpose: the transition rules live in `DictationMachine`, in
+/// Core, where they are testable without a running app.
+@MainActor
+@Observable
+final class AppModel {
+    private(set) var machine = DictationMachine()
+    private(set) var lastTranscript: String?
+    /// Non-nil when something at launch left the app unable to dictate. Shown in the menu.
+    private(set) var startupFailure: String?
+    private let engine: any TranscriptionEngine
+    private let capture: (any AudioCapture)?
+    private let injector: (any TextInjector)?
+    private let feed: AudioFeed
+    private let indicator: (any DictationIndicator)?
+    private let levels = LevelSink()
+    private var levelTimer: Timer?
+    /// Turns raw edges into events, so a double press can start a latched utterance (#46).
+    private var pressPattern = PressPatternRecognizer()
+    private var captureWatchdog: Timer?
+    /// Text waiting to be injected, held between `transcriptFinalized` and `injectionFinished`.
+    private var pendingText: String?
+
+    /// Longest a single utterance may hold the microphone before it is force-closed.
+    ///
+    /// This is the ONLY defence against the measured stuck-capture case. A stalled `.defaultTap` can
+    /// drop a modifier key-up so thoroughly that macOS's own `flagsState` stays latched — the event
+    /// stream and the live flag state are then both wrong, and every state-based recovery is blind.
+    /// Elapsed time is the one signal that cannot be corrupted that way.
+    ///
+    /// Generous on purpose: it exists to stop a stuck microphone, not to cut off a long sentence.
+    var maximumCaptureDuration: TimeInterval = 120
+
+    /// `capture` and `injector` are optional so the state-machine tests can construct a model with
+    /// no OS dependencies at all. A model without them still transitions correctly; it simply has
+    /// no audio to record and nowhere to put text.
+    init(engine: any TranscriptionEngine,
+         capture: (any AudioCapture)? = nil,
+         injector: (any TextInjector)? = nil,
+         indicator: (any DictationIndicator)? = nil,
+         machine: DictationMachine = DictationMachine()) {
+        self.engine = engine
+        self.capture = capture
+        self.injector = injector
+        self.indicator = indicator
+        self.feed = AudioFeed(engine: engine)
+        self.machine = machine
+    }
+
+    func reportStartupFailure(_ message: String) {
+        startupFailure = message
+    }
+
+    var menuBarSymbol: String {
+        machine.isCapturing ? "waveform.circle.fill" : "waveform"
+    }
+
+    /// Feeds one event into the dictation machine.
+    ///
+    /// The composition root routes hotkey edges here; keeping the mapping in one place means the
+    /// shell never decides what a key press MEANS, it only reports that one happened.
+    func apply(_ event: DictationEvent) {
+        let wasCapturing = machine.isCapturing
+        let previous = machine.state
+        machine.apply(event)
+
+        if machine.isCapturing != wasCapturing {
+            if machine.isCapturing {
+                startCaptureWatchdog()
+            } else {
+                stopCaptureWatchdog()
+            }
+        }
+
+        guard machine.state != previous else {
+            dictationLog.debug("""
+                event=\(String(describing: event), privacy: .public) \
+                ignored in state=\(String(describing: previous), privacy: .public)
+                """)
+            return
+        }
+        dictationLog.info("""
+            state \(String(describing: previous), privacy: .public) -> \
+            \(String(describing: self.machine.state), privacy: .public)
+            """)
+        performEffects(entering: machine.state, from: previous, on: event)
+    }
+
+    /// Drives the side effects from the STATE, never from the raw key edge.
+    ///
+    /// The machine already decides what a press means in each state - duplicate key-downs from an
+    /// event tap are normal, and reacting to the edge directly would start a second utterance on
+    /// one of them. Reacting to a state CHANGE makes that impossible by construction.
+    private func performEffects(
+        entering state: DictationState,
+        from previous: DictationState,
+        on event: DictationEvent
+    ) {
+        // Reaching idle from an ACTIVE utterance means the user cancelled; reaching it from
+        // `.injecting` is an utterance that completed normally and needs no teardown.
+        let previousWasActive = previous == .arming || previous == .recording
+        updateIndicator(for: state)
+
+        switch state {
+        case .arming:
+            Task { await self.openUtterance() }
+
+        case .transcribing:
+            Task { await self.closeUtterance() }
+
+        case .cleaning:
+            // No CleanupProvider yet (#14). The machine requires this transition, so pass the
+            // transcript through unchanged rather than inventing a stage.
+            if case .transcriptFinalized(let text) = event {
+                pendingText = text
+                lastTranscript = text
+                apply(.cleanupFinished(text))
+            }
+
+        case .injecting:
+            let text = pendingText ?? ""
+            Task { await self.injectText(text) }
+
+        case .failed:
+            closeMicrophone()
+            Task { await self.teardown() }
+
+        case .idle where previousWasActive:
+            // Reached idle from an active utterance: that is a CANCEL. Tear down without asking the
+            // engine for a transcript, because the point of cancel is that nothing is typed.
+            closeMicrophone()
+            Task { await self.teardown() }
+
+        default:
+            break
+        }
+    }
+
+    /// The HUD follows STATE, so it cannot disagree with the machine about whether we are
+    /// recording - the failure that would make the indicator a lie rather than a readout.
+    private func updateIndicator(for state: DictationState) {
+        guard let indicator else { return }
+        switch state {
+        case .arming, .recording:
+            indicator.show(
+                phase: .recording,
+                onCancel: { [weak self] in self?.apply(.cancelRequested) },
+                onConfirm: { [weak self] in self?.apply(.endRequested) })
+            startLevelTimer()
+        case .transcribing, .cleaning, .injecting:
+            stopLevelTimer()
+            indicator.update(phase: .working, level: 0)
+        case .idle, .failed:
+            stopLevelTimer()
+            indicator.hide()
+        }
+    }
+
+    /// 20 Hz: fast enough that the bars track speech, slow enough that it is not a per-buffer hop.
+    private func startLevelTimer() {
+        guard levelTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.machine.isCapturing else { return }
+                self.indicator?.update(phase: .recording, level: self.levels.current)
+            }
+        }
+        levelTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopLevelTimer() {
+        levelTimer?.invalidate()
+        levelTimer = nil
+    }
+
+    private func openUtterance() async {
+        do {
+            try await feed.begin()
+
+            // The utterance may have ENDED while the engine was starting - a quick tap goes
+            // arming -> idle, and a cancel can arrive at any moment. Opening the microphone now
+            // would leave it running for an utterance that no longer exists, and would let a
+            // stale start clobber the next one.
+            guard machine.state == .arming else {
+                dictationLog.info("openUtterance abandoned: state moved on while starting")
+                await feed.cancel()
+                return
+            }
+
+            // Capture starts AFTER the engine is ready, so no buffer can arrive with nowhere to go.
+            levels.reset()
+            try capture?.start { [feed, levels] buffer in
+                feed.submit(buffer)
+                levels.record(buffer.samples)
+            }
+            dictationLog.info("capture started")
+            apply(.audioStarted)
+        } catch {
+            dictationLog.error("openUtterance FAILED: \(String(describing: error), privacy: .public)")
+            await feed.cancel()
+            capture?.stop()
+            apply(.failure(Self.classify(error)))
+        }
+    }
+
+    private func closeUtterance() async {
+        // Stop the microphone FIRST: everything already submitted is still in the feed's queue, and
+        // leaving it open would keep appending audio the user did not intend to dictate.
+        capture?.stop()
+        do {
+            let transcript = try await feed.finish()
+            dictationLog.info("transcript chars=\(transcript.text.count) duration=\(transcript.duration)")
+            apply(.transcriptFinalized(transcript.text))
+        } catch {
+            dictationLog.error("finishUtterance FAILED: \(String(describing: error), privacy: .public)")
+            apply(.failure(.transcriptionFailed))
+        }
+    }
+
+    private func injectText(_ text: String) async {
+        guard let injector else {
+            apply(.injectionFinished)
+            return
+        }
+        do {
+            try await injector.inject(text)
+            dictationLog.info("injected chars=\(text.count)")
+            pendingText = nil
+            apply(.injectionFinished)
+        } catch {
+            dictationLog.error("inject FAILED: \(String(describing: error), privacy: .public)")
+            apply(.failure(.injectionFailed))
+        }
+    }
+
+    /// Runs on every failure path. The microphone staying open is the worst outcome this app has -
+    /// worse than losing the utterance - so it is closed unconditionally.
+    /// Synchronous on purpose. A microphone left open is the worst outcome this app has - worse
+    /// than losing the utterance - so it closes in the same turn as the decision to stop, not
+    /// whenever a Task happens to be scheduled. Idempotent, so the async teardown may call it again.
+    private func closeMicrophone() {
+        capture?.stop()
+    }
+
+    private func teardown() async {
+        closeMicrophone()
+        await feed.cancel()
+        pendingText = nil
+    }
+
+    private static func classify(_ error: Error) -> DictationFailure {
+        if let captureError = error as? AVAudioEngineCapture.CaptureError,
+           captureError == .microphoneNotAuthorized {
+            return .permissionDenied
+        }
+        return .transcriptionFailed
+    }
+
+    private func startCaptureWatchdog() {
+        stopCaptureWatchdog()
+        guard maximumCaptureDuration > 0 else { return }
+        let timer = Timer(timeInterval: maximumCaptureDuration, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.apply(.watchdogExpired) }
+        }
+        captureWatchdog = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopCaptureWatchdog() {
+        captureWatchdog?.invalidate()
+        captureWatchdog = nil
+    }
+
+    /// Whether a capture-duration watchdog is currently armed.
+    var isCaptureWatchdogArmed: Bool { captureWatchdog != nil }
+
+    /// Maps a raw key edge to the dictation event it implies, including the double press that
+    /// starts a latched utterance.
+    ///
+    /// The timestamp is a parameter with a monotonic default so tests can drive the double-press
+    /// windows deterministically instead of racing a wall clock. `systemUptime` rather than
+    /// `Date()`: it cannot step backwards when the clock is adjusted.
+    func handle(_ edge: HotkeyEdge, at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        apply(pressPattern.handle(edge, at: time))
+    }
+
+    var statusText: String {
+        switch machine.state {
+        case .idle: "Ready"
+        case .arming: "Starting..."
+        case .recording: "Listening"
+        case .transcribing: "Transcribing"
+        case .cleaning: "Polishing"
+        case .injecting: "Inserting"
+        case .failed(let reason): Self.describe(reason)
+        }
+    }
+
+    private static func describe(_ failure: DictationFailure) -> String {
+        switch failure {
+        case .permissionDenied: "Permission needed"
+        case .noSpeechDetected: "Didn't catch that"
+        case .transcriptionFailed: "Transcription failed"
+        case .injectionFailed: "Couldn't insert text"
+        case .cancelled: "Cancelled"
+        }
+    }
+}
