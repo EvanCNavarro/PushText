@@ -3,6 +3,7 @@ import SwiftUI
 import Foundation
 @testable import PushText
 import PushTextKit
+import PushTextCore
 import MacFaceKit
 
 /// Renders the permission rows to a PNG so the copy and layout can be LOOKED AT (#6, FL-9).
@@ -105,6 +106,47 @@ struct PermissionRowSnapshotTests {
             return
         }
         let url = URL(fileURLWithPath: directory).appendingPathComponent("capture-warning.png")
+        try png.write(to: url)
+        print("SNAPSHOT \(url.path) bytes=\(png.count)")
+    }
+
+    /// The model-preparation row (#76), rendered because its failure mode is layout: a percentage
+    /// that wraps mid-number, or a failure message so long it swamps the section, are both things
+    /// only a render shows.
+    @Test("Render model preparation, in progress and failed",
+          .enabled(if: PermissionRowSnapshotTests.outputDirectory != nil))
+    func renderModelPreparation() throws {
+        guard let directory = Self.outputDirectory else { return }
+
+        let states: [ModelPreparation] = [
+            .preparing(fraction: 0.07),
+            .preparing(fraction: 0.64),
+            .failed("The Internet connection appears to be offline.")
+        ]
+        let view = VStack(alignment: .leading, spacing: Tokens.space) {
+            ForEach(Array(states.enumerated()), id: \.offset) { _, state in
+                SectionCard("NEEDS ATTENTION") {
+                    if let message = AppModel.preparationMessage(for: state) {
+                        Text(message)
+                            .font(Tokens.caption)
+                            .foregroundStyle(Tokens.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .frame(width: 320)
+        .padding(Tokens.pad)
+        .background(Tokens.panel)
+
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        guard let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:]) else {
+            Issue.record("ImageRenderer produced nothing"); return
+        }
+        let url = URL(fileURLWithPath: directory).appendingPathComponent("model-preparation.png")
         try png.write(to: url)
         print("SNAPSHOT \(url.path) bytes=\(png.count)")
     }

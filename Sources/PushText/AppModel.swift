@@ -49,32 +49,32 @@ private let engine: any TranscriptionEngine
     /// Text waiting to be injected, held between `transcriptFinalized` and `injectionFinished`.
     private var pendingText: String?
 
-    /// Permission rows for the menu, refreshed when it opens (#6).
-    ///
-    /// Recomputed on open rather than polled: TCC state changes while the user is in System
-    /// Settings, i.e. while this menu is CLOSED, so a value cached at launch is stale exactly when
-    /// someone is acting on it.
-    private(set) var permissionAdvice: [(permission: Permission, advice: PermissionAdvice)] = []
+    private let advisor = PermissionAdvisor()   // see PermissionAdvisor
 
-    /// Injected so tests can drive every state; nil means "do not show permission rows at all",
-    /// which is what the state-machine tests want.
-    var permissionProbe: (any PermissionProbe)?
+    var permissionAdvice: [(permission: Permission, advice: PermissionAdvice)] { advisor.advice }
 
-    func refreshPermissionAdvice() {
-        guard let permissionProbe else { permissionAdvice = []; return }
-        permissionAdvice = Permission.allCases.compactMap { permission in
-            guard let advice = PermissionAdvice.forStatus(permissionProbe.status(of: permission),
-                                                          of: permission) else { return nil }
-            return (permission, advice)
-        }
+    var permissionProbe: (any PermissionProbe)? {
+        get { advisor.probe }
+        set { advisor.probe = newValue }
     }
 
-    /// The user's rewrite rules (#82). Loaded per utterance rather than cached: the file is edited
-    /// by hand in a text editor, and a cache would ignore every change until relaunch.
-    private let dictionary: (any DictionaryStore)?
+    func refreshPermissionAdvice() { advisor.refresh() }
+
+    /// Model installation, owned by its own type - see ModelPreparer.
+    private let preparer = ModelPreparer()
+
+    var modelPreparation: ModelPreparation { preparer.state }
+
+    func prepareModel() async { await preparer.prepare(engine: engine) }
+
+    /// What the menu says about preparation, or nil when there is nothing to say.
+    var modelPreparationMessage: String? { Self.preparationMessage(for: modelPreparation) }
 
     /// Where completed dictations are kept (#10). Optional so the state-machine tests can run with
     /// no filesystem at all.
+    /// The user's rewrite rules (#82). Loaded per utterance, never cached - the file is hand-edited.
+    private let dictionary: (any DictionaryStore)?
+
     private let history: (any HistoryStore)?
 
     /// What the last utterance lost, phrased for a human, or nil when it lost nothing (#71).

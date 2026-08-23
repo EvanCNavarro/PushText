@@ -72,12 +72,10 @@ struct PushTextApp: App {
         // Install the on-device model NOW rather than on the first key-down (#36). Detached and
         // unawaited on purpose: launch must not block on a download either, and a failure here is
         // not fatal - `beginUtterance` reports `.modelNotReady` and the user is told to wait.
-        Task.detached(priority: .utility) {
-            do {
-                try await engine.prepare()
-            } catch {
-                dictationLog.error("model prepare failed: \(String(describing: error), privacy: .public)")
-            }
+        // Through the model now (#76), so progress and failure reach the menu rather than only the
+        // log. Still detached: launch must not block on a download either.
+        Task.detached(priority: .utility) { [model] in
+            await model.prepareModel()
         }
 
         // The tap is the only thing that can fail at launch, and it fails for one reason worth

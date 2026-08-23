@@ -27,7 +27,9 @@ public protocol TranscriptionEngine: Actor {
     /// Everything slow and one-time belongs here: for the Apple engine that is installing the
     /// on-device model, which `beginUtterance` used to do while the user was already speaking.
     /// Called at launch, and safe to call again - implementations must be idempotent.
-    func prepare() async throws
+    /// - Parameter onProgress: fraction complete, 0...1, called as installation advances (#76).
+    ///   Nil when the caller does not care. Not every engine has anything to report.
+    func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws
 
     /// Begin a new utterance. Called on hotkey-down.
     func beginUtterance() async throws
@@ -45,7 +47,10 @@ public protocol TranscriptionEngine: Actor {
 
 public extension TranscriptionEngine {
     /// Most engines need no preparation; only one has a model to download.
-    func prepare() async throws {}
+    func prepare(onProgress: (@Sendable (Double) -> Void)?) async throws {}
+
+    /// For callers with no use for progress.
+    func prepare() async throws { try await prepare(onProgress: nil) }
 }
 
 /// A finished transcript.
