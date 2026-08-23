@@ -17,11 +17,36 @@ import FoundationModels
 /// cleanup can never ship here; `appleIntelligenceNotEnabled` is a Settings toggle; `modelNotReady`
 /// is a download that will finish on its own.
 ///
-/// Activated by `PUSHTEXT_CLEANUP_PROBE=1`. Exits non-zero when the model cannot run, so it is
-/// usable as a gate on #14.
+/// Activated by `PUSHTEXT_CLEANUP_PROBE=1`. With `PUSHTEXT_CLEANUP_PROBE_TEXT` set it also runs one
+/// REAL cleanup through `FoundationModelsCleanup` and prints what came back - availability says the
+/// model can run, and only this says cleanup produces something that survives the drift guard.
+/// Exits non-zero when the model cannot run, so it is usable as a gate on #14.
 public enum CleanupProbe {
     public static var isRequested: Bool {
         ProcessInfo.processInfo.environment["PUSHTEXT_CLEANUP_PROBE"] == "1"
+    }
+
+    /// Runs one real cleanup and exits. Blocking wait is fine here: this is a probe process whose
+    /// only job is this call, and nothing else needs the main thread.
+    @available(macOS 26, *)
+    private static func runCleanupAndExit(_ text: String) -> Never {
+        let semaphore = DispatchSemaphore(value: 0)
+        let box = ResultBox()
+        Task {
+            let cleanup = FoundationModelsCleanup()
+            let transcript = Transcript(text: text, duration: 0)
+            let cleaned = (try? await cleanup.clean(transcript)) ?? text
+            box.set(cleaned: cleaned, rejection: await cleanup.lastRejection)
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 60)
+
+        print("CLEANUP_PROBE raw=\"\(text)\"")
+        print("CLEANUP_PROBE cleaned=\"\(box.cleaned)\"")
+        print("CLEANUP_PROBE changed=\(box.cleaned != text) rejection=\(box.rejectionDescription)")
+        print("CLEANUP_PROBE model=ok")
+        fflush(stdout)
+        exit(0)
     }
 
     public static func runAndExit() -> Never {
@@ -37,9 +62,17 @@ public enum CleanupProbe {
         switch availability {
         case .available:
             print("CLEANUP_PROBE availability=available isAvailable=\(model.isAvailable)")
-            print("CLEANUP_PROBE model=ok")
             fflush(stdout)
-            exit(0)
+
+            // With text supplied, drive the REAL model through the real provider. Availability says
+            // the model can run; only this says cleanup actually produces something and survives
+            // the drift guard.
+            guard let text = ProcessInfo.processInfo.environment["PUSHTEXT_CLEANUP_PROBE_TEXT"] else {
+                print("CLEANUP_PROBE model=ok")
+                fflush(stdout)
+                exit(0)
+            }
+            runCleanupAndExit(text)
 
         case .unavailable(let reason):
             let name: String
@@ -64,6 +97,23 @@ public enum CleanupProbe {
             fflush(stdout)
             exit(3)
         }
+    }
+}
+
+/// Carries the async result back across the semaphore.
+private final class ResultBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var text = ""
+    private var reason: CleanupRejection?
+
+    func set(cleaned: String, rejection: CleanupRejection?) {
+        lock.lock(); text = cleaned; reason = rejection; lock.unlock()
+    }
+
+    var cleaned: String { lock.lock(); defer { lock.unlock() }; return text }
+    var rejectionDescription: String {
+        lock.lock(); defer { lock.unlock() }
+        return reason.map { "\($0)" } ?? "none"
     }
 }
 #endif

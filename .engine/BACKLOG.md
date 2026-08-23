@@ -132,7 +132,7 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   Determines whether #9 can bias the engine or is post-pass only. Highest value per minute of any
   Phase 1 check.
 
-#14 - FoundationModelsCleanup behind the drift guard - S0
+#14 - FoundationModelsCleanup behind the drift guard - DONE
   blocked-by: #8, #11. Permissive guardrails at construction time; `respond` not `streamResponse`;
   silent fallback to the raw transcript on all nine GenerationError cases.
 
