@@ -13,6 +13,26 @@ final class AppModel {
     private(set) var lastTranscript: String?
     /// Non-nil when something at launch left the app unable to dictate. Shown in the menu.
     private(set) var startupFailure: String?
+
+    /// Permission rows for the menu, refreshed when it opens (#6).
+    ///
+    /// Recomputed on open rather than polled: TCC state changes while the user is in System
+    /// Settings, i.e. while this menu is CLOSED, so a value cached at launch is stale exactly when
+    /// someone is acting on it.
+    private(set) var permissionAdvice: [(permission: Permission, advice: PermissionAdvice)] = []
+
+    /// Injected so tests can drive every state; nil means "do not show permission rows at all",
+    /// which is what the state-machine tests want.
+    var permissionProbe: (any PermissionProbe)?
+
+    func refreshPermissionAdvice() {
+        guard let permissionProbe else { permissionAdvice = []; return }
+        permissionAdvice = Permission.allCases.compactMap { permission in
+            guard let advice = PermissionAdvice.forStatus(permissionProbe.status(of: permission),
+                                                          of: permission) else { return nil }
+            return (permission, advice)
+        }
+    }
     private let engine: any TranscriptionEngine
     private let capture: (any AudioCapture)?
     private let injector: (any TextInjector)?

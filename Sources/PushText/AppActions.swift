@@ -3,6 +3,7 @@ import AppKit
 import OSLog
 import Sparkle
 import MacFaceKit
+import PushTextKit
 
 /// The `···` overflow actions, matching TermTile's set so the two apps behave the same way (#47).
 ///
@@ -21,6 +22,21 @@ final class AppActions {
     private let updater = SPUStandardUpdaterController(startingUpdater: true,
                                                        updaterDelegate: nil,
                                                        userDriverDelegate: nil)
+
+    /// Acts on a permission row: prompt if the app can, otherwise open the right Settings pane.
+    ///
+    /// The pane is opened rather than described because Privacy panes are several clicks deep and
+    /// naming a path is not help. Verified on macOS 26.6.2: opening the Accessibility anchor lands
+    /// on a window titled "Accessibility" - the research called that anchor's survival on Tahoe its
+    /// single highest-risk assumption (docs/research/04), so it is measured rather than trusted.
+    func resolvePermission(_ advice: PermissionAdvice) {
+        if advice.canPromptInApp {
+            Task { _ = await AVAudioEngineCapture.requestMicrophoneAccess() }
+            return
+        }
+        guard let url = advice.settingsURL else { return }
+        NSWorkspace.shared.open(url)
+    }
 
     func menuActions() -> [MenuAction] {
         [
