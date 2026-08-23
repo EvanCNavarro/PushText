@@ -48,28 +48,32 @@ enum HUDPhase: Equatable {
 struct DictationHUDView: View {
     let phase: HUDPhase
     let level: Double
+    /// Drives the drop-down transition. Separate from `phase` because the pill has to be MOUNTED
+    /// before it can animate in - flipping it after the panel is on screen is what makes the motion
+    /// happen at all.
+    let isPresented: Bool
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
     private let barCount = 13
 
     var body: some View {
-        Group {
-            if phase.isActive {
+        VStack(spacing: 0) {
+            if isPresented {
                 active
-            } else {
-                resting
+                    // Enters and leaves through the TOP edge, so it reads as dropping out of the
+                    // menu-bar item it hangs from. A default transition scales from the view's
+                    // centre inside a wider panel, which looks like it slides in from a corner -
+                    // which is exactly what it looked like.
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
+            Spacer(minLength: 0)
         }
-        .animation(.spring(response: 0.28, dampingFraction: 0.82), value: phase)
-    }
-
-    private var resting: some View {
-        Capsule(style: .continuous)
-            .strokeBorder(.white.opacity(0.35), lineWidth: 1.5)
-            .background(Capsule(style: .continuous).fill(.black.opacity(0.55)))
-            .frame(width: 46, height: 16)
-            .accessibilityLabel(Text("PushText ready"))
+        // Pinned to the TOP of the panel and centred horizontally, so the pill hangs from the same
+        // point regardless of how wide it grows.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .animation(.spring(response: 0.30, dampingFraction: 0.78), value: isPresented)
+        .animation(.spring(response: 0.30, dampingFraction: 0.78), value: phase)
     }
 
     private var active: some View {
@@ -138,6 +142,7 @@ final class DictationHUDController {
     @Observable
     final class HUDModel {
         var phase: HUDPhase = .resting
+        var isPresented = false
         var level: Double = 0
         var onCancel: () -> Void = {}
         var onConfirm: () -> Void = {}
@@ -157,6 +162,15 @@ final class DictationHUDController {
         // `orderFrontRegardless` rather than `makeKeyAndOrderFront`: the latter would take focus and
         // break injection.
         panel?.orderFrontRegardless()
+
+        // Mount first, animate second. Setting this in the same turn as ordering the window front
+        // would show the pill already in place with nothing to animate.
+        model.isPresented = false
+        DispatchQueue.main.async { [model] in
+            withAnimation(.spring(response: 0.30, dampingFraction: 0.78)) {
+                model.isPresented = true
+            }
+        }
     }
 
     func update(phase: HUDPhase, level: Double) {
@@ -168,8 +182,19 @@ final class DictationHUDController {
     /// menu-bar item rather than living on screen, so there is nothing to dismiss when idle.
     func hide() {
         model.level = 0
-        model.phase = .resting
-        panel?.orderOut(nil)
+        guard let panel, panel.isVisible else {
+            model.isPresented = false
+            model.phase = .resting
+            return
+        }
+        // Let it retract through the top edge before the window goes away, or the animation is
+        // replaced by the panel simply vanishing.
+        withAnimation(.easeIn(duration: 0.16)) { model.isPresented = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+            guard let self, self.model.isPresented == false else { return }
+            self.model.phase = .resting
+            panel.orderOut(nil)
+        }
     }
 
     private func makePanel() -> DictationHUDPanel {
@@ -179,7 +204,7 @@ final class DictationHUDController {
         // transparent panel, so growing it cannot cause a window-server flicker or move the click
         // targets around mid-animation.
         let panel = DictationHUDPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 220, height: 60),
+            contentRect: NSRect(x: 0, y: 0, width: 240, height: 76),
             styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false)
@@ -246,6 +271,7 @@ private struct HUDHost: View {
         DictationHUDView(
             phase: model.phase,
             level: model.level,
+            isPresented: model.isPresented,
             onCancel: model.onCancel,
             onConfirm: model.onConfirm)
     }

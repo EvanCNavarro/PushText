@@ -337,3 +337,18 @@ research that found them is not read on every cycle, and the trap is.
   cancel and failure rather than inside the async teardown, because a microphone left open is the
   worst outcome this app has, and "it closes a moment later, once a Task is scheduled" is not
   closing it.
+
+### TRAP-32: Text Input Source calls TRAP off the main thread, they do not fail
+- what happened: `PasteboardTextInjector.pasteKeyCode()` uses `TISCopyCurrentKeyboardLayoutInputSource`
+  and `TISGetInputSourceProperty` to resolve the paste keycode. `TextInjector.inject` is not
+  main-actor isolated, so `await injector.inject(text)` from AppModel runs on the cooperative pool -
+  and `TSMGetInputSourceProperty` asserts its dispatch queue. The app died mid-dictation with
+  SIGTRAP: `_dispatch_assert_queue_fail <- TSMGetInputSourceProperty <- pasteKeyCode()`. It had
+  worked earlier in the same session, which is what made it read as "crashes if I record too long"
+  rather than as a threading bug.
+- warning: mark such functions `@MainActor` so the COMPILER enforces the hop rather than a comment.
+  Doing that here immediately surfaced a second off-main call site in `InjectionProbe` that nobody
+  knew about. And check what the hop then deadlocks against: the probe waited on a
+  `DispatchSemaphore` from the main thread, so the new main-actor hop could never be serviced and
+  reported as `inject=failed error=timeout`. It now pumps the run loop instead. A blocking wait on
+  the main thread is incompatible with any main-actor work the awaited task needs.
