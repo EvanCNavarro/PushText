@@ -142,7 +142,50 @@ public enum CleanupDriftGuard {
             .replacingOccurrences(of: "\u{2019}", with: "")
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { !$0.isEmpty }
+            .map(canonicalNumber)
     }
+
+    /// Collapses a number to one canonical form so grounding treats "1st" and "first" as the same
+    /// word.
+    ///
+    /// Measured need, not a guess: in shadow mode over 20 real `SpeechTranscriber` transcripts x 3
+    /// model runs, grounding produced 10 of the 12 rejections, and the most common single token was
+    /// "first" - the model expanding the transcriber's "1st"
+    /// (docs/verification/task68-cleanup-shadow-mode.md). Expanding an ordinal is a NORMALISATION,
+    /// and rejecting it made the guard fire hardest on the tidying the user actually wanted.
+    ///
+    /// Bounded to 0-20 on purpose. A full number-words parser is a large surface with its own bugs,
+    /// and the measured failures are all small ordinals; anything outside the table is left alone
+    /// and stays subject to grounding rather than being waved through.
+    ///
+    /// This makes the guard slightly MORE permissive, which is the right direction here: it cannot
+    /// weaken the case the guard exists for - "what is the capital of France" -> "Paris" - because
+    /// no mapping turns a country into a city. `47` appearing in a transcript that never mentioned
+    /// a number is still ungrounded.
+    private static func canonicalNumber(_ token: String) -> String {
+        if let word = numberWords[token] { return word }
+        // "1st", "22nd", "103rd" -> the digits. Suffix only, so "1stanza" is untouched.
+        for suffix in ["st", "nd", "rd", "th"] where token.hasSuffix(suffix) {
+            let stem = String(token.dropLast(2))
+            if !stem.isEmpty, stem.allSatisfy(\.isNumber) { return stem }
+        }
+        return token
+    }
+
+    /// Cardinal and ordinal words for 0-20, each mapped to the digit form.
+    private static let numberWords: [String: String] = {
+        let cardinals = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
+                         "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+                         "sixteen", "seventeen", "eighteen", "nineteen", "twenty"]
+        let ordinals = ["zeroth", "first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+                        "eighth", "ninth", "tenth", "eleventh", "twelfth", "thirteenth",
+                        "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth",
+                        "nineteenth", "twentieth"]
+        var map: [String: String] = [:]
+        for (value, word) in cardinals.enumerated() { map[word] = String(value) }
+        for (value, word) in ordinals.enumerated() { map[word] = String(value) }
+        return map
+    }()
 
     private static func count(of set: Set<String>, in tokens: [String]) -> Int {
         tokens.reduce(0) { $0 + (set.contains($1) ? 1 : 0) }

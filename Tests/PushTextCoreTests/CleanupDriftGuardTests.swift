@@ -189,4 +189,42 @@ struct CleanupDriftGuardTests {
         #expect(CleanupDriftGuard.tokens("don't") == ["dont"])
         #expect(CleanupDriftGuard.tokens("I can't do it") == ["i", "cant", "do", "it"])
     }
+    /// Measured in shadow mode over 20 real `SpeechTranscriber` transcripts, 3 model runs each
+    /// (docs/verification/task68-cleanup-shadow-mode.md): 12 of 60 runs were rejected, 10 of them
+    /// by grounding, and the single most common token was "first" - the model expanding the
+    /// transcriber's "1st".
+    ///
+    /// That is a NORMALISATION, not invented content, and it is exactly the kind of tidying
+    /// cleanup exists to do. Rejecting it means the guard fires hardest on the correction the user
+    /// most wanted.
+    @Test("An ordinal expanded from its digit form is grounded, not invented")
+    func digitOrdinalExpansionIsGrounded() {
+        let raw = "I think we should cut the scope for the 1st release"
+        let cleaned = "I think we should cut the scope for the first release."
+
+        #expect(CleanupDriftGuard.verdict(raw: raw, cleaned: cleaned) == .plausible)
+    }
+
+    @Test("The equivalence runs both ways and covers cardinals")
+    func numeralEquivalenceIsSymmetric() {
+        #expect(CleanupDriftGuard.verdict(raw: "give me 2 minutes",
+                                          cleaned: "Give me two minutes.") == .plausible)
+        #expect(CleanupDriftGuard.verdict(raw: "give me two minutes",
+                                          cleaned: "Give me 2 minutes.") == .plausible)
+        #expect(CleanupDriftGuard.verdict(raw: "the 3rd option",
+                                          cleaned: "The third option.") == .plausible)
+    }
+
+    /// The equivalence must not become a hole. A number the transcript never contained is still
+    /// invented content, and this is the assertion that stops the fix from simply disabling
+    /// grounding for anything numeric.
+    @Test("A number that was never said is still ungrounded")
+    func unspokenNumberIsStillRejected() {
+        #expect(CleanupDriftGuard.verdict(raw: "how many users signed up",
+                                          cleaned: "How many users signed up? 47.")
+                != .plausible)
+        #expect(CleanupDriftGuard.verdict(raw: "the 1st release",
+                                          cleaned: "The second release.") != .plausible)
+    }
+
 }
