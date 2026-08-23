@@ -99,8 +99,10 @@ jobs:
           REQUIRE_STABLE_CODESIGN: "1"
           REQUIRE_DEVELOPER_ID_CODESIGN: "1"
           REQUIRE_SPARKLE_KEY: "1"
-          # Inherited from TermTile - same developer, same Apple team. UNVERIFIED against a
-          # PushText signing identity; confirm before the first release (backlog #17).
+          # VERIFIED 2026-08-23, previously marked UNVERIFIED and inherited from TermTile:
+          # `security find-identity -v -p codesigning` on the build machine returns
+          # "Developer ID Application: Evan Navarro (XG9SBNWNXT)", so the team id is this
+          # developer's, not a value copied from a sibling project and hoped for.
           REQUIRE_CODESIGN_TEAM_ID: XG9SBNWNXT
         run: scripts/test-packaged-app.sh "${{ steps.build.outputs.app_path }}"
 
