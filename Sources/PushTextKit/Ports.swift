@@ -22,6 +22,13 @@ public protocol TranscriptionEngine: Actor {
     /// `supportedLocales` is a hardware signal, not a missing download (docs/research/01).
     var isAvailable: Bool { get async }
 
+    /// Get ready to transcribe, off the dictation path (#36).
+    ///
+    /// Everything slow and one-time belongs here: for the Apple engine that is installing the
+    /// on-device model, which `beginUtterance` used to do while the user was already speaking.
+    /// Called at launch, and safe to call again - implementations must be idempotent.
+    func prepare() async throws
+
     /// Begin a new utterance. Called on hotkey-down.
     func beginUtterance() async throws
 
@@ -34,6 +41,11 @@ public protocol TranscriptionEngine: Actor {
     /// Implementations MUST bound their own wait. The Apple result stream is known to hang in the
     /// field; VoiceInk ships `max(20, duration * 4 + 10)` seconds as its ceiling (docs/research/01 §7).
     func finishUtterance() async throws -> Transcript
+}
+
+public extension TranscriptionEngine {
+    /// Most engines need no preparation; only one has a model to download.
+    func prepare() async throws {}
 }
 
 /// A finished transcript.

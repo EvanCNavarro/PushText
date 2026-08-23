@@ -28,6 +28,7 @@ extension AppModel {
         case .noSpeechDetected: "Didn't catch that"
         case .transcriptionFailed: "Transcription failed"
         case .injectionFailed: "Couldn't insert text"
+        case .modelNotReady: "Preparing model..."
         case .cancelled: "Cancelled"
         }
     }

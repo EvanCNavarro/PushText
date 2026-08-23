@@ -10,11 +10,16 @@ import Foundation
 public enum DictationState: Equatable, Sendable {
     /// Nothing happening. The hotkey is up.
     case idle
-    /// Hotkey down. Audio engine starting, LLM prewarming. Not yet capturing speech.
+    /// Hotkey down. Audio engine and transcriber starting. Not yet capturing speech.
     ///
-    /// This phase exists to buy latency: prewarming the language model on key-down gives us the
-    /// user's entire speech duration for free, which is the single largest win available and the
-    /// main reason cleanup runs in-process rather than over HTTP (PLAN.md §2.1).
+    /// This phase exists to buy latency: work started on key-down gets the user's entire speech
+    /// duration for free, which is the largest win available and the main reason cleanup runs
+    /// in-process rather than over HTTP (PLAN.md sec 2.1).
+    ///
+    /// It used to say the language model was PREWARMED here, and nothing did that - the only
+    /// model work on this path was an asset download that blocked the first utterance (#36).
+    /// Installation now happens at launch via `TranscriptionEngine.prepare()`, and this phase
+    /// starts the analyzer for an already-installed model.
     case arming
     /// Capturing audio and streaming it to the transcription engine.
     case recording
@@ -44,6 +49,12 @@ public enum DictationFailure: Equatable, Sendable {
     case transcriptionFailed
     /// Text was produced but could not be written into the frontmost app.
     case injectionFailed
+    /// The on-device model has not finished installing yet (#36).
+    ///
+    /// Distinct from `transcriptionFailed` because the user's next move differs: this one resolves
+    /// itself if they wait, and telling them "Transcription failed" would send them looking for a
+    /// fault that does not exist.
+    case modelNotReady
     /// The user let go before saying anything, or cancelled.
     case cancelled
 }

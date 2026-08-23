@@ -28,6 +28,12 @@ public actor AppleSpeechEngine: TranscriptionEngine {
         case localeUnsupported(String)
         /// The on-device model is not installed and installation failed or was refused.
         case modelUnavailable(String)
+        /// The model is absent and this is the DICTATION path, which must not download (#36).
+        ///
+        /// Failing here in milliseconds is the point. `beginUtterance` used to await
+        /// `downloadAndInstall()`, so on a cold machine the first key-down vanished into a
+        /// multi-minute wait with the user already talking. Installation belongs in `prepare()`.
+        case modelNotReady
         case notStarted
         /// The results stream did not terminate within the ceiling. Bounded deliberately: the
         /// stream is known to hang in the field, and an unbounded await would hang the app.
@@ -49,12 +55,37 @@ public actor AppleSpeechEngine: TranscriptionEngine {
     private var deliveredFrames: Int64 = 0
     private var targetSampleRate: Double = 0
 
+    /// `isModelInstalled` is injectable for ONE reason: #36's claim is that `beginUtterance` no
+    /// longer downloads, and that is a property of the NOT-installed case - which cannot occur on a
+    /// machine whose model is present and which `AssetInventory` offers no way to undo. Without a
+    /// seam the central assertion would be untestable and could only be re-read, not run.
     public init(
         locale: Locale = Locale(identifier: "en-US"),
-        preset: SpeechTranscriber.Preset = .progressiveTranscription
+        preset: SpeechTranscriber.Preset = .progressiveTranscription,
+        isModelInstalled: (@Sendable (SpeechTranscriber) async -> Bool)? = nil,
+        isTranscriberAvailable: (@Sendable () -> Bool)? = nil
     ) {
         self.requestedLocale = locale
         self.preset = preset
+        self.isModelInstalledOverride = isModelInstalled
+        self.isTranscriberAvailableOverride = isTranscriberAvailable
+    }
+
+    private let isModelInstalledOverride: (@Sendable (SpeechTranscriber) async -> Bool)?
+
+    /// Injectable for the same reason as `isModelInstalled`, and CI proved the need: GitHub's
+    /// macos-26 runner has no Neural Engine, so `SpeechTranscriber.isAvailable` is false there and
+    /// `beginUtterance` throws `.unavailable` before any model check. A test that assumed capable
+    /// hardware passed locally and failed in CI.
+    private let isTranscriberAvailableOverride: (@Sendable () -> Bool)?
+
+    private var transcriberIsAvailable: Bool {
+        isTranscriberAvailableOverride?() ?? SpeechTranscriber.isAvailable
+    }
+
+    private func isModelInstalled(_ transcriber: SpeechTranscriber) async -> Bool {
+        if let isModelInstalledOverride { return await isModelInstalledOverride(transcriber) }
+        return await AssetInventory.status(forModules: [transcriber]) == .installed
     }
 
     /// Whether the recognizer can run on this hardware at all.
@@ -74,14 +105,20 @@ public actor AppleSpeechEngine: TranscriptionEngine {
     }
 
     public func beginUtterance() async throws {
-        guard SpeechTranscriber.isAvailable else { throw EngineError.unavailable }
+        // Hardware first, deliberately: an unusable Neural Engine is permanent, and telling that
+        // user "Preparing model..." would promise a wait that never ends.
+        guard transcriberIsAvailable else { throw EngineError.unavailable }
 
         guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requestedLocale) else {
             throw EngineError.localeUnsupported(requestedLocale.identifier)
         }
 
         let transcriber = SpeechTranscriber(locale: locale, preset: preset)
-        try await ensureModelInstalled(for: transcriber)
+
+        // Refuse rather than download (#36). `prepare()` owns installation; if it has not finished,
+        // the honest answer is "not yet" in milliseconds, not a silent multi-minute await with the
+        // user already speaking.
+        guard await isModelInstalled(transcriber) else { throw EngineError.modelNotReady }
 
         // The Bool is not a success signal - it came back false while the reservation had in fact
         // taken effect (TRAP-22). Read the post-condition instead of branching on the return.
@@ -106,6 +143,24 @@ public actor AppleSpeechEngine: TranscriptionEngine {
         self.targetSampleRate = format.sampleRate
         self.deliveredFrames = 0
         self.startedAt = ContinuousClock.now
+    }
+
+    /// Installs the on-device model if it is missing. Called at launch, off the dictation path.
+    ///
+    /// Idempotent: `ensureModelInstalled` returns immediately when the status is already
+    /// `.installed`, which is every run after the first on a given machine.
+    ///
+    /// The COLD path is not verifiable here. macOS 26's `AssetInventory` exposes `reserve` /
+    /// `release` / `status` / `assetInstallationRequest` and no uninstall - read from the SDK
+    /// interface - so a machine whose model is present cannot be returned to the state this method
+    /// exists for. What IS verified is that it is idempotent and that `beginUtterance` no longer
+    /// downloads.
+    public func prepare() async throws {
+        guard transcriberIsAvailable else { throw EngineError.unavailable }
+        guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requestedLocale) else {
+            throw EngineError.localeUnsupported(requestedLocale.identifier)
+        }
+        try await ensureModelInstalled(for: SpeechTranscriber(locale: locale, preset: preset))
     }
 
     public func append(_ buffer: PushTextKit.AudioBuffer) async throws {

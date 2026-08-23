@@ -59,4 +59,56 @@ struct AppleSpeechEngineTests {
             try await engine.beginUtterance()
         }
     }
+    /// #36's central claim, and the only test that can hold it: `beginUtterance` must REFUSE when
+    /// the model is absent, not download it.
+    ///
+    /// The not-installed state cannot occur on this machine - `AssetInventory` has no uninstall -
+    /// so the installed-check is injected. Asserting on the ERROR is what makes this real: a
+    /// version that downloaded would either hang or eventually succeed, and both are visibly
+    /// different from `.modelNotReady`.
+    @Test("beginUtterance refuses a missing model instead of downloading it")
+    func beginRefusesWhenTheModelIsAbsent() async {
+        let engine = AppleSpeechEngine(isModelInstalled: { _ in false },
+                                       isTranscriberAvailable: { true })
+
+        await #expect(throws: AppleSpeechEngine.EngineError.modelNotReady) {
+            try await engine.beginUtterance()
+        }
+    }
+
+    /// Hardware beats readiness, and CI is why this is asserted rather than assumed. GitHub's
+    /// macos-26 runner has no Neural Engine, so the test above failed there with `.unavailable`
+    /// until availability was injected too - a machine-dependent test that passed locally.
+    ///
+    /// The ordering is correct and worth pinning: an unusable Neural Engine is PERMANENT, so
+    /// "Preparing model..." would promise a wait that never ends.
+    @Test("Unusable hardware is reported ahead of a missing model")
+    func hardwareFailureOutranksModelReadiness() async {
+        let engine = AppleSpeechEngine(isModelInstalled: { _ in false },
+                                       isTranscriberAvailable: { false })
+
+        await #expect(throws: AppleSpeechEngine.EngineError.unavailable) {
+            try await engine.beginUtterance()
+        }
+    }
+
+    /// The refusal has to be FAST. A slow refusal is the same user-visible defect as a download:
+    /// the key is held, the words are being spoken, and nothing is listening.
+    @Test("The refusal is immediate rather than a disguised wait")
+    func theRefusalIsFast() async {
+        let engine = AppleSpeechEngine(isModelInstalled: { _ in false },
+                                       isTranscriberAvailable: { true })
+
+        let started = ContinuousClock.now
+        _ = try? await engine.beginUtterance()
+        let elapsed = ContinuousClock.now - started
+
+        #expect(elapsed < .seconds(2), "refusal took \(elapsed), which is a wait not a refusal")
+    }
+
+    // The installed case is NOT unit-tested here on purpose. `beginUtterance` with a real
+    // installed model starts SpeechAnalyzer, and a first attempt at asserting it hung past 600s -
+    // the engine's real path belongs to `TranscriptionProbe`, which drives it end to end and is
+    // what AGENTS.md says to cite for any claim about transcription.
+
 }
