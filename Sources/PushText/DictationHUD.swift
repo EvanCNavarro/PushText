@@ -87,14 +87,29 @@ struct DictationHUDView: View {
                 .frame(width: 16, height: 7)
 
             HStack(spacing: Tokens.inset) {
-                control(symbol: "xmark", help: "Discard this dictation",
-                        destructive: true, action: onCancel)
+                if phase == .working {
+                    // Both controls go, not just confirm. Confirm has nothing left to confirm, and
+                    // cancel CANNOT be honoured here: `cancelRequested` is accepted only from
+                    // `.arming` and `.recording` (DictationState), so leaving it on screen would
+                    // replace one dead button with another. A spinner on each side keeps the pill
+                    // the same width, so the phase change reads as the same object working rather
+                    // than as the controls jumping.
+                    spinner
+                } else {
+                    control(symbol: "xmark", help: "Discard this dictation",
+                            destructive: true, action: onCancel)
+                }
 
                 levels
                     .frame(width: 96, height: 26)
                     .accessibilityLabel(Text("\(phase.label), input level \(Int(level * 100)) percent"))
 
-                control(symbol: "checkmark", help: "Finish and insert the text", action: onConfirm)
+                if phase == .working {
+                    spinner
+                } else {
+                    control(symbol: "checkmark", help: "Finish and insert the text",
+                            action: onConfirm)
+                }
             }
             .padding(.horizontal, Tokens.inset + 2)
             .padding(.vertical, Tokens.space + 1)
@@ -131,6 +146,20 @@ struct DictationHUDView: View {
         let minimum = 3.0
         let maximum = 24.0
         return CGFloat(minimum + (maximum - minimum) * level * shape)
+    }
+
+    /// Occupies exactly a control's footprint, so the pill neither resizes nor reflows when the
+    /// phase flips - the failure a naive swap produces is the waveform sliding sideways mid-utterance.
+    private var spinner: some View {
+        ProgressView()
+            .progressViewStyle(.circular)
+            .controlSize(.small)
+            .scaleEffect(0.6)
+            .frame(width: Tokens.controlButton, height: Tokens.controlButton)
+            .background(
+                RoundedRectangle(cornerRadius: Tokens.radius - 2, style: .continuous)
+                    .fill(Tokens.row))
+            .accessibilityLabel(Text(phase.label))
     }
 
     /// Cancel is tinted with `Tokens.warning` and confirm stays neutral, so the destructive control

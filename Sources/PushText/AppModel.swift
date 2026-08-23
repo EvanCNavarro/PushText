@@ -210,6 +210,11 @@ private let engine: any TranscriptionEngine
         case .idle where previousWasActive:
             // Reached idle from an active utterance: that is a CANCEL. Tear down without asking the
             // engine for a transcript, because the point of cancel is that nothing is typed.
+            //
+            // Logged because a cancel otherwise appears in the log as `recording -> idle` and
+            // nothing else, which is indistinguishable from the utterance having failed silently -
+            // and "the microphone closed" was a claim no log line could support (#107).
+            dictationLog.info("cancelled: capture closed, nothing injected")
             closeMicrophone()
             Task { await self.teardown() }
 
