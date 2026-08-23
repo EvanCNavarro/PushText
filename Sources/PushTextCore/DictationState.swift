@@ -263,3 +263,16 @@ public struct DictationMachine: Sendable {
         return state == .idle
     }
 }
+
+/// How far along the on-device model's installation is (#76).
+///
+/// #36 moved the download OFF the dictation path so the first key-down no longer blocks. This is
+/// the other half: telling the user it is happening. A cold machine otherwise shows an app that
+/// refuses to dictate with no indication of why or for how long.
+public enum ModelPreparation: Equatable, Sendable {
+    case notStarted
+    case preparing(fraction: Double)
+    case ready
+    /// Installation failed. Distinct from `preparing` because waiting will not fix it.
+    case failed(String)
+}

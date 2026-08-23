@@ -155,12 +155,13 @@ public actor AppleSpeechEngine: TranscriptionEngine {
     /// interface - so a machine whose model is present cannot be returned to the state this method
     /// exists for. What IS verified is that it is idempotent and that `beginUtterance` no longer
     /// downloads.
-    public func prepare() async throws {
+    public func prepare(onProgress: (@Sendable (Double) -> Void)? = nil) async throws {
         guard transcriberIsAvailable else { throw EngineError.unavailable }
         guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requestedLocale) else {
             throw EngineError.localeUnsupported(requestedLocale.identifier)
         }
-        try await ensureModelInstalled(for: SpeechTranscriber(locale: locale, preset: preset))
+        try await ensureModelInstalled(for: SpeechTranscriber(locale: locale, preset: preset),
+                                       onProgress: onProgress)
     }
 
     public func append(_ buffer: PushTextKit.AudioBuffer) async throws {
@@ -205,7 +206,8 @@ public actor AppleSpeechEngine: TranscriptionEngine {
 
     // MARK: - Internals
 
-    private func ensureModelInstalled(for transcriber: SpeechTranscriber) async throws {
+    private func ensureModelInstalled(for transcriber: SpeechTranscriber,
+                                      onProgress: (@Sendable (Double) -> Void)? = nil) async throws {
         // `SpeechTranscriber.installedLocales` is NOT this question - it listed en_US while the
         // module status was .supported and an install was still required (TRAP-21).
         let status = await AssetInventory.status(forModules: [transcriber])
@@ -216,7 +218,20 @@ public actor AppleSpeechEngine: TranscriptionEngine {
                 // Nothing to install and not installed: not a download problem.
                 throw EngineError.modelUnavailable("status \(status), no installation request offered")
             }
+            // `AssetInstallationRequest` conforms to ProgressReporting - read from the SDK
+            // interface, not from documentation. Polled rather than KVO-observed: this runs once at
+            // launch and a timer is far less machinery than an observer whose lifetime has to be
+            // managed across an async throw.
+            let progress = request.progress
+            let reporter = Task {
+                while !Task.isCancelled {
+                    onProgress?(progress.fractionCompleted)
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
+            }
+            defer { reporter.cancel() }
             try await request.downloadAndInstall()
+            onProgress?(1.0)
         } catch let error as EngineError {
             throw error
         } catch {

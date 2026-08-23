@@ -59,4 +59,25 @@ extension AppModel {
                       seconds)
     }
 
+    /// Preparation, phrased for a human, or nil when there is nothing worth saying.
+    ///
+    /// Silent when ready or not yet started: every run after the first is already installed, and a
+    /// permanent "preparing" row is noise that trains the user to ignore the section it sits in.
+    ///
+    /// The preparing message carries the PERCENTAGE deliberately. "Preparing..." with no number is
+    /// indistinguishable from a hang, which is the complaint #36 fixed at the other end of the
+    /// pipeline and would be a poor thing to reintroduce here.
+    static func preparationMessage(for preparation: ModelPreparation) -> String? {
+        switch preparation {
+        case .notStarted, .ready:
+            return nil
+        case .preparing(let fraction):
+            return String(format: "Downloading the speech model - %.0f%% complete. "
+                          + "Dictation will work once this finishes.", fraction * 100)
+        case .failed(let reason):
+            // Waiting will not fix this, so it must not read like progress.
+            return "The speech model could not be installed, so dictation cannot run: \(reason)"
+        }
+    }
+
 }

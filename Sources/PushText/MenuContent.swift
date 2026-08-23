@@ -32,8 +32,17 @@ struct MenuContent: View {
             subtitle: "Hold-to-talk dictation that runs entirely on this Mac.",
             actions: actions.menuActions()
         ) {
-            if model.startupFailure != nil || !model.permissionAdvice.isEmpty {
+            if model.startupFailure != nil || !model.permissionAdvice.isEmpty
+                || model.modelPreparationMessage != nil {
                 SectionCard("NEEDS ATTENTION") {
+                    // Model preparation first: while it is downloading, nothing else in this
+                    // section can be acted on usefully anyway (#76).
+                    if let preparing = model.modelPreparationMessage {
+                        Text(preparing)
+                            .font(Tokens.caption)
+                            .foregroundStyle(Tokens.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if let failure = model.startupFailure {
                         Text(failure)
                             .font(Tokens.body)
