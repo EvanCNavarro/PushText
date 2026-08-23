@@ -55,6 +55,10 @@ public actor FoundationModelsCleanup: CleanupProvider {
     /// is discarded.
     public private(set) var lastRejection: CleanupRejection?
 
+    /// What the last model call cost, and whether it had a warmed session (#94). Recorded on every
+    /// call, including failures, because the slow cases are the ones worth attributing.
+    public private(set) var lastTiming: CleanupTiming?
+
     /// Production: talks to the on-device model.
     ///
     /// **Guardrails are set at CONSTRUCTION time**, and permissively: apfel's own measurement has
@@ -81,6 +85,15 @@ public actor FoundationModelsCleanup: CleanupProvider {
     }
 
     private func respond(_ prompt: String) async throws -> String {
+        // Captured BEFORE the call and recorded on every exit, thrown or returned: a slow call that
+        // failed is exactly as interesting as a slow one that succeeded, and recording only the
+        // happy path would hide the case where the model is cold enough to error.
+        let wasWarm = warmSession != nil
+        let started = ContinuousClock.now
+        defer {
+            lastTiming = CleanupTiming(wasWarm: wasWarm,
+                                       respondMillis: Int((ContinuousClock.now - started).seconds * 1000))
+        }
         if let injectedRespond { return try await injectedRespond(prompt) }
         guard let model else { throw NoModel() }
         // Spend the warmed session, then drop it, so the next utterance starts from a clean

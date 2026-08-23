@@ -39,6 +39,14 @@ struct TranscriptFinisher {
         var text = transcript.text
         if let cleanup, await cleanup.isAvailable {
             text = (try? await cleanup.clean(transcript)) ?? text
+            // #94 step 1. `warm` is the discriminator the earlier measurements lacked: a slow call
+            // with warm=false means the key-down prewarm never completed, and a slow one with
+            // warm=true means it completed and the model was cold anyway. Different bugs.
+            if let timing = await cleanup.lastTiming {
+                let warm = timing.wasWarm
+                let ms = timing.respondMillis
+                dictationLog.info("cleanup warm=\(warm, privacy: .public) respondMs=\(ms, privacy: .public)")
+            }
         }
 
         // The user's own vocabulary (#82). #13 measured that the engine cannot be biased at all,

@@ -124,3 +124,35 @@ private final class PromptBox: @unchecked Sendable {
     var value: String { lock.lock(); defer { lock.unlock() }; return stored }
 }
 
+
+extension FoundationModelsCleanupTests {
+
+    /// #94 trigger step 1. A slow dictation is only actionable if the log says WHICH slow it was, so
+    /// `clean` has to record the split every time - not only when something goes wrong.
+    @Test("Cleanup records what the model call cost")
+    func cleanRecordsItsTiming() async throws {
+        let cleanup = FoundationModelsCleanup(respond: { _ in
+            try? await Task.sleep(for: .milliseconds(40))
+            return "Ship it today."
+        })
+        _ = try await cleanup.clean(Transcript(text: "ship it today", duration: 1))
+
+        let timing = try #require(await cleanup.lastTiming)
+        #expect(timing.respondMillis >= 30,
+                "recorded \(timing.respondMillis) ms for a call that slept 40 ms")
+    }
+}
+
+extension FoundationModelsCleanupTests {
+
+    /// Pins `wasWarm` to reality rather than to a constant. Nothing was prewarmed here, so a `true`
+    /// would mean the field reports a hardcoded value - and a hardcoded field is worse than no
+    /// field, because #94's whole next step is reading it off a real dictation.
+    @Test("An un-prewarmed call reports itself as cold")
+    func unwarmedCallReportsCold() async throws {
+        let cleanup = FoundationModelsCleanup(respond: { _ in "Ship it today." })
+        _ = try await cleanup.clean(Transcript(text: "ship it today", duration: 1))
+        let timing = try #require(await cleanup.lastTiming)
+        #expect(timing.wasWarm == false)
+    }
+}

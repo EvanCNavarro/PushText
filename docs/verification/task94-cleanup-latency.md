@@ -134,11 +134,67 @@ more `hotkey edge=pressed` lines than the harness issued (5 and 6 against an exp
 now checked with a press count. The 21 samples include those runs; the press-count check is what
 makes that disclosable rather than invisible.
 
+## 4c. Attribution: the prewarm always runs, and the model call is binary
+
+#94's trigger asked for one slow dictation to be attributed, because "prewarm never ran" and
+"prewarm ran and the model was cold anyway" are different bugs. `clean` now records `wasWarm` and
+the milliseconds spent inside the model call alone, logged per dictation.
+
+12 dictations, two batches of six, machine quiet (press count checked against the harness both
+times).
+
+| warm | model call | release-to-text |
+| --- | --- | --- |
+| true | 277 ms | 545 ms |
+| true | 422 ms | 590 ms |
+| true | 3426 ms | 3648 ms |
+| true | 3515 ms | 3678 ms |
+| true | 269 ms | 1384 ms |
+| true | 304 ms | 524 ms |
+| true | 3559 ms | 3813 ms |
+| true | 400 ms | 573 ms |
+| true | 3421 ms | 3637 ms |
+| true | 3530 ms | 3712 ms |
+| true | 263 ms | 440 ms |
+| true | 3513 ms | 3727 ms |
+
+**`warm=true` on 12 of 12.** The key-down prewarm completes every time.
+
+**The model call is binary, not variable:**
+
+- resident: n=6, mean **322 ms**, range 263-422
+- not resident: n=6, mean **3494 ms**, range 3421-3559 - a spread of just **138 ms**
+
+The difference is a near-constant **3172 ms**. A cost that reproducible is a discrete step - loading
+model assets - not contention or thermal variation. It lands on **50%** of dictations.
+
+### What this disproves
+
+The previous section blamed backgrounding: prewarming is documented as not guaranteeing asset
+loading while an app is backgrounded, and this app is backgrounded permanently. That was recorded as
+INFERRED, and it is now **wrong**. The prewarm is not being refused; it runs, a warmed session
+exists, and the assets still are not resident when the transcript arrives.
+
+### A limit of this instrument, stated plainly
+
+`wasWarm` reports that a session built at key-down was still available - **not** that the model's
+assets were loaded. `prewarm()` returns immediately, so `warm=true` and "cold model" are compatible
+states, which is exactly what these 12 samples show. Anyone reading this field later should not
+treat it as a residency signal.
+
+### What the API allows next
+
+`LanguageModelSession(model:tools:transcript:)` exists, so a session can be constructed with a given
+transcript. That matters because this implementation discards the session after each utterance to
+stop one dictation's context leaking into the next - and if residency is tied to a live session,
+those two goals looked mutually exclusive. With that initialiser they are not. Whether residency is
+tied to a live session at all is UNTESTED and is #94's next step.
+
 ## 5. What ships
 
 `TranscriptFinisher` and the ordering it enforces (cleanup, then the user's dictionary, then
 history), plus the key-down prewarm. `PushTextApp` still does **not** construct a cleanup provider,
 so behaviour is unchanged and transcripts ship as the recognizer produced them.
 
-Enabling it is one line. What has to be true first is section 4b: make the prewarm land more than
-43% of the time, or accept that most dictations cost ~4 s. Tracked in #94.
+Enabling it is one line. What has to be true first is section 4c: stop half of all dictations paying
+a ~3.2 s asset load that the key-down prewarm does not prevent. Tracked in #94.
