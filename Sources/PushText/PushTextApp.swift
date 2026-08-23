@@ -51,10 +51,15 @@ struct PushTextApp: App {
         // it get an engine that REFUSES rather than the mock, whose canned phrases would otherwise
         // be typed into a real document — see TranscriptionEngineFactory.
         let engine = TranscriptionEngineFactory.makeDefault()
+        // Plain JSONL under Application Support (#10). For an app whose pitch is that nothing
+        // leaves the machine, a file the user can read with `tail` and delete with `rm` is part of
+        // the claim rather than an implementation detail.
+        let history = JSONLHistoryStore.defaultURL().map { JSONLHistoryStore(url: $0) }
         let model = AppModel(engine: engine,
                              capture: AVAudioEngineCapture(),
                              injector: PasteboardTextInjector(),
-                             indicator: DictationHUDController())
+                             indicator: DictationHUDController(),
+                             history: history)
         self.model = model
         // The real probe, with the persisted latch, so `grantBroken` survives a relaunch - which is
         // when the break is usually noticed, on the launch AFTER the one that worked (#6).

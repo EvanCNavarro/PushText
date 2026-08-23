@@ -109,4 +109,50 @@ struct CaptureHealthTests {
 
         #expect(recovered != failed)
     }
+    private final class SpyHistory: HistoryStore, @unchecked Sendable {
+        private let lock = NSLock()
+        private var records: [HistoryRecord] = []
+        func append(_ record: HistoryRecord) { lock.lock(); records.append(record); lock.unlock() }
+        func load() -> [HistoryRecord] { lock.lock(); defer { lock.unlock() }; return records }
+        func clear() { lock.lock(); records = []; lock.unlock() }
+    }
+
+    /// History has to be WIRED, not merely built (#10). Three components in this repo were shipped
+    /// with tests and referenced by the app zero times; this asserts the store is actually called.
+    @Test("A completed dictation is written to history")
+    func dictationIsRecorded() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["recorded words"],
+                                                                  latency: .milliseconds(1)))
+        let capture = LossyCapture(health: CaptureHealth())
+        let history = SpyHistory()
+        let model = AppModel(engine: engine, capture: capture, injector: nil, history: history)
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        capture.deliver()
+        model.handle(.released, at: 0.2)
+
+        _ = await settle { !history.load().isEmpty }
+        #expect(history.load().map(\.text) == ["recorded words"])
+    }
+
+    /// An empty transcript is not a dictation. Recording it fills the history with blanks the user
+    /// never spoke, which makes the real entries harder to find.
+    @Test("An empty transcript is not recorded")
+    func emptyTranscriptIsNotRecorded() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: [""],
+                                                                  latency: .milliseconds(1)))
+        let capture = LossyCapture(health: CaptureHealth())
+        let history = SpyHistory()
+        let model = AppModel(engine: engine, capture: capture, injector: nil, history: history)
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        capture.deliver()
+        model.handle(.released, at: 0.2)
+
+        _ = await settle { model.machine.state == .idle || model.machine.state == .failed(.noSpeechDetected) }
+        #expect(history.load().isEmpty)
+    }
+
 }

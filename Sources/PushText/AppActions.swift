@@ -38,10 +38,42 @@ final class AppActions {
         NSWorkspace.shared.open(url)
     }
 
+    /// Where history lives, so the two actions below agree on one path.
+    private var historyURL: URL? { JSONLHistoryStore.defaultURL() }
+
+    /// Opens the history file itself rather than a viewer.
+    ///
+    /// The file IS the feature: plain JSONL the user can read, grep and delete. Building a browser
+    /// would put a worse reader in front of a file that every tool on the machine already opens.
+    func revealHistory() {
+        guard let url = historyURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    /// Deletes every recorded dictation. Irreversible, so it confirms first.
+    func clearHistory() {
+        guard let url = historyURL else { return }
+        let alert = NSAlert()
+        alert.messageText = "Delete all dictation history?"
+        alert.informativeText = "Every transcript PushText has recorded will be removed from "
+            + url.path + ". This cannot be undone."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        JSONLHistoryStore(url: url).clear()
+    }
+
     func menuActions() -> [MenuAction] {
         [
             MenuAction(title: "Check for Updates", systemImage: "arrow.triangle.2.circlepath") { [weak self] in
                 self?.checkForUpdates()
+            },
+            MenuAction(title: "Show History File", systemImage: "clock.arrow.circlepath") { [weak self] in
+                self?.revealHistory()
+            },
+            MenuAction(title: "Delete History", systemImage: "trash") { [weak self] in
+                self?.clearHistory()
             },
             MenuAction(title: "Quit PushText", systemImage: "power") {
                 NSApplication.shared.terminate(nil)

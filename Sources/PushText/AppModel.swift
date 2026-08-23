@@ -14,38 +14,6 @@ final class AppModel {
     /// Non-nil when something at launch left the app unable to dictate. Shown in the menu.
     private(set) var startupFailure: String?
 
-    /// Permission rows for the menu, refreshed when it opens (#6).
-    ///
-    /// Recomputed on open rather than polled: TCC state changes while the user is in System
-    /// Settings, i.e. while this menu is CLOSED, so a value cached at launch is stale exactly when
-    /// someone is acting on it.
-    private(set) var permissionAdvice: [(permission: Permission, advice: PermissionAdvice)] = []
-
-    /// Injected so tests can drive every state; nil means "do not show permission rows at all",
-    /// which is what the state-machine tests want.
-    var permissionProbe: (any PermissionProbe)?
-
-    func refreshPermissionAdvice() {
-        guard let permissionProbe else { permissionAdvice = []; return }
-        permissionAdvice = Permission.allCases.compactMap { permission in
-            guard let advice = PermissionAdvice.forStatus(permissionProbe.status(of: permission),
-                                                          of: permission) else { return nil }
-            return (permission, advice)
-        }
-    }
-    private let engine: any TranscriptionEngine
-    private let capture: (any AudioCapture)?
-    private let injector: (any TextInjector)?
-    private let feed: AudioFeed
-    private let indicator: (any DictationIndicator)?
-    private let levels = LevelSink()
-    private var levelTimer: Timer?
-    /// Turns raw edges into events, so a double press can start a latched utterance (#46).
-    private var pressPattern = PressPatternRecognizer()
-    private var captureWatchdog: Timer?
-    /// Text waiting to be injected, held between `transcriptFinalized` and `injectionFinished`.
-    private var pendingText: String?
-
     /// Serialises `openUtterance`, so two of them can never be inside `feed.begin()` at once.
     ///
     /// Ordering alone is not enough (the epoch below handles identity), but without it the two
@@ -67,6 +35,43 @@ final class AppModel {
     /// Each task therefore has to say WHICH utterance it is finishing or abandoning; without that
     /// the abandoning one tore down its successor.
     private var utterance: AudioFeed.Utterance?
+
+private let engine: any TranscriptionEngine
+    private let capture: (any AudioCapture)?
+    private let injector: (any TextInjector)?
+    private let feed: AudioFeed
+    private let indicator: (any DictationIndicator)?
+    private let levels = LevelSink()
+    private var levelTimer: Timer?
+    /// Turns raw edges into events, so a double press can start a latched utterance (#46).
+    private var pressPattern = PressPatternRecognizer()
+    private var captureWatchdog: Timer?
+    /// Text waiting to be injected, held between `transcriptFinalized` and `injectionFinished`.
+    private var pendingText: String?
+
+    /// Permission rows for the menu, refreshed when it opens (#6).
+    ///
+    /// Recomputed on open rather than polled: TCC state changes while the user is in System
+    /// Settings, i.e. while this menu is CLOSED, so a value cached at launch is stale exactly when
+    /// someone is acting on it.
+    private(set) var permissionAdvice: [(permission: Permission, advice: PermissionAdvice)] = []
+
+    /// Injected so tests can drive every state; nil means "do not show permission rows at all",
+    /// which is what the state-machine tests want.
+    var permissionProbe: (any PermissionProbe)?
+
+    func refreshPermissionAdvice() {
+        guard let permissionProbe else { permissionAdvice = []; return }
+        permissionAdvice = Permission.allCases.compactMap { permission in
+            guard let advice = PermissionAdvice.forStatus(permissionProbe.status(of: permission),
+                                                          of: permission) else { return nil }
+            return (permission, advice)
+        }
+    }
+
+    /// Where completed dictations are kept (#10). Optional so the state-machine tests can run with
+    /// no filesystem at all.
+    private let history: (any HistoryStore)?
 
     /// What the last utterance lost, phrased for a human, or nil when it lost nothing (#71).
     private(set) var lastCaptureWarning: String?
@@ -96,11 +101,13 @@ final class AppModel {
          capture: (any AudioCapture)? = nil,
          injector: (any TextInjector)? = nil,
          indicator: (any DictationIndicator)? = nil,
+         history: (any HistoryStore)? = nil,
          machine: DictationMachine = DictationMachine()) {
         self.engine = engine
         self.capture = capture
         self.injector = injector
         self.indicator = indicator
+        self.history = history
         self.feed = AudioFeed(engine: engine)
         self.machine = machine
     }
@@ -299,6 +306,14 @@ final class AppModel {
         do {
             let transcript = try await feed.finish(token)
             dictationLog.info("transcript chars=\(transcript.text.count) duration=\(transcript.duration)")
+            // Recorded here rather than after injection: the dictation happened whether or not the
+            // paste lands, and losing the transcript to an injection failure is the one case where
+            // a user most wants to go back and find it.
+            if !transcript.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                history?.append(HistoryRecord(text: transcript.text,
+                                              recordedAt: Date(),
+                                              durationSeconds: transcript.duration))
+            }
             apply(.transcriptFinalized(transcript.text))
         } catch {
             dictationLog.error("finishUtterance FAILED: \(String(describing: error), privacy: .public)")
@@ -349,19 +364,6 @@ final class AppModel {
             await feed.cancel(token)
         }
         pendingText = nil
-    }
-
-    private static func classify(_ error: Error) -> DictationFailure {
-        if let captureError = error as? AVAudioEngineCapture.CaptureError,
-           captureError == .microphoneNotAuthorized {
-            return .permissionDenied
-        }
-        // "Transcription failed" would send the user looking for a fault that does not exist; this
-        // one resolves itself once the download `prepare()` started has finished (#36).
-        if let engineError = error as? AppleSpeechEngine.EngineError, engineError == .modelNotReady {
-            return .modelNotReady
-        }
-        return .transcriptionFailed
     }
 
     private func startCaptureWatchdog() {
