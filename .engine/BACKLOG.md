@@ -66,7 +66,7 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   blocked-by: #3. `canBecomeKey = false` is load-bearing: stealing focus breaks injection, which is
   the entire product. Authority: docs/research/04 sec 7.
 
-#8 - isPlausibleCleanup drift guard + tests - S0
+#8 - isPlausibleCleanup drift guard + tests - DONE
   blocked-by: none. Pure function in Core, red-first. The differentiator: Handy (30k stars),
   VoiceInk (6k) and Whispering (4.7k) all fall back to raw output only on TRANSPORT errors and never
   compare content. Thresholds to start from: length ratio 0.72/1.35, Levenshtein 0.62, negation-count
