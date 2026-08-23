@@ -233,4 +233,37 @@ struct CaptureHealthTests {
         #expect(history.load().map(\.text) == ["open PushText now"])
     }
 
+    /// Found by planting: dropping `levels.record(...)` from the capture callback left the whole
+    /// suite green. The HUD waveform is driven by that feed, so a break shows up as bars that never
+    /// move while recording - visible to a user, invisible to the tests.
+    @Test("Captured audio reaches the level meter that drives the HUD")
+    func capturedAudioReachesTheLevelMeter() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["x"],
+                                                                  latency: .milliseconds(1)))
+        let capture = LoudCapture()
+        let model = AppModel(engine: engine, capture: capture, injector: nil)
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        capture.deliverLoud()
+
+        #expect(await settle { model.currentAudioLevel > 0 },
+                "level stayed at \(model.currentAudioLevel) - samples never reached the meter")
+    }
+
+    /// Delivers samples loud enough to register above the meter's -60 dBFS floor.
+    private final class LoudCapture: AudioCapture, @unchecked Sendable {
+        private let lock = NSLock()
+        private var handler: (@Sendable (PushTextKit.AudioBuffer) -> Void)?
+        func start(onBuffer: @escaping @Sendable (PushTextKit.AudioBuffer) -> Void) throws {
+            lock.lock(); handler = onBuffer; lock.unlock()
+        }
+        func stop() { lock.lock(); handler = nil; lock.unlock() }
+        func deliverLoud() {
+            lock.lock(); let h = handler; lock.unlock()
+            h?(PushTextKit.AudioBuffer(samples: Array(repeating: 0.6, count: 512),
+                                       sampleRate: 48_000, startTime: 0))
+        }
+    }
+
 }
