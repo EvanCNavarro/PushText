@@ -75,6 +75,14 @@ public final class AVAudioEngineCapture: AudioCapture, @unchecked Sendable {
     /// was lost, which for dictation means words were lost — surfaced rather than swallowed.
     public var droppedFrames: Int { ring.droppedFrames }
 
+    /// What this utterance lost (#71). The counters below existed from #70 with no caller; this is
+    /// the accessor that makes the port's promise true.
+    public var health: CaptureHealth {
+        CaptureHealth(restarts: restartCount,
+                      restartFailures: restartFailures,
+                      droppedFrames: ring.droppedFrames)
+    }
+
     /// Microphone authorisation, checked without prompting.
     public static var isMicrophoneAuthorized: Bool {
         AVCaptureDevice.authorizationStatus(for: .audio) == .authorized

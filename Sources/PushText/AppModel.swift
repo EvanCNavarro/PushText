@@ -68,6 +68,9 @@ final class AppModel {
     /// the abandoning one tore down its successor.
     private var utterance: AudioFeed.Utterance?
 
+    /// What the last utterance lost, phrased for a human, or nil when it lost nothing (#71).
+    private(set) var lastCaptureWarning: String?
+
     /// When the user stopped speaking, for the release-to-text figure the app logs (#15).
     ///
     /// The first such number this project had was subtracted by hand from two os_log timestamps,
@@ -287,6 +290,12 @@ final class AppModel {
             return
         }
         utterance = nil
+        // Read BEFORE the transcript: the counters describe the capture that just stopped, and the
+        // next utterance resets them.
+        lastCaptureWarning = capture.map { Self.captureWarning(for: $0.health) } ?? nil
+        if let lastCaptureWarning {
+            dictationLog.error("capture lost audio: \(lastCaptureWarning, privacy: .public)")
+        }
         do {
             let transcript = try await feed.finish(token)
             dictationLog.info("transcript chars=\(transcript.text.count) duration=\(transcript.duration)")

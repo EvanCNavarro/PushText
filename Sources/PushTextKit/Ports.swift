@@ -106,6 +106,38 @@ public protocol HotkeyMonitor: AnyObject, Sendable {
 public protocol AudioCapture: AnyObject, Sendable {
     func start(onBuffer: @escaping @Sendable (AudioBuffer) -> Void) throws
     func stop()
+
+    /// What the last utterance lost, if anything (#71).
+    ///
+    /// On the port rather than the concrete capture because the app has to be able to ASK. The
+    /// counters existed on `AVAudioEngineCapture` from #70 and nothing read them - `droppedFrames`
+    /// even carries a comment saying it is "surfaced rather than swallowed", which it was not. A
+    /// counter no caller can reach is the same silence it was added to break.
+    var health: CaptureHealth { get }
+}
+
+public extension AudioCapture {
+    /// Captures with nothing to lose report nothing lost.
+    var health: CaptureHealth { CaptureHealth() }
+}
+
+/// Audio the capture could not deliver during one utterance.
+///
+/// Three separate causes, kept separate because their remedies differ: a device change the engine
+/// recovered from, a device change it could NOT recover from, and frames the realtime thread had to
+/// discard because the drain fell behind.
+public struct CaptureHealth: Equatable, Sendable {
+    public var restarts: Int
+    public var restartFailures: Int
+    public var droppedFrames: Int
+
+    public init(restarts: Int = 0, restartFailures: Int = 0, droppedFrames: Int = 0) {
+        self.restarts = restarts
+        self.restartFailures = restartFailures
+        self.droppedFrames = droppedFrames
+    }
+
+    public var isClean: Bool { restarts == 0 && restartFailures == 0 && droppedFrames == 0 }
 }
 
 // MARK: - Output
