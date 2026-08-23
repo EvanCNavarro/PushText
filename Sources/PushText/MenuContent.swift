@@ -20,15 +20,18 @@ struct MenuContent: View {
     private var appInfo: AppInfo { .fromBundle() }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Tokens.gap) {
-            AppIdentityCard(
-                name: "PushText",
-                version: appInfo.displayVersion,
-                repoURL: repoURL,
-                licenseURL: licenseURL,
-                subtitle: "Hold-to-talk dictation that runs entirely on this Mac.",
-                actions: actions.menuActions())
-
+        // The sections go INSIDE AppIdentityCard's `content:` builder, not beside it. The card draws
+        // the Divider between identity and app content, and applies `Tokens.pad` itself - passing
+        // them as siblings skipped the divider and padded the panel twice, which is exactly how the
+        // spacing drifted from TermTile's.
+        AppIdentityCard(
+            name: "PushText",
+            version: appInfo.displayVersion,
+            repoURL: repoURL,
+            licenseURL: licenseURL,
+            subtitle: "Hold-to-talk dictation that runs entirely on this Mac.",
+            actions: actions.menuActions()
+        ) {
             if let failure = model.startupFailure {
                 SectionCard("NEEDS ATTENTION") {
                     Text(failure)
@@ -59,7 +62,6 @@ struct MenuContent: View {
                 }
             }
         }
-        .padding(Tokens.pad)
         .frame(width: 320)
         .background(Tokens.panel)
     }
