@@ -474,3 +474,17 @@ research that found them is not read on every cycle, and the trap is.
   PIDs you named, never that you named the right ones. Capture `$!` per job, kill the explicit list,
   then assert with `kill -0` that none survive - and count strays BEFORE a measurement too, since a
   leak from a previous run is indistinguishable from a clean machine in every number you take.
+
+### TRAP-41: a summary line that is not DERIVED from the run is a constant pretending to be a result
+- what happened: three times in one session my own reporting line was wrong while the underlying
+  work was fine. `echo "9/9 gates pass"` came after a loop that echoed only FAILURES, so the line
+  was a hardcoded string that would have printed unchanged with a gate red. A plant checker counted
+  `^✘ Test "` lines, so a `fatalError` - which crashes the run and prints no such line - scored as
+  0 failures while the raw output said `Fatal error: no default`. And `kill $LP` with `LP=$(jobs -p)`
+  reported nothing wrong while leaking 100 processes (TRAP-40). Each is the same shape: the summary
+  was authored rather than computed, and the authored version is always the one that agrees with me.
+- warning: a number in a report has to be produced BY the thing it describes. Count the passes,
+  print the count; never write the total you expect. Then check the counter against a state whose
+  answer you already know - a planted failing gate must move 9/9 to 9/10, and if it does not, the
+  counter is decoration. `evidence-check` catches the claim in the reply; nothing catches a shell
+  line that lies to me first, which is why this one has to be a habit rather than a hook.
