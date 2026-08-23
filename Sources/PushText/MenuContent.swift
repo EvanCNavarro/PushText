@@ -65,6 +65,15 @@ struct MenuContent: View {
 
             if let transcript = model.lastTranscript, !transcript.isEmpty {
                 SectionCard("LAST TRANSCRIPT") {
+                    // Beside the transcript, not in NEEDS ATTENTION: this describes THIS utterance
+                    // and stops being true at the next one, whereas that section is for conditions
+                    // that persist until the user fixes them (#71).
+                    if let warning = model.lastCaptureWarning {
+                        Text(warning)
+                            .font(Tokens.caption)
+                            .foregroundStyle(Tokens.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Text(transcript)
                         .font(Tokens.body)
                         .foregroundStyle(Tokens.text)

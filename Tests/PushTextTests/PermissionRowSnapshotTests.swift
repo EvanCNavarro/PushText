@@ -62,4 +62,51 @@ struct PermissionRowSnapshotTests {
         try png.write(to: url)
         print("SNAPSHOT \(url.path) bytes=\(png.count)")
     }
+    /// The capture-loss warning above a transcript (#71). Rendered because the failure mode is
+    /// layout: three lines of amber over a four-line transcript in a 320pt panel either reads as a
+    /// caption or swamps the thing it annotates, and no string assertion can tell which.
+    @Test("Render the capture-loss warning above a transcript",
+          .enabled(if: PermissionRowSnapshotTests.outputDirectory != nil))
+    func renderCaptureWarning() throws {
+        guard let directory = Self.outputDirectory else { return }
+
+        let cases: [CaptureHealth] = [
+            CaptureHealth(restarts: 1),
+            CaptureHealth(restarts: 1, restartFailures: 1),
+            CaptureHealth(droppedFrames: 96_000)
+        ]
+        let view = VStack(alignment: .leading, spacing: Tokens.space) {
+            ForEach(Array(cases.enumerated()), id: \.offset) { _, health in
+                SectionCard("LAST TRANSCRIPT") {
+                    if let warning = AppModel.captureWarning(for: health) {
+                        Text(warning)
+                            .font(Tokens.caption)
+                            .foregroundStyle(Tokens.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text("Send him the invoice today and let me know when it clears.")
+                        .font(Tokens.body)
+                        .foregroundStyle(Tokens.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(width: 320)
+        .padding(Tokens.pad)
+        .background(Tokens.panel)
+
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        guard let image = renderer.nsImage,
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:]) else {
+            Issue.record("ImageRenderer produced nothing")
+            return
+        }
+        let url = URL(fileURLWithPath: directory).appendingPathComponent("capture-warning.png")
+        try png.write(to: url)
+        print("SNAPSHOT \(url.path) bytes=\(png.count)")
+    }
+
 }
