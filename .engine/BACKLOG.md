@@ -127,23 +127,45 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   Gaps: #35, #36.) Volatile results must REPLACE, never append - they duplicate the tail of the last
   finalized result. Wrap `transcriber.results` in a timeout; the stream hangs in the field.
 
-#13 - SPIKE: contextualStrings with SpeechTranscriber - S0
-  blocked-by: the upgrade. Documented only for DictationTranscriber and capped at 100 short phrases.
-  Determines whether #9 can bias the engine or is post-pass only. Highest value per minute of any
-  Phase 1 check.
+#13 - SPIKE: contextualStrings with SpeechTranscriber - DONE
+  (2026-08-22: it does NOTHING. An A/B holding audio, preset, locale and chunking constant and
+  differing only in AnalysisContext.contextualStrings[.general] produced byte-identical transcripts
+  on 3/3 runs, with none of the three bias words appearing. The recognizer mangled all three
+  targets without the bias - "push, text", "and rail a", "Cubanies" - so there was maximum room for
+  an effect and there was none. docs/research/01 sec 1.6 predicted this off two REPORTS; it is now
+  measured. #9's dictionary stays a post-pass, which is how it was already built, so no shipped code
+  changed. docs/verification/task13-contextual-strings.md.)
 
 #14 - FoundationModelsCleanup behind the drift guard - DONE
   blocked-by: #8, #11. Permissive guardrails at construction time; `respond` not `streamResponse`;
   silent fallback to the raw transcript on all nine GenerationError cases.
 
-#15 - Measure and publish real latency numbers - S0
-  blocked-by: #12. No published SpeechAnalyzer figure exists anywhere. n>=3, spanning short/medium/
-  long utterances. We cite our own numbers or none.
+#15 - Measure and publish real latency numbers - DONE
+  (2026-08-22: finalize is the only term the user waits on, because transcription streams while
+  they are still speaking. 5 runs each at 2.03s / 9.97s / 46.25s, paced to realtime, through the
+  packaged .app: median 49.4 / 120.8 / 205.4 ms. Strongly sub-linear - 23x the audio costs 4.2x the
+  finalize, so a paragraph is not meaningfully worse than a sentence. begin is flat at 115-155 ms
+  and lands at press. Pasteboard work is 2-3 ms and flat with length; the injector's 120 ms settle
+  delay is NOT user-visible, it is waited after the key is posted. The instrument was checked first:
+  paced deliver=2173ms vs unpaced 3.1ms on the same 2.03s clip. STILL UNMEASURED: end to end inside
+  the app - the only datum is #42's n=1 221 ms, leaving ~170 ms unaccounted for, so AppModel now
+  emits releaseToText=<n>ms rather than requiring arithmetic on two log timestamps.
+  docs/verification/task15-latency.md.)
 
 ## Phase 2 - ship
 
-#16 - Bump platform floor to macOS 26 - S0
-  blocked-by: #12, #14. One line in Package.swift plus MIN_SYSTEM_VERSION in build-app.sh.
+#16 - Bump platform floor to macOS 26 - DONE
+  (2026-08-22: the issue said one line plus MIN_SYSTEM_VERSION; it was four. swift-tools-version had
+  to go 6.0 -> 6.2 because .v26 does not exist in PackageDescription 6.0, and BOTH workflows ran on
+  macos-15, which cannot resolve a v26 manifest at all - release.yml fires only on a tag, so that
+  break would have surfaced at the first release. platform-floor-consistent.sh now gates all four,
+  and each disagreement was planted and confirmed detected before the gate was trusted. check-macos26
+  folded into check: it existed only because the macos-15 build compiled the engine OUT via
+  #if canImport(FoundationModels). That scaffolding is gone with no behaviour change - every gate was
+  a whole-file wrap with no #else, and @available(macOS 26, *) is a no-op at a v26 target.
+  UnsupportedTranscriptionEngine went with it; its two construction sites were version gates that can
+  no longer be reached, and unsupported HARDWARE was never a version question - AppleSpeechEngine
+  already throws EngineError.unavailable for it.)
 
 #17 - Sparkle EdDSA keypair + first release - S0
   blocked-by: #16. build-app.sh currently refuses to ship without SU_PUBLIC_ED_KEY in CI and warns

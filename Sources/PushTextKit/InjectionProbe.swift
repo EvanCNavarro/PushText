@@ -58,6 +58,30 @@ public enum InjectionProbe {
 
     /// Exercises both restore branches against the LIVE pasteboard, sending no keystroke.
     private static func runClipboardOnly(pasteboard: NSPasteboard, sentinel: String, text: String) {
+        // Timed for #15. Release-to-text is finalize plus THIS - the pasteboard work standing
+        // between a finished transcript and the Command-V that makes it appear. The 120 ms settle
+        // delay is deliberately NOT in it: that wait happens after the key is posted, so it is
+        // clipboard-restore hygiene rather than something the user sits through.
+        //
+        // Uses `stage`, not `setString`: staging writes one item carrying the text plus three
+        // conceal markers (#41), so timing `setString` would measure a path production never runs.
+        let clock = ContinuousClock()
+        let t0 = clock.now
+        let snap = PasteboardTextInjector.snapshot(pasteboard)
+        let t1 = clock.now
+        _ = PasteboardTextInjector.stage(text, on: pasteboard)
+        let t2 = clock.now
+        PasteboardTextInjector.restore(snap, to: pasteboard)
+        let t3 = clock.now
+        func ms(_ from: ContinuousClock.Instant, _ to: ContinuousClock.Instant) -> String {
+            let span = to - from
+            return String(format: "%.2f", Double(span.components.seconds) * 1000
+                + Double(span.components.attoseconds) / 1_000_000_000_000_000)
+        }
+        print("INJECT_PROBE snapshot=\(ms(t0, t1))ms stage=\(ms(t1, t2))ms "
+              + "restore=\(ms(t2, t3))ms chars=\(text.count)")
+        fflush(stdout)
+
         // Branch 1: we are still the last writer, so the sentinel must come back.
         let saved = PasteboardTextInjector.snapshot(pasteboard)
         pasteboard.clearContents()

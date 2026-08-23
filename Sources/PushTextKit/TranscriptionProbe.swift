@@ -129,9 +129,9 @@ public enum TranscriptionProbe {
     /// `Duration` has no lossless `Double` accessor; `components` is the documented way out, and
     /// attoseconds are 1e-18 so the divisor for milliseconds is 1e15.
     private static func ms(_ from: ContinuousClock.Instant, _ to: ContinuousClock.Instant) -> String {
-        let d = to - from
-        let value = Double(d.components.seconds) * 1000
-            + Double(d.components.attoseconds) / 1_000_000_000_000_000
+        let span = to - from
+        let value = Double(span.components.seconds) * 1000
+            + Double(span.components.attoseconds) / 1_000_000_000_000_000
         return String(format: "%.1f", value)
     }
 
