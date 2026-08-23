@@ -107,14 +107,51 @@ struct DictationPipelineTests {
     /// for having run out of patience.
     private func settle(
         timeout: Duration = .seconds(5),
+        line: Int = #line,
+        describe: @MainActor () -> String = { "" },
         until condition: @MainActor () -> Bool
     ) async -> Bool {
-        let deadline = ContinuousClock.now + timeout
+        let started = ContinuousClock.now
+        let deadline = started + timeout
+        var satisfied = false
         while ContinuousClock.now < deadline {
-            if condition() { return true }
+            if condition() { satisfied = true; break }
             try? await Task.sleep(for: .milliseconds(5))
         }
-        return condition()
+        if !satisfied { satisfied = condition() }
+        // On a timeout the condition tells you only that it is false, which is the one thing you
+        // already knew. #55 stayed unexplained for exactly this reason.
+        if !satisfied {
+            print("SETTLE_TIMEOUT line=\(line) \(describe())")
+            fflush(stdout)
+        }
+        Self.recordSettle(from: started, line: line, satisfied: satisfied)
+        return satisfied
+    }
+
+    /// Reports a settle that took unusually long even though it eventually passed (#55).
+    ///
+    /// #55 is a settle that hit the 5 s ceiling once and has been reproduced exactly twice in ~198
+    /// runs, so waiting for the full failure is not a strategy. The reason it stays a mystery is
+    /// that a settle taking 4.9 s and one taking 5 ms are INDISTINGUISHABLE in a green run - the
+    /// suite only ever reports the total. If there is a slow tail, it is already happening on
+    /// passing runs and nothing looks at it.
+    ///
+    /// That distinction is the whole diagnosis. Occasional 200 ms settles mean scheduler starvation
+    /// and the 5 s outlier is its far tail; settles that are always under a few ms mean the failure
+    /// was a HANG, which is a different bug with a different fix. Printing rather than failing:
+    /// this is an observation, and a threshold guessed today should not turn a green suite red.
+    private static let settleWarnThreshold = Duration.milliseconds(100)
+
+    private static func recordSettle(from started: ContinuousClock.Instant,
+                                     line: Int,
+                                     satisfied: Bool) {
+        let elapsed = ContinuousClock.now - started
+        guard elapsed > settleWarnThreshold else { return }
+        let millis = Double(elapsed.components.seconds) * 1000
+            + Double(elapsed.components.attoseconds) / 1_000_000_000_000_000
+        print("SETTLE_SLOW line=\(line) elapsed=\(String(format: "%.1f", millis))ms satisfied=\(satisfied)")
+        fflush(stdout)
     }
 
     private func makeModel(
@@ -279,7 +316,10 @@ struct DictationPipelineTests {
         #expect(injector.injected.isEmpty)
 
         model.handle(.pressed, at: 1.0)    // press again to end
-        #expect(await settle { injector.injected == ["latched words"] })
+        #expect(await settle(describe: {
+            "state=\(model.machine.state) injected=\(injector.injected) "
+            + "captureStarts=\(capture.startCount) captureStops=\(capture.stopCount)"
+        }) { injector.injected == ["latched words"] })
     }
 
     @Test("Cancel discards the utterance and injects nothing")
