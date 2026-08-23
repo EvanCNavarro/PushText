@@ -28,7 +28,10 @@ fi
 security find-identity -v -p codesigning | grep "$IDENTITY_HINT"
 
 P12="$WORK/signing.p12"
-P12_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 40)"
+# NOT `tr -dc ... < /dev/urandom | head -c N`: head closes the pipe at N bytes, tr takes SIGPIPE,
+# and under `set -euo pipefail` the script exits 141 SILENTLY - before the dialog, with no error.
+# That shipped once and wasted a run. openssl rand needs no pipeline at all.
+P12_PASSWORD="$(openssl rand -hex 24)"
 
 echo
 echo "==> A Keychain dialog is about to appear."
@@ -41,11 +44,28 @@ security export -k "$HOME/Library/Keychains/login.keychain-db" \
 # Developer ID cert, or without its private key, would set both secrets to something that fails only
 # at release time - the exact class of green this repo does not accept.
 echo "==> Verifying the exported .p12 actually contains the identity"
-INFO="$(openssl pkcs12 -in "$P12" -passin "pass:$P12_PASSWORD" -nokeys -info 2>&1 || true)"
-echo "$INFO" | grep -q "$IDENTITY_HINT" || {
-    echo "The .p12 does not contain a '$IDENTITY_HINT' certificate - refusing to upload it." >&2
+# Check the certificate SUBJECT, not the .p12 bag's friendlyName. `-nokeys -info` prints the
+# friendlyName, which is just a label carried alongside the cert - a .p12 holding the WRONG
+# certificate under the RIGHT label passes a grep of it. Planted exactly that and the first version
+# of this guard accepted it and set both secrets.
+CERTS="$WORK/certs.pem"
+openssl pkcs12 -in "$P12" -passin "pass:$P12_PASSWORD" -nokeys > "$CERTS" 2>/dev/null || {
+    echo "Could not read certificates out of the exported .p12." >&2
     exit 1
 }
+awk -v dir="$WORK" '/BEGIN CERTIFICATE/ { n++ } n { print > (dir "/cert-" n ".pem") }' "$CERTS"
+FOUND_IDENTITY=0
+for cert in "$WORK"/cert-*.pem; do
+    test -e "$cert" || continue
+    if openssl x509 -in "$cert" -noout -subject 2>/dev/null | grep -q "$IDENTITY_HINT"; then
+        FOUND_IDENTITY=1
+    fi
+done
+test "$FOUND_IDENTITY" = "1" || {
+    echo "No certificate in the .p12 has a '$IDENTITY_HINT' subject - refusing to upload it." >&2
+    exit 1
+}
+
 # Assert the key IS PRESENT rather than that openssl exited 0: `-nocerts -noout` returns 0 on a
 # .p12 that contains no private key at all. Caught by planting a keyless .p12, which this guard
 # accepted before the grep was added.
@@ -54,7 +74,7 @@ openssl pkcs12 -in "$P12" -passin "pass:$P12_PASSWORD" -nocerts -nodes 2>/dev/nu
     echo "The .p12 has no private key - CI could import it and still fail to sign." >&2
     exit 1
 }
-echo "    ok: certificate and private key both present"
+echo "    ok: certificate subject and private key both verified"
 
 echo "==> Setting the two repo secrets on $REPO"
 base64 -i "$P12" | gh secret set PUSHTEXT_RELEASE_SIGNING_CERT_P12_BASE64 --repo "$REPO"
