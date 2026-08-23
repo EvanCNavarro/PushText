@@ -16,6 +16,7 @@ public enum InjectionProbe {
         ProcessInfo.processInfo.environment["PUSHTEXT_INJECT_PROBE"] == "1"
     }
 
+    @MainActor
     public static func runAndExit() -> Never {
         let env = ProcessInfo.processInfo.environment
         let text = env["PUSHTEXT_INJECT_TEXT"] ?? "pushtext probe"
@@ -87,7 +88,6 @@ public enum InjectionProbe {
     /// Bridges the async injector into the probe's synchronous flow.
     /// - Returns: a failure description, or nil on success.
     private static func injectBlocking(injector: PasteboardTextInjector, text: String) -> String? {
-        let done = DispatchSemaphore(value: 0)
         let outcome = OutcomeBox()
         Task {
             do {
@@ -96,9 +96,16 @@ public enum InjectionProbe {
             } catch {
                 outcome.set("\(error)")
             }
-            done.signal()
         }
-        _ = done.wait(timeout: .now() + 15)
+
+        // PUMP the run loop rather than blocking on a semaphore. `inject` hops to the main actor to
+        // read the keyboard layout - Text Input Source calls trap off-main - so a blocking wait on
+        // this thread deadlocks against the very work it is waiting for, and reports it as a
+        // timeout. Observed exactly that: `inject=failed error=timeout` with the paste never sent.
+        let deadline = Date().addingTimeInterval(15)
+        while !outcome.isSettled, Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
         return outcome.get()
     }
 }
@@ -109,4 +116,5 @@ private final class OutcomeBox: @unchecked Sendable {
     private var settled = false
     func set(_ value: String?) { lock.lock(); failure = value; settled = true; lock.unlock() }
     func get() -> String? { lock.lock(); defer { lock.unlock() }; return settled ? failure : "timeout" }
+    var isSettled: Bool { lock.lock(); defer { lock.unlock() }; return settled }
 }
