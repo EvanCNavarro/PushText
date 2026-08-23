@@ -56,6 +56,9 @@ struct PushTextApp: App {
                              injector: PasteboardTextInjector(),
                              indicator: DictationHUDController())
         self.model = model
+        // The real probe, with the persisted latch, so `grantBroken` survives a relaunch - which is
+        // when the break is usually noticed, on the launch AFTER the one that worked (#6).
+        model.permissionProbe = SystemPermissionProbe(latch: UserDefaultsGrantLatch())
 
         // Install the on-device model NOW rather than on the first key-down (#36). Detached and
         // unawaited on purpose: launch must not block on a download either, and a failure here is

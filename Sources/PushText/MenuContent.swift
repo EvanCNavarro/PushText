@@ -32,12 +32,24 @@ struct MenuContent: View {
             subtitle: "Hold-to-talk dictation that runs entirely on this Mac.",
             actions: actions.menuActions()
         ) {
-            if let failure = model.startupFailure {
+            if model.startupFailure != nil || !model.permissionAdvice.isEmpty {
                 SectionCard("NEEDS ATTENTION") {
-                    Text(failure)
-                        .font(Tokens.body)
-                        .foregroundStyle(Tokens.warning)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let failure = model.startupFailure {
+                        Text(failure)
+                            .font(Tokens.body)
+                            .foregroundStyle(Tokens.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    // One row per permission that is not granted. The copy differs by STATE, which
+                    // is the entire reason the probe reports three of them (#6).
+                    // A rule between rows, matching AppIdentityCard's use of Divider. Rendered
+                    // without one, three stacked rows read as a single block of prose: SectionCard
+                    // puts 10pt between children and a row puts 4pt inside itself, and that ratio
+                    // is not enough separation to group each title with its own button.
+                    ForEach(Array(model.permissionAdvice.enumerated()), id: \.element.permission) { index, entry in
+                        if index > 0 || model.startupFailure != nil { Divider() }
+                        PermissionRow(advice: entry.advice) { actions.resolvePermission(entry.advice) }
+                    }
                 }
             }
 
@@ -64,6 +76,35 @@ struct MenuContent: View {
         }
         .frame(width: 320)
         .background(Tokens.panel)
+        // Recomputed on OPEN, not cached at launch. The user changes these in System Settings while
+        // this menu is closed, so a launch-time value is stale exactly when they come back to check.
+        .onAppear { model.refreshPermissionAdvice() }
+    }
+}
+
+/// One unmet permission: what is missing, why it matters, and a way out.
+///
+/// Always actionable. A row that names a problem and offers nothing is worse than no row, because
+/// the user now knows they are stuck and still cannot move.
+struct PermissionRow: View {
+    let advice: PermissionAdvice
+    /// A closure, not the whole `AppActions`: a row needs one verb, and depending on the object
+    /// that owns Sparkle's updater makes the row unrenderable outside a running app.
+    let onResolve: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.micro) {
+            Text(advice.title)
+                .font(Tokens.body)
+                .foregroundStyle(Tokens.warning)
+            Text(advice.detail)
+                .font(Tokens.caption)
+                .foregroundStyle(Tokens.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            ActionRow(title: advice.actionLabel,
+                      systemImage: advice.canPromptInApp ? "checkmark.shield" : "gearshape",
+                      action: onResolve)
+        }
     }
 }
 

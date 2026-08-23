@@ -1,0 +1,97 @@
+import Foundation
+import PushTextKit
+
+/// What the menu says about a permission that is not granted (#6).
+///
+/// Separate from the probe and from the view because it is the part with a right and wrong answer:
+/// `needsFirstGrant` and `grantBroken` produce the same OS reading and need opposite instructions,
+/// and getting that backwards sends a user to a Settings list where the app is already ticked.
+struct PermissionAdvice: Equatable {
+    let title: String
+    let detail: String
+    let actionLabel: String
+    /// Where the action goes. Nil only when the app can ask directly instead.
+    let settingsURL: URL?
+    /// True when the app itself can raise the system prompt, which is only ever the first ask.
+    let canPromptInApp: Bool
+
+    static func forStatus(_ status: PermissionStatus, of permission: Permission) -> PermissionAdvice? {
+        let title = Self.title(of: permission)
+        let pane = Self.settingsURL(for: permission)
+
+        switch status {
+        case .granted:
+            return nil
+
+        case .needsFirstGrant:
+            // Only the microphone can be asked for from inside the app. Accessibility and PostEvent
+            // have no programmatic prompt worth using - `AXIsProcessTrustedWithOptions` shows a
+            // dialog that just sends the user to Settings anyway, with less context than this row.
+            let canPrompt = permission == .microphone
+            return PermissionAdvice(
+                title: title,
+                detail: "PushText has not been given \(Self.noun(of: permission)) access yet.",
+                actionLabel: canPrompt ? "Allow..." : "Open Settings...",
+                settingsURL: canPrompt ? nil : pane,
+                canPromptInApp: canPrompt)
+
+        case .grantBroken:
+            // The app IS already in the list, so "allow" is an instruction the user cannot follow.
+            // Toggling off and on is what actually re-associates the grant with the new signature.
+            return PermissionAdvice(
+                title: title,
+                detail: "Access was granted before and has stopped working - usually after an "
+                    + "update. Switch PushText off and on again in the list.",
+                actionLabel: "Open Settings...",
+                settingsURL: pane,
+                canPromptInApp: false)
+
+        case .denied:
+            // A decision, not a fault. Stated as something they can revisit rather than an error.
+            return PermissionAdvice(
+                title: title,
+                detail: "Access was declined. PushText cannot \(Self.capability(of: permission)) "
+                    + "until it is turned on.",
+                actionLabel: "Open Settings...",
+                settingsURL: pane,
+                canPromptInApp: false)
+        }
+    }
+
+    private static func title(of permission: Permission) -> String {
+        switch permission {
+        case .microphone: "Microphone"
+        case .accessibility: "Accessibility"
+        case .postEvent: "Input control"
+        }
+    }
+
+    private static func noun(of permission: Permission) -> String {
+        switch permission {
+        case .microphone: "microphone"
+        case .accessibility: "accessibility"
+        case .postEvent: "input control"
+        }
+    }
+
+    private static func capability(of permission: Permission) -> String {
+        switch permission {
+        case .microphone: "hear you"
+        case .accessibility: "watch for the hotkey"
+        case .postEvent: "insert text"
+        }
+    }
+
+    /// PostEvent deliberately routes to the ACCESSIBILITY pane.
+    ///
+    /// Measured on macOS 26.6.2, not assumed: `Privacy_Accessibility` and `Privacy_Microphone` each
+    /// appear once in `SecurityPrivacyExtension.appex`'s binary while `Privacy_PostEvent` and
+    /// `Privacy_ListenEvent` appear zero times, and a deliberately fake anchor also scores zero, so
+    /// the check discriminates. Opening the Accessibility anchor was then confirmed to land on a
+    /// window titled "Accessibility". PostEvent has no pane of its own and is surfaced under
+    /// Accessibility (docs/research/04 sec 4).
+    private static func settingsURL(for permission: Permission) -> URL? {
+        let anchor = permission == .microphone ? "Privacy_Microphone" : "Privacy_Accessibility"
+        return URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")
+    }
+}
