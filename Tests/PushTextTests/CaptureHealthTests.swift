@@ -155,4 +155,82 @@ struct CaptureHealthTests {
         #expect(history.load().isEmpty)
     }
 
+    private final class SpyInjector: TextInjector, @unchecked Sendable {
+        private let lock = NSLock()
+        private var texts: [String] = []
+        var isTrusted: Bool { true }
+        func inject(_ text: String) async throws { record(text) }
+        private func record(_ text: String) { lock.lock(); texts.append(text); lock.unlock() }
+        var injected: [String] { lock.lock(); defer { lock.unlock() }; return texts }
+    }
+
+    private struct StubDictionary: DictionaryStore {
+        let entries: [DictionaryEntry]
+        func load() -> [DictionaryEntry] { entries }
+        func save(_ entries: [DictionaryEntry]) {}
+    }
+
+    /// #82: the matcher has existed since #9 and was applied to nothing. This asserts the
+    /// transcript actually passes through it before injection.
+    @Test("The dictionary rewrites the transcript before it is injected")
+    func dictionaryRewritesBeforeInjection() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["open push text now"],
+                                                                  latency: .milliseconds(1)))
+        let capture = LossyCapture(health: CaptureHealth())
+        let injector = SpyInjector()
+        let dictionary = StubDictionary(entries: [DictionaryEntry(spoken: "push text",
+                                                                  written: "PushText")])
+        let model = AppModel(engine: engine, capture: capture, injector: injector,
+                             dictionary: dictionary)
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        capture.deliver()
+        model.handle(.released, at: 0.2)
+
+        _ = await settle { !injector.injected.isEmpty }
+        #expect(injector.injected == ["open PushText now"])
+    }
+
+    /// An empty dictionary must be a no-op, not a mangling. This is the state every user starts in.
+    @Test("An empty dictionary leaves the transcript untouched")
+    func emptyDictionaryChangesNothing() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["leave me alone"],
+                                                                  latency: .milliseconds(1)))
+        let capture = LossyCapture(health: CaptureHealth())
+        let injector = SpyInjector()
+        let model = AppModel(engine: engine, capture: capture, injector: injector,
+                             dictionary: StubDictionary(entries: []))
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        capture.deliver()
+        model.handle(.released, at: 0.2)
+
+        _ = await settle { !injector.injected.isEmpty }
+        #expect(injector.injected == ["leave me alone"])
+    }
+
+    /// History records what the user actually got. Storing the pre-rewrite text would make the
+    /// history disagree with the document they pasted into.
+    @Test("History records the rewritten text, not the raw transcript")
+    func historyRecordsWhatWasInjected() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["open push text now"],
+                                                                  latency: .milliseconds(1)))
+        let capture = LossyCapture(health: CaptureHealth())
+        let history = SpyHistory()
+        let model = AppModel(engine: engine, capture: capture, injector: SpyInjector(),
+                             history: history,
+                             dictionary: StubDictionary(entries: [
+                                DictionaryEntry(spoken: "push text", written: "PushText")]))
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        capture.deliver()
+        model.handle(.released, at: 0.2)
+
+        _ = await settle { !history.load().isEmpty }
+        #expect(history.load().map(\.text) == ["open PushText now"])
+    }
+
 }

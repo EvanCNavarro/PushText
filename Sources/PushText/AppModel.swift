@@ -45,7 +45,7 @@ private let engine: any TranscriptionEngine
     private var levelTimer: Timer?
     /// Turns raw edges into events, so a double press can start a latched utterance (#46).
     private var pressPattern = PressPatternRecognizer()
-    private var captureWatchdog: Timer?
+    private let watchdog = CaptureWatchdog()
     /// Text waiting to be injected, held between `transcriptFinalized` and `injectionFinished`.
     private var pendingText: String?
 
@@ -69,6 +69,10 @@ private let engine: any TranscriptionEngine
         }
     }
 
+    /// The user's rewrite rules (#82). Loaded per utterance rather than cached: the file is edited
+    /// by hand in a text editor, and a cache would ignore every change until relaunch.
+    private let dictionary: (any DictionaryStore)?
+
     /// Where completed dictations are kept (#10). Optional so the state-machine tests can run with
     /// no filesystem at all.
     private let history: (any HistoryStore)?
@@ -85,14 +89,11 @@ private let engine: any TranscriptionEngine
     private var releasedAt: ContinuousClock.Instant?
 
     /// Longest a single utterance may hold the microphone before it is force-closed.
-    ///
-    /// This is the ONLY defence against the measured stuck-capture case. A stalled `.defaultTap` can
-    /// drop a modifier key-up so thoroughly that macOS's own `flagsState` stays latched — the event
-    /// stream and the live flag state are then both wrong, and every state-based recovery is blind.
-    /// Elapsed time is the one signal that cannot be corrupted that way.
-    ///
-    /// Generous on purpose: it exists to stop a stuck microphone, not to cut off a long sentence.
-    var maximumCaptureDuration: TimeInterval = 120
+    /// Forwarded to `CaptureWatchdog`, which owns the timer and the reasoning.
+    var maximumCaptureDuration: TimeInterval {
+        get { watchdog.maximumDuration }
+        set { watchdog.maximumDuration = newValue }
+    }
 
     /// `capture` and `injector` are optional so the state-machine tests can construct a model with
     /// no OS dependencies at all. A model without them still transitions correctly; it simply has
@@ -102,12 +103,14 @@ private let engine: any TranscriptionEngine
          injector: (any TextInjector)? = nil,
          indicator: (any DictationIndicator)? = nil,
          history: (any HistoryStore)? = nil,
+         dictionary: (any DictionaryStore)? = nil,
          machine: DictationMachine = DictationMachine()) {
         self.engine = engine
         self.capture = capture
         self.injector = injector
         self.indicator = indicator
         self.history = history
+        self.dictionary = dictionary
         self.feed = AudioFeed(engine: engine)
         self.machine = machine
     }
@@ -306,15 +309,22 @@ private let engine: any TranscriptionEngine
         do {
             let transcript = try await feed.finish(token)
             dictationLog.info("transcript chars=\(transcript.text.count) duration=\(transcript.duration)")
+            // The user's own vocabulary, applied before anything else sees the text (#82). #13
+            // measured that the engine cannot be biased at all, so this post-pass is the only
+            // mechanism there is for proper nouns.
+            let text = dictionary.map { CustomDictionary(entries: $0.load()).apply(to: transcript.text) }
+                ?? transcript.text
+
             // Recorded here rather than after injection: the dictation happened whether or not the
             // paste lands, and losing the transcript to an injection failure is the one case where
-            // a user most wants to go back and find it.
-            if !transcript.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                history?.append(HistoryRecord(text: transcript.text,
+            // a user most wants to go back and find it. Stores the REWRITTEN text, so the history
+            // agrees with the document the user pasted into.
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                history?.append(HistoryRecord(text: text,
                                               recordedAt: Date(),
                                               durationSeconds: transcript.duration))
             }
-            apply(.transcriptFinalized(transcript.text))
+            apply(.transcriptFinalized(text))
         } catch {
             dictationLog.error("finishUtterance FAILED: \(String(describing: error), privacy: .public)")
             apply(.failure(.transcriptionFailed))
@@ -367,22 +377,13 @@ private let engine: any TranscriptionEngine
     }
 
     private func startCaptureWatchdog() {
-        stopCaptureWatchdog()
-        guard maximumCaptureDuration > 0 else { return }
-        let timer = Timer(timeInterval: maximumCaptureDuration, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.apply(.watchdogExpired) }
-        }
-        captureWatchdog = timer
-        RunLoop.main.add(timer, forMode: .common)
+        watchdog.arm { [weak self] in self?.apply(.watchdogExpired) }
     }
 
-    private func stopCaptureWatchdog() {
-        captureWatchdog?.invalidate()
-        captureWatchdog = nil
-    }
+    private func stopCaptureWatchdog() { watchdog.disarm() }
 
     /// Whether a capture-duration watchdog is currently armed.
-    var isCaptureWatchdogArmed: Bool { captureWatchdog != nil }
+    var isCaptureWatchdogArmed: Bool { watchdog.isArmed }
 
     /// Maps a raw key edge to the dictation event it implies, including the double press that
     /// starts a latched utterance.
