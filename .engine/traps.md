@@ -458,3 +458,19 @@ research that found them is not read on every cycle, and the trap is.
   observe needs a seam that makes it observable: `AudioFeed.livePumps` counts pumps that have
   started and not finished, and the test now polls that. Every fix in this area gets its plant run
   individually; two out of three passing is what a partially-vacuous suite looks like.
+
+### TRAP-40: my load harness leaked 100 processes and quietly corrupted every measurement after it
+- what happened: five flake-hunt batches each spawned 20 `(while :; do :; done) &` workers and each
+  ended with `kill $LP` where `LP=$(jobs -p)`. In a non-interactive `zsh -c` that captured nothing,
+  so NONE of them died. 100 busy loops ran for about two hours at load average 367, and I only found
+  them while investigating an unrelated `.git/index.lock`. The measurements were not merely noisy:
+  load ACCUMULATED, so runs late in the session faced heavier contention than early ones. The #55
+  pre-fix baseline ran late and scored 21/60, the post-fix run ran earlier and scored 0/60 - a
+  confound pointing the same direction as my conclusion. Re-measured under verified-equal load it is
+  12/60 vs 0/60: same conclusion, published magnitude nearly double the real one.
+- warning: this is the throwaway-instrument rule with the cost made concrete - I verified what the
+  workers DID to the test and never verified that they stopped. A cleanup step produces no output
+  when it fails, so it is invisible by default; `kill` returning 0 says the signal was sent to the
+  PIDs you named, never that you named the right ones. Capture `$!` per job, kill the explicit list,
+  then assert with `kill -0` that none survive - and count strays BEFORE a measurement too, since a
+  leak from a previous run is indistinguishable from a clean machine in every number you take.
