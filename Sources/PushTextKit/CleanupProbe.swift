@@ -20,6 +20,19 @@ import FoundationModels
 /// REAL cleanup through `FoundationModelsCleanup` and prints what came back - availability says the
 /// model can run, and only this says cleanup produces something that survives the drift guard.
 /// Exits non-zero when the model cannot run, so it is usable as a gate on #14.
+/// Carries the measured duration out of the Task without a captured `var`.
+private final class ElapsedBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var duration: Duration = .zero
+    func set(_ value: Duration) { lock.lock(); duration = value; lock.unlock() }
+    var milliseconds: String {
+        lock.lock(); defer { lock.unlock() }
+        let value = Double(duration.components.seconds) * 1000
+            + Double(duration.components.attoseconds) / 1_000_000_000_000_000
+        return String(format: "%.0f", value)
+    }
+}
+
 public enum CleanupProbe {
     public static var isRequested: Bool {
         ProcessInfo.processInfo.environment["PUSHTEXT_CLEANUP_PROBE"] == "1"
@@ -30,10 +43,17 @@ public enum CleanupProbe {
     private static func runCleanupAndExit(_ text: String) -> Never {
         let semaphore = DispatchSemaphore(value: 0)
         let box = ResultBox()
+        // Timed IN-PROCESS around clean() alone (#81). Timing the whole process instead folds in
+        // launch and framework init, which inflated an earlier estimate to 431-811 ms and made it
+        // an upper bound rather than the cost of adding this stage to the dictation path.
+        let clock = ContinuousClock()
+        let elapsed = ElapsedBox()
         Task {
             let cleanup = FoundationModelsCleanup()
             let transcript = Transcript(text: text, duration: 0)
+            let started = clock.now
             let cleaned = (try? await cleanup.clean(transcript)) ?? text
+            elapsed.set(clock.now - started)
             box.set(cleaned: cleaned, rejection: await cleanup.lastRejection)
             semaphore.signal()
         }
@@ -42,6 +62,7 @@ public enum CleanupProbe {
         print("CLEANUP_PROBE raw=\"\(text)\"")
         print("CLEANUP_PROBE cleaned=\"\(box.cleaned)\"")
         print("CLEANUP_PROBE changed=\(box.cleaned != text) rejection=\(box.rejectionDescription)")
+        print("CLEANUP_PROBE cleanMillis=\(elapsed.milliseconds)")
         print("CLEANUP_PROBE model=ok")
         fflush(stdout)
         exit(0)
