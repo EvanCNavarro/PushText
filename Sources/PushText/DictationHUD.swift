@@ -198,11 +198,13 @@ final class DictationHUDController {
         model.phase = phase
         model.level = phase.isActive ? level : 0
 
-        // Re-anchor when the icon MOVES, which it does mid-utterance: macOS inserts its orange
-        // recording indicator into the menu bar the moment capture starts, shifting every item
-        // right. Anchoring only at show() left the pill a few points off-centre for the rest of
-        // that utterance. Guarded on an actual change rather than repositioning on every 20 Hz
-        // tick, so a still menu bar costs nothing.
+        // Re-anchor if the icon moves. DEFENSIVE, not a fix for an observed bug: I claimed the
+        // orange recording indicator shifts our status item mid-utterance and then MEASURED it -
+        // `NSStatusBarWindow` held x=1034 (midX 1050) across arming, recording and every 20 Hz tick,
+        // with and without the indicator. The 1042-vs-1050 variation seen earlier was between app
+        // LAUNCHES, not within a session. This stays because another menu-bar app appearing while we
+        // record genuinely would move us, and the guard costs nothing on a still bar - but it has
+        // never fired, and should not be read as having fixed anything.
         guard let panel, panel.isVisible, let anchor = statusItemAnchor() else { return }
         let wanted = origin(for: anchor, size: panel.frame.size)
         if abs(panel.frame.origin.x - wanted.x) > 0.5 || abs(panel.frame.origin.y - wanted.y) > 0.5 {
