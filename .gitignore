@@ -10,3 +10,6 @@ build/
 # Sparkle (vendored by scripts/fetch-sparkle.sh)
 Vendor/
 .sparkle-tools/
+
+# Finder metadata, created by opening dist/ in Finder during verification.
+.DS_Store

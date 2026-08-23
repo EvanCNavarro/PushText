@@ -85,6 +85,43 @@ public struct DictationMachine: Sendable {
 
     /// Pure transition function — the whole machine, in one place, testable without a machine.
     public static func transition(from state: DictationState, on event: DictationEvent) -> DictationState? {
+        // Split from the main table purely to keep this function within the complexity limit; the
+        // rules themselves stay in one place to read top to bottom.
+        if let recovery = recoveryTransition(from: state, on: event) { return recovery }
+        return progressTransition(from: state, on: event)
+    }
+
+    /// Ends an utterance: failures, the watchdog, and retrying after a failure.
+    private static func recoveryTransition(
+        from state: DictationState,
+        on event: DictationEvent
+    ) -> DictationState? {
+        switch (state, event) {
+        // The watchdog only means anything while the mic could be open.
+        case (.arming, .watchdogExpired), (.recording, .watchdogExpired):
+            return .failed(.cancelled)
+
+        // A new press RETRIES. Without this, `.failed` is a dead end and one bad utterance disables
+        // dictation until the app is relaunched - observed in the field: a permissionDenied failure
+        // left every subsequent key press producing edges with no state change, so the app looked
+        // dead rather than broken-once. A key that silently stops working is worse than one that
+        // fails every time, because the user cannot tell which state they are in.
+        case (.failed, .hotkeyPressed):
+            return .arming
+
+        case (_, .failure(let reason)):
+            return state == .idle ? nil : .failed(reason)
+
+        default:
+            return nil
+        }
+    }
+
+    /// Moves an utterance forward through its happy path.
+    private static func progressTransition(
+        from state: DictationState,
+        on event: DictationEvent
+    ) -> DictationState? {
         switch (state, event) {
         case (.idle, .hotkeyPressed):
             return .arming
@@ -105,13 +142,6 @@ public struct DictationMachine: Sendable {
             return .injecting
         case (.injecting, .injectionFinished):
             return .idle
-
-        // The watchdog only means anything while the mic could be open.
-        case (.arming, .watchdogExpired), (.recording, .watchdogExpired):
-            return .failed(.cancelled)
-
-        case (_, .failure(let reason)):
-            return state == .idle ? nil : .failed(reason)
 
         default:
             return nil

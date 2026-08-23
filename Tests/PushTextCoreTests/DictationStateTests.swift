@@ -123,4 +123,33 @@ struct DictationStateTests {
         #expect(!c)
         #expect(machine.state == .idle)
     }
+
+    /// A failed utterance must not brick the app.
+    ///
+    /// Observed in the field before this test existed: the first utterance failed with
+    /// `permissionDenied`, and every subsequent key press produced `hotkeyPressed` edges with NO
+    /// state change, because `.failed` had no outgoing transition. The app looked dead and the only
+    /// cure was relaunching it. A dictation key that stops working after one error is worse than one
+    /// that errors every time, because the user cannot tell which state they are in.
+    @Test("A new press recovers from a failed utterance instead of staying stuck")
+    func pressRecoversFromFailure() {
+        for failure in [DictationFailure.permissionDenied,
+                        .noSpeechDetected,
+                        .transcriptionFailed,
+                        .injectionFailed,
+                        .cancelled] {
+            var machine = DictationMachine(state: .failed(failure))
+            let changed = machine.apply(.hotkeyPressed)
+            #expect(changed, "no way out of .failed")
+            #expect(machine.state == .arming)
+        }
+    }
+
+    @Test("A release in the failed state is ignored rather than starting an utterance")
+    func releaseInFailedIsIgnored() {
+        var machine = DictationMachine(state: .failed(.permissionDenied))
+        let changed = machine.apply(.hotkeyReleased)
+        #expect(changed == false)
+        #expect(machine.state == .failed(.permissionDenied))
+    }
 }
