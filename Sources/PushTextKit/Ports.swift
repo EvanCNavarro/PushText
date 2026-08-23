@@ -97,6 +97,15 @@ public protocol CleanupProvider: Actor {
     /// utility is *always* backgrounded. See PLAN.md §2.8, §2.9.
     func clean(_ transcript: Transcript) async throws -> String
 
+    /// What the last `clean` call cost, and whether it ran against a warmed session.
+    ///
+    /// Diagnostic only, and `nil` by default. It exists because the wired path is bimodal - a fast
+    /// mode near 624 ms and a slow mode near 3957 ms - and nothing measured so far distinguishes
+    /// "the warm-up never ran" from "the warm-up ran and the model was still cold". Those are
+    /// different bugs, and every candidate fix is guesswork until one slow dictation is attributed
+    /// to one of them (#94).
+    var lastTiming: CleanupTiming? { get async }
+
     /// Optional warm-up, called when the user starts speaking rather than when the text arrives.
     ///
     /// Default no-op so an implementation that needs nothing warmed ignores it. Push-to-talk is an
@@ -107,6 +116,20 @@ public protocol CleanupProvider: Actor {
 
 public extension CleanupProvider {
     func prewarm() async {}
+    var lastTiming: CleanupTiming? { get async { nil } }
+}
+
+/// What one cleanup call cost, split so a slow one can be attributed rather than guessed at (#94).
+public struct CleanupTiming: Sendable, Equatable {
+    /// Whether a session warmed at key-down was still available when the transcript arrived.
+    public let wasWarm: Bool
+    /// Time inside the model call alone - not the drift guard, dictionary or history.
+    public let respondMillis: Int
+
+    public init(wasWarm: Bool, respondMillis: Int) {
+        self.wasWarm = wasWarm
+        self.respondMillis = respondMillis
+    }
 }
 
 // MARK: - Input

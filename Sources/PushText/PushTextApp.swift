@@ -58,16 +58,15 @@ struct PushTextApp: App {
         // The user's rewrite rules (#82). #13 measured that the engine cannot be biased, so this
         // post-pass is the only mechanism there is for proper nouns like "PushText".
         let dictionary = JSONLDictionaryStore.defaultURL().map { JSONLDictionaryStore(url: $0) }
-        // STILL no cleanup provider here (#94), now for a sharper reason than before.
+        // STILL no cleanup provider here (#94), and the reason is now attributed rather than guessed.
         //
-        // Prewarming at key-down works - when it lands, cleanup costs ~624 ms instead of ~4182 ms.
-        // It lands 43% of the time (n=21). The other 57% pay 3957 ms, which is the unwarmed cost,
-        // so prewarm either completes or buys nothing. Prewarming is documented as not guaranteeing
-        // asset loading while an app is BACKGROUNDED, and a menu-bar LSUIElement app is backgrounded
-        // permanently - so that caveat describes this app's normal state, not an edge case.
+        // The key-down prewarm ALWAYS completes - `warm=true` on 12 of 12 quiet dictations - so the
+        // earlier backgrounding explanation was wrong. The cost is inside the model call, and it is
+        // binary: 322 ms when the assets are resident, 3494 ms when they are not, with the slow mode
+        // spread only 138 ms wide. That is a discrete load step of ~3.2 s that `prewarm()` does not
+        // prevent, and it hits 50% of dictations.
         //
-        // Passing `FoundationModelsCleanup()` below is still the one line that switches it on, and
-        // the prewarm plumbing is in place for whatever fixes the 57%. See
+        // Passing `FoundationModelsCleanup()` below is still the one line that switches it on. See
         // docs/verification/task94-cleanup-latency.md.
         let model = AppModel(engine: engine,
                              capture: AVAudioEngineCapture(),
