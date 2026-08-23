@@ -3,6 +3,10 @@
 ## Repository Expectations
 
 - Run `swift build && swift test && swiftlint --strict` before claiming project health.
+- Run every `.engine/checks/*.sh` before claiming project health; they all fail closed.
+- Conventional Commits are gated on BOTH the commit subject and the PR title, because the squash
+  header comes from whichever one the PR's commit count selects (TRAP-37). Keep both under 84
+  characters - GitHub appends ` (#N)` afterwards.
 - Run `.engine/checks/core-purity.sh` before claiming `PushTextCore` is clean — it is the ADR-0001
   gate and it fails closed.
 - Keep secrets out of commits.

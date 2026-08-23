@@ -411,3 +411,22 @@ research that found them is not read on every cycle, and the trap is.
   removal of anything a comment calls necessary. If the suite stays green the comment is a
   hypothesis, not a reason, and either the test or the claim has to change. Both were fixed here:
   two discriminating tests added, and the false clause replaced with the measured one.
+
+### TRAP-37: the squash header comes from whichever input you did not check
+- what happened: I measured the PR title on #64, merged, and the header that landed came from the
+  single COMMIT subject. On #65 I did the reverse - a conventional commit subject, a PR title with
+  no type prefix - and because that branch carried TWO commits, GitHub used the TITLE. Master now
+  reads `Publish measured latency numbers and log release-to-text (#65)`, in a repo whose stated
+  convention is Conventional Commits. `File backlog as GitHub issues ... (#23)` got in the same way,
+  months earlier, so this is a recurring hole and not a one-off slip. The setting is
+  `squash_merge_commit_title=COMMIT_OR_PR_TITLE`: ONE commit uses the commit subject, MORE THAN ONE
+  uses the PR title. A check that reads either input alone looks correct on every PR that happens to
+  match it, and a local commit-msg hook cannot see a PR title at all.
+- warning: when a value can come from two sources depending on a condition, gate BOTH - never the
+  one you happened to test with. `.engine/checks/conventional-subjects.sh` now validates the PR
+  title and every commit on the branch, and reserves 8 characters because GitHub appends ` (#N)`
+  AFTER the subject has cleared any local hook. Battle-testing it found a second instance of the
+  same shape in the gate itself: `[ -n "${PR_TITLE:-}" ]` treated set-but-empty the same as unset,
+  so a broken workflow expression would have skipped the check and reported OK. `+set` separates
+  them, because a gate that passes while checking nothing is indistinguishable from a gate that
+  passed.
