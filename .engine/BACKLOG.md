@@ -202,7 +202,7 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   delivers the device's native rate, so the two differ by default - #12 must convert at the boundary
   and assert the format there. TRAP-20.
 
-#33 - Apple Intelligence reports restricted/assetIsNotReady - S0
+#33 - Apple Intelligence reports restricted/assetIsNotReady - DONE
   blocked-by: none; GO/NO-GO input for #14 the way #11 was for #12. The crash report from the #11
   spike carried appleIntelligenceStatus state=restricted reasons=[assetIsNotReady]. FoundationModels
   is present in the SDK and compiles; whether SystemLanguageModel.availability returns .available

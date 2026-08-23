@@ -56,6 +56,9 @@ struct PushTextApp: App {
         if TranscriptionProbe.isRequested {
             TranscriptionProbe.runAndExit()
         }
+        if CleanupProbe.isRequested {
+            CleanupProbe.runAndExit()
+        }
         #endif
         // No probe took over, so any probe-tuning variable still set is a misconfiguration that
         // would otherwise launch the UI and look like a hung probe.
