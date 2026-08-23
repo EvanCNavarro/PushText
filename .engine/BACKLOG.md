@@ -250,3 +250,19 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   no exit so the first error bricked dictation until relaunch (TRAP-28); and the app never requested
   the mic at all, every prior capture having come from terminal-parented probes inheriting the
   terminal's grant (#44).)
+
+## Requested 2026-08-22 after the first working dictation
+
+#46 - Double-press to latch recording, with a HUD that can cancel or commit - S1
+  blocked-by: none. Supersedes #7, whose non-activating NSPanel mechanics remain the hard part - the
+  panel must not take key focus or the injected Command-V lands in the HUD instead of the document.
+  Order: interaction model in Core (DONE) -> double-press recogniser (pure, testable: the timing is a
+  product decision and must not be buried in an event-tap callback) -> the panel, which needs
+  rendered verification -> level metering from the existing capture buffers so the waveform shows
+  REAL audio; a decorative animation would move while a dead capture path delivers nothing, which is
+  the exact failure AudioProbe exists to catch.
+
+#47 - MacFaceKit is linked but never used - the UI is unstyled SwiftUI - S0
+  blocked-by: none. `grep -rn MacFaceKit Sources/` returns nothing while Package.swift both declares
+  and links it, so the app pays the dependency cost and looks like a prototype. Do it with #46 so
+  the HUD is built from the same components rather than adding a second visual language.
