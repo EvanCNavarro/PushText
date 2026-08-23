@@ -430,3 +430,31 @@ research that found them is not read on every cycle, and the trap is.
   so a broken workflow expression would have skipped the check and reported OK. `+set` separates
   them, because a gate that passes while checking nothing is indistinguishable from a gate that
   passed.
+
+### TRAP-38: a flake stayed unexplained because slow and fast look identical in a green run
+- what happened: #55 was a settle that hit its 5 s ceiling once and had "not reproduced" in 8 runs.
+  Brute force did not help either - 1 failure in 40 loaded runs, then 0 in 150 - and TWICE I lost
+  the failing test's name by re-running to capture detail instead of keeping the first run's
+  output, which is the identical mistake the original report made. What broke it open was noticing
+  that a settle taking 4.9 s and one taking 5 ms are INDISTINGUISHABLE in a green run: the suite
+  only ever reports the total. Printing every settle over 100 ms showed a whole population of
+  ~105 ms waits nobody had ever seen, and printing the model's state on timeout named the bug in
+  one run: `state=transcribing injected=[] captureStarts=1 captureStops=3`.
+- warning: when a rare failure will not reproduce, stop hunting the failure and instrument the
+  NEAR MISS - it is already happening on passing runs, at a rate high enough to measure. And a
+  timeout that reports only "the condition is false" reports the one thing you already knew; make
+  it print the state that would discriminate the hypotheses. Both changes are permanent in
+  `DictationPipelineTests`.
+
+### TRAP-39: my regression test for the deadlock could not have failed
+- what happened: fixing #55 I added three tests. Planting the pre-fix behaviour back caught two of
+  them and NOT the third - `supersedingCompletesTheOldPump` passed happily with the defect
+  restored. It asserted that a stale `cancel` returned, but a stale `cancel` no-ops by design, so
+  it could never have hung no matter how badly the stream was orphaned. The invariant it claimed to
+  cover - a superseded pump must finish rather than await a producer that will never arrive - is
+  invisible from the public API, because nobody awaits a superseded pump.
+- warning: "what would still be true if the property were absent?" caught this, but only when the
+  plant was run - reading the test, it looks like it tests the deadlock. An invariant no caller can
+  observe needs a seam that makes it observable: `AudioFeed.livePumps` counts pumps that have
+  started and not finished, and the test now polls that. Every fix in this area gets its plant run
+  individually; two out of three passing is what a partially-vacuous suite looks like.

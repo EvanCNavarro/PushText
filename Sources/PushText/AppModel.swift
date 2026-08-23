@@ -26,6 +26,28 @@ final class AppModel {
     /// Text waiting to be injected, held between `transcriptFinalized` and `injectionFinished`.
     private var pendingText: String?
 
+    /// Serialises `openUtterance`, so two of them can never be inside `feed.begin()` at once.
+    ///
+    /// Ordering alone is not enough (the epoch below handles identity), but without it the two
+    /// `begin` calls can land in either order, and the LATER one owns the feed - so the task that
+    /// abandons could still be the one holding the live utterance.
+    private var openTask: Task<Void, Never>?
+
+    /// Which `.arming` a task belongs to.
+    ///
+    /// `machine.state == .arming` cannot distinguish "still MY arming" from "a NEW arming that
+    /// replaced mine" - and in the #55 trace it is exactly a new one, so the stale task sailed
+    /// past the guard and adopted the successor's utterance.
+    private var armingEpoch = 0
+
+    /// The utterance this model currently owns, or nil between utterances (#55).
+    ///
+    /// Two `openUtterance()` tasks can be in flight at once - a quick tap goes `arming -> idle`
+    /// while its task still awaits `feed.begin()`, and a double press immediately arms the next.
+    /// Each task therefore has to say WHICH utterance it is finishing or abandoning; without that
+    /// the abandoning one tore down its successor.
+    private var utterance: AudioFeed.Utterance?
+
     /// When the user stopped speaking, for the release-to-text figure the app logs (#15).
     ///
     /// The first such number this project had was subtracted by hand from two os_log timestamps,
@@ -116,7 +138,14 @@ final class AppModel {
 
         switch state {
         case .arming:
-            Task { await self.openUtterance() }
+            armingEpoch += 1
+            let epoch = armingEpoch
+            let previous = openTask
+            openTask = Task {
+                // Let the outgoing attempt finish abandoning before this one opens anything.
+                await previous?.value
+                await self.openUtterance(epoch: epoch)
+            }
 
         case .transcribing:
             Task { await self.closeUtterance() }
@@ -187,19 +216,27 @@ final class AppModel {
         levelTimer = nil
     }
 
-    private func openUtterance() async {
+    private func openUtterance(epoch: Int) async {
+        // Cheap pre-check: the utterance may already be over before this task got scheduled.
+        guard epoch == armingEpoch, machine.state == .arming else {
+            dictationLog.info("openUtterance skipped: superseded before it began")
+            return
+        }
         do {
-            try await feed.begin()
+            let token = try await feed.begin()
 
             // The utterance may have ENDED while the engine was starting - a quick tap goes
             // arming -> idle, and a cancel can arrive at any moment. Opening the microphone now
             // would leave it running for an utterance that no longer exists, and would let a
             // stale start clobber the next one.
-            guard machine.state == .arming else {
+            guard epoch == armingEpoch, machine.state == .arming else {
                 dictationLog.info("openUtterance abandoned: state moved on while starting")
-                await feed.cancel()
+                // `token`, not "whatever is installed": a newer utterance may already own the feed,
+                // and cancelling THAT is exactly the bug this argument exists to prevent (#55).
+                await feed.cancel(token)
                 return
             }
+            utterance = token
 
             // Capture starts AFTER the engine is ready, so no buffer can arrive with nowhere to go.
             levels.reset()
@@ -211,7 +248,7 @@ final class AppModel {
             apply(.audioStarted)
         } catch {
             dictationLog.error("openUtterance FAILED: \(String(describing: error), privacy: .public)")
-            await feed.cancel()
+            if let token = utterance { await feed.cancel(token); utterance = nil }
             capture?.stop()
             apply(.failure(Self.classify(error)))
         }
@@ -222,8 +259,16 @@ final class AppModel {
         // Stop the microphone FIRST: everything already submitted is still in the feed's queue, and
         // leaving it open would keep appending audio the user did not intend to dictate.
         capture?.stop()
+        guard let token = utterance else {
+            // No utterance to finish. Failing loudly beats hanging in `.transcribing`, which is
+            // precisely what #55 did.
+            dictationLog.error("closeUtterance with no open utterance")
+            apply(.failure(.transcriptionFailed))
+            return
+        }
+        utterance = nil
         do {
-            let transcript = try await feed.finish()
+            let transcript = try await feed.finish(token)
             dictationLog.info("transcript chars=\(transcript.text.count) duration=\(transcript.duration)")
             apply(.transcriptFinalized(transcript.text))
         } catch {
@@ -270,7 +315,10 @@ final class AppModel {
 
     private func teardown() async {
         closeMicrophone()
-        await feed.cancel()
+        if let token = utterance {
+            utterance = nil
+            await feed.cancel(token)
+        }
         pendingText = nil
     }
 
@@ -308,27 +356,5 @@ final class AppModel {
     /// `Date()`: it cannot step backwards when the clock is adjusted.
     func handle(_ edge: HotkeyEdge, at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         apply(pressPattern.handle(edge, at: time))
-    }
-
-    var statusText: String {
-        switch machine.state {
-        case .idle: "Ready"
-        case .arming: "Starting..."
-        case .recording: "Listening"
-        case .transcribing: "Transcribing"
-        case .cleaning: "Polishing"
-        case .injecting: "Inserting"
-        case .failed(let reason): Self.describe(reason)
-        }
-    }
-
-    private static func describe(_ failure: DictationFailure) -> String {
-        switch failure {
-        case .permissionDenied: "Permission needed"
-        case .noSpeechDetected: "Didn't catch that"
-        case .transcriptionFailed: "Transcription failed"
-        case .injectionFailed: "Couldn't insert text"
-        case .cancelled: "Cancelled"
-        }
     }
 }
