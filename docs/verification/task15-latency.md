@@ -90,7 +90,23 @@ number the user feels by more than double.
   2.43 s utterance, from #42 - subtracted by hand from two os_log timestamps, n=1. Against a 49 ms
   finalize, that leaves roughly 170 ms unaccounted for. `AppModel` now emits
   `releaseToText=<n>ms` directly, so real dictations produce the figure instead of requiring
-  arithmetic on a log - but no sample of it is published here, and this section is why.
+  arithmetic on a log.
+
+  **SAMPLED 2026-08-23**, two real dictations driven end to end - synthetic Right Option, speech
+  played aloud into the microphone, text landing in TextEdit:
+
+  ```
+  released 06:25:26.147 -> injected 06:25:26.399    252 ms (from timestamps)
+  injected chars=40 releaseToText=275ms             275 ms (logged directly)
+  ```
+
+  Consistent with #42's 221 ms, and roughly 5x the 49 ms engine finalize for a short utterance. The
+  gap is mic teardown, the state machine and the HUD, and it is now measured rather than inferred.
+
+  The first of those two runs is also why the log line reads `privacy: .public`: it originally
+  printed `releaseToText=<private>ms`, because os_log redacts interpolated strings by default while
+  the numeric `chars=` beside it needed no annotation. An instrument added to be read, that could
+  not be read.
 - **Nothing about cleanup.** `FoundationModelsCleanup` is written and NOT wired into the live
   pipeline, so it costs zero today. Wiring it in adds a model call between finalize and injection,
   and that has not been timed.
