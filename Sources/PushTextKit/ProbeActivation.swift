@@ -42,7 +42,9 @@ public enum ProbeActivation {
             "PUSHTEXT_INJECT_SENTINEL",
             "PUSHTEXT_INJECT_CLIPBOARD_ONLY"
         ]),
-        ("PUSHTEXT_CLEANUP_PROBE", []),
+        ("PUSHTEXT_CLEANUP_PROBE", [
+            "PUSHTEXT_CLEANUP_PROBE_TEXT"
+        ]),
         ("PUSHTEXT_HUD_PROBE", [
             "PUSHTEXT_HUD_PROBE_LEVEL"
         ]),
