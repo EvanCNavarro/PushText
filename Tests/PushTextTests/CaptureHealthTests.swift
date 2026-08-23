@@ -62,7 +62,7 @@ struct CaptureHealthTests {
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
         capture.deliver()
-        model.handle(.released, at: 0.2)
+        model.handle(.released, at: 1)
 
         _ = await settle { model.machine.state == .idle }
         #expect(model.lastCaptureWarning == nil)
@@ -79,7 +79,7 @@ struct CaptureHealthTests {
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
         capture.deliver()
-        model.handle(.released, at: 0.2)
+        model.handle(.released, at: 1)
 
         _ = await settle { model.lastCaptureWarning != nil }
         let warning = model.lastCaptureWarning ?? ""
@@ -130,7 +130,7 @@ struct CaptureHealthTests {
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
         capture.deliver()
-        model.handle(.released, at: 0.2)
+        model.handle(.released, at: 1)
 
         _ = await settle { !history.load().isEmpty }
         #expect(history.load().map(\.text) == ["recorded words"])
@@ -149,7 +149,7 @@ struct CaptureHealthTests {
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
         capture.deliver()
-        model.handle(.released, at: 0.2)
+        model.handle(.released, at: 1)
 
         _ = await settle { model.machine.state == .idle || model.machine.state == .failed(.noSpeechDetected) }
         #expect(history.load().isEmpty)
@@ -186,7 +186,7 @@ struct CaptureHealthTests {
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
         capture.deliver()
-        model.handle(.released, at: 0.2)
+        model.handle(.released, at: 1)
 
         _ = await settle { !injector.injected.isEmpty }
         #expect(injector.injected == ["open PushText now"])
@@ -205,7 +205,7 @@ struct CaptureHealthTests {
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
         capture.deliver()
-        model.handle(.released, at: 0.2)
+        model.handle(.released, at: 1)
 
         _ = await settle { !injector.injected.isEmpty }
         #expect(injector.injected == ["leave me alone"])
@@ -227,7 +227,7 @@ struct CaptureHealthTests {
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
         capture.deliver()
-        model.handle(.released, at: 0.2)
+        model.handle(.released, at: 1)
 
         _ = await settle { !history.load().isEmpty }
         #expect(history.load().map(\.text) == ["open PushText now"])
@@ -326,7 +326,7 @@ struct CaptureHealthTests {
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
         capture.deliver()
-        model.handle(.released, at: 0.2)
+        model.handle(.released, at: 1)
 
         _ = await settle { !injector.injected.isEmpty }
         #expect(injector.injected == ["hello there [cleaned]"])
@@ -350,7 +350,7 @@ struct CaptureHealthTests {
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
         capture.deliver()
-        model.handle(.released, at: 0.2)
+        model.handle(.released, at: 1)
 
         _ = await settle { !injector.injected.isEmpty }
         #expect(injector.injected == ["open PushText now"],
@@ -374,7 +374,7 @@ struct CaptureHealthTests {
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
         capture.deliver()
-        model.handle(.released, at: 0.2)
+        model.handle(.released, at: 1)
 
         _ = await settle { !injector.injected.isEmpty && !history.load().isEmpty }
         #expect(history.load().map(\.text) == injector.injected,

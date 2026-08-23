@@ -74,6 +74,9 @@ public struct PressPatternRecognizer: Sendable {
 
         let wasTap = time >= start && time - start <= tapMaximumDuration
         lastTapReleasedAt = wasTap ? time : nil
-        return .hotkeyReleased
+        // Tell the machine WHICH it was. It already computed this to arm the double-press window and
+        // then discarded it, which left the machine deciding "tap or dictation?" from whether
+        // capture had started - a race it loses by about 4 ms (#105).
+        return wasTap ? .hotkeyTapReleased : .hotkeyReleased
     }
 }

@@ -18,18 +18,27 @@ struct PressPatternRecognizerTests {
         #expect(recognizer.handle(.pressed, at: 0) == .hotkeyPressed)
     }
 
-    @Test("Press and release round-trip to the plain events")
+    @Test("A press and a SHORT release round-trip to press and tap-release")
     func pressRelease() {
         var recognizer = PressPatternRecognizer()
         #expect(recognizer.handle(.pressed, at: 0) == .hotkeyPressed)
-        #expect(recognizer.handle(.released, at: 0.1) == .hotkeyReleased)
+        // 0.1 s is inside `tapMaximumDuration`, so this is a tap and the machine must be told so
+        // rather than left to infer it from whether capture had started (#105).
+        #expect(recognizer.handle(.released, at: 0.1) == .hotkeyTapReleased)
+    }
+
+    @Test("A press held longer than a tap round-trips to a plain release")
+    func longPressRelease() {
+        var recognizer = PressPatternRecognizer()
+        #expect(recognizer.handle(.pressed, at: 0) == .hotkeyPressed)
+        #expect(recognizer.handle(.released, at: 1.0) == .hotkeyReleased)
     }
 
     @Test("Two quick taps produce a double press on the second")
     func twoQuickTaps() {
         var recognizer = PressPatternRecognizer()
         #expect(recognizer.handle(.pressed, at: 0) == .hotkeyPressed)
-        #expect(recognizer.handle(.released, at: 0.08) == .hotkeyReleased)
+        #expect(recognizer.handle(.released, at: 0.08) == .hotkeyTapReleased)
 
         #expect(recognizer.handle(.pressed, at: 0.20) == .hotkeyDoublePressed)
     }
@@ -88,13 +97,23 @@ struct PressPatternRecognizerTests {
         #expect(recognizer.handle(.pressed, at: 0.40) == .hotkeyPressed)
     }
 
-    @Test("Releases always pass through unchanged, whatever the pattern")
+    /// The intent of this test is that a release is NEVER swallowed - every one produces an event.
+    /// What changed in #105 is WHICH event: a tap now says so. Kept rather than deleted, because
+    /// "no release goes missing" is still the property worth pinning.
+    @Test("Every release produces an event, and a tap says it was a tap")
     func releasesPassThrough() {
         var recognizer = PressPatternRecognizer()
         _ = recognizer.handle(.pressed, at: 0)
-        #expect(recognizer.handle(.released, at: 0.05) == .hotkeyReleased)
-        _ = recognizer.handle(.pressed, at: 0.1)
+        #expect(recognizer.handle(.released, at: 0.05) == .hotkeyTapReleased)
+        // This press is within the double-press window of the release above, so it IS a double
+        // press - and the release that closes a double press is deliberately plain, because
+        // `justDoublePressed` suppresses tap handling so a three-tap stutter cannot relatch.
+        #expect(recognizer.handle(.pressed, at: 0.1) == .hotkeyDoublePressed)
         #expect(recognizer.handle(.released, at: 0.15) == .hotkeyReleased)
+        // And a genuine hold is still a plain release, so the new event is a real distinction
+        // rather than a rename of every release.
+        _ = recognizer.handle(.pressed, at: 2.0)
+        #expect(recognizer.handle(.released, at: 3.0) == .hotkeyReleased)
     }
 
     /// A tap, then a long gap, then a tap, then a quick tap: only the LAST pair is close enough.

@@ -63,6 +63,14 @@ public enum DictationFailure: Equatable, Sendable {
 public enum DictationEvent: Equatable, Sendable {
     case hotkeyPressed
     case hotkeyReleased
+    /// A release whose press was short enough to be a TAP rather than a dictation.
+    ///
+    /// Distinct from `hotkeyReleased` because the two mean opposite things: a hold's release ENDS an
+    /// utterance, and a tap's release means there was never an utterance to end. The machine already
+    /// said so - `(.arming, .hotkeyReleased) -> .idle`, "too short to be speech" - but that rule
+    /// raced capture start and lost by 4 ms on the real event tap (#105), so the tap became a 74 ms
+    /// utterance and the double press that followed arrived in a state that could not accept it.
+    case hotkeyTapReleased
     /// Two presses in quick succession: start a LATCHED utterance that outlives the key release.
     case hotkeyDoublePressed
     /// Stop and transcribe. What releasing the key does in hold mode, as an explicit request the
@@ -167,10 +175,14 @@ public struct DictationMachine: Sendable {
 
         // A latched utterance ignores the release entirely - both the one following the starting
         // double-press and the one following the ending press.
-        case (.arming, .hotkeyReleased), (.recording, .hotkeyReleased):
+        case (.arming, .hotkeyReleased), (.recording, .hotkeyReleased),
+             (.arming, .hotkeyTapReleased), (.recording, .hotkeyTapReleased):
             return mode == .latched ? .ignore : .unhandled
 
-        case (.transcribing, .hotkeyReleased):
+        // The press that ENDS a latched utterance is itself a tap, so its release arrives here
+        // while transcribing. Both spellings must be ignored or that release would end the
+        // utterance a second time.
+        case (.transcribing, .hotkeyReleased), (.transcribing, .hotkeyTapReleased):
             return .ignore
 
         // Press again to end, but only when latched: in hold mode a press while recording is a
@@ -234,6 +246,13 @@ public struct DictationMachine: Sendable {
             return .idle
         case (.recording, .hotkeyReleased):
             return .transcribing
+
+        // The same judgement as the arming case above, applied where it actually bites. Capture
+        // starts ~70 ms after arming and a tap releases ~74 ms after the press (#105), so a tap
+        // reaches `.recording` and the arming rule never sees it. Deciding from the PRESS DURATION
+        // rather than from which state won the race makes the outcome independent of a 4 ms margin.
+        case (.arming, .hotkeyTapReleased), (.recording, .hotkeyTapReleased):
+            return .idle
 
         case (.transcribing, .transcriptFinalized(let text)):
             return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
