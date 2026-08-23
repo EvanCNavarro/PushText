@@ -396,3 +396,18 @@ research that found them is not read on every cycle, and the trap is.
   absent? - has a specific version here: would this test pass if the tokeniser mangled the word? It
   did. Apostrophes are now stripped before splitting, both typewriter and typographic, because
   dictation output and cleaned output do not agree on which to use.
+
+### TRAP-36: a justification comment is a claim, and two of mine were false
+- what happened: `CustomDictionary` shipped with two design choices, each explained in a comment that
+  asserted why it was necessary. Planting the REMOVAL of both left the suite green, so neither
+  explanation was demonstrated by anything. Worse, one was measurably wrong: the comment said `\b`
+  "misses (pushtext)", and swapping `\b` in leaves every punctuation test passing, because ICU's
+  `\b` is Unicode-aware. The real difference is underscore, which the comment never mentioned.
+  Longest-first ordering was also undemonstrated - the separator pattern rescues the test case,
+  because "cloud code studio" still matches "CloudCode studio" after the shorter rule has run. It IS
+  needed, but only when the short rule's replacement DESTROYS the text the longer one would match.
+- warning: writing down WHY is good and this project does it everywhere - which is exactly why a
+  wrong why is dangerous: it reads as evidence and gets inherited by every later reader. Plant the
+  removal of anything a comment calls necessary. If the suite stays green the comment is a
+  hypothesis, not a reason, and either the test or the claim has to change. Both were fixed here:
+  two discriminating tests added, and the false clause replaced with the measured one.

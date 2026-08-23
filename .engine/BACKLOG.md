@@ -72,7 +72,7 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   compare content. Thresholds to start from: length ratio 0.72/1.35, Levenshtein 0.62, negation-count
   equality, token grounding, no novel content words. Authority: docs/research/06, docs/research/03.
 
-#9 - Custom dictionary matcher + tests - S0
+#9 - Custom dictionary matcher + tests - DONE
   blocked-by: none. Longest-match-first, NFC-normalized, fenced by \p{L}\p{N} lookarounds rather than
   \b, phrase parts joined with [\s\-]* so "CloudCode" matches. Authority: docs/research/03.
 
