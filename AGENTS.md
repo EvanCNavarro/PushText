@@ -10,12 +10,18 @@
 - Keep generated caches out of source control.
 - Treat `.skills/manifest.json` as the project-readable cross-agent skill authority.
 
-## What this project cannot verify locally
+## What a green suite does and does not prove
 
-`SpeechAnalyzer` and `FoundationModels` are macOS 26 APIs and the SDK ships with Xcode, not with the
-OS. Until Xcode 26 is installed here, no claim about their runtime behaviour is verifiable on this
-machine. Say so rather than asserting one. `docs/research/01` and `docs/research/02` mark every such
-claim; keep that discipline.
+`SpeechAnalyzer` and `FoundationModels` ARE now verifiable here: this machine runs macOS 26 with the
+26 SDK, and the package floor matches it (#16). Prefer a measurement to a citation. `docs/research/01`
+and `docs/research/02` predate that and mark every unverified claim as such - when a measurement now
+contradicts one of them, the measurement wins and gets written up in `docs/verification/`.
 
-`MockTranscriptionEngine` is the Phase 0 engine, not a test double. A green suite proves the
-pipeline, never the speech recognition.
+What is still NOT provable from `swift test`: the suite runs against `MockTranscriptionEngine` and
+protocol seams, so a green run proves the pipeline and never the speech recognition or the on-device
+model. Those have their own probes, which drive the real frameworks and exit non-zero:
+
+    PUSHTEXT_TRANSCRIBE_PROBE=1 PUSHTEXT_TRANSCRIBE_PROBE_FILE=<abs.wav> <app-binary>
+    PUSHTEXT_CLEANUP_PROBE=1 PUSHTEXT_CLEANUP_PROBE_TEXT="<raw text>" <app-binary>
+
+Cite a probe run, not a test count, for any claim about transcription or cleanup.

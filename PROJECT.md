@@ -15,7 +15,8 @@ Deploy target: local .app bundle (signed release via GitHub Releases)
 
 ## Platform floor
 
-Shipped floor is macOS 26 — `SpeechAnalyzer` and `FoundationModels` exist nowhere below it.
-`Package.swift` sits at `.macOS(.v14)` during Phase 0 so the ~70% of the app that needs neither can
-be built and tested on Sequoia; that single line and `MIN_SYSTEM_VERSION` in `scripts/build-app.sh`
-move together in Phase 2. See `PLAN.md` §2.5.
+macOS 26, everywhere — `SpeechAnalyzer` and `FoundationModels` exist nowhere below it. Phase 0's
+lower build floor is gone (#16): `Package.swift` is `.macOS(.v26)`, `MIN_SYSTEM_VERSION` in
+`scripts/build-app.sh` is `26.0`, and both CI workflows run on `macos-26`. Those four must agree, and
+`.engine/checks/platform-floor-consistent.sh` fails the build if they drift — `release.yml` fires
+only on a tag, so nothing else would notice its runner falling behind. See `PLAN.md` §2.5.

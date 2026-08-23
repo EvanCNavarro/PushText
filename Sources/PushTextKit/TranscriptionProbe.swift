@@ -2,14 +2,6 @@ import Foundation
 import AVFoundation
 import PushTextCore
 
-// `SpeechAnalyzer` ships with the macOS 26 SDK, NOT with the OS, so `@available(macOS 26, *)`
-// alone is not enough: on an older SDK the symbols do not exist and the file cannot compile at all.
-// CI runs `macos-15`, where exactly that happened - `cannot find type 'SpeechTranscriber' in scope`.
-// `canImport(FoundationModels)` is the repo's chosen proxy for "building against the 26 SDK"
-// (Package.swift), since that framework is absent from the 15 SDK and present in 26 - verified by
-// `ls` on both before and after the Xcode upgrade.
-#if canImport(FoundationModels)
-
 /// Headless proof that `AppleSpeechEngine` actually transcribes on this machine.
 ///
 /// A green `AudioFormatConverter` suite proves the conversion arithmetic and nothing about whether
@@ -34,12 +26,6 @@ public enum TranscriptionProbe {
     }
 
     public static func runAndExit() -> Never {
-        guard #available(macOS 26, *) else {
-            print("TRANSCRIBE_PROBE engine=skipped reason=requires-macos-26")
-            fflush(stdout)
-            exit(2)
-        }
-
         let env = ProcessInfo.processInfo.environment
         let semaphore = DispatchSemaphore(value: 0)
         let code = Box<Int32>(1)
@@ -52,7 +38,6 @@ public enum TranscriptionProbe {
         exit(code.value)
     }
 
-    @available(macOS 26, *)
     private static func run(env: [String: String]) async -> Int32 {
         let engine = AppleSpeechEngine()
 
@@ -89,7 +74,6 @@ public enum TranscriptionProbe {
                                 realtime: env["PUSHTEXT_TRANSCRIBE_PROBE_REALTIME"] == "1")
     }
 
-    @available(macOS 26, *)
     private static func transcribe(
         engine: AppleSpeechEngine,
         buffers: [PushTextKit.AudioBuffer],
@@ -211,4 +195,3 @@ private final class LockedBuffers: @unchecked Sendable {
         return buffers
     }
 }
-#endif

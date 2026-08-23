@@ -1,7 +1,6 @@
 import Foundation
 import PushTextCore
 
-#if canImport(FoundationModels)
 import FoundationModels
 
 /// Answers the question #33 asks: can `FoundationModels` actually run on this machine?
@@ -28,7 +27,6 @@ public enum CleanupProbe {
 
     /// Runs one real cleanup and exits. Blocking wait is fine here: this is a probe process whose
     /// only job is this call, and nothing else needs the main thread.
-    @available(macOS 26, *)
     private static func runCleanupAndExit(_ text: String) -> Never {
         let semaphore = DispatchSemaphore(value: 0)
         let box = ResultBox()
@@ -50,12 +48,6 @@ public enum CleanupProbe {
     }
 
     public static func runAndExit() -> Never {
-        guard #available(macOS 26, *) else {
-            print("CLEANUP_PROBE model=skipped reason=requires-macos-26")
-            fflush(stdout)
-            exit(2)
-        }
-
         let model = SystemLanguageModel.default
         let availability = model.availability
 
@@ -116,4 +108,3 @@ private final class ResultBox: @unchecked Sendable {
         return reason.map { "\($0)" } ?? "none"
     }
 }
-#endif

@@ -15,9 +15,11 @@ CONFIGURATION="${CONFIGURATION:-release}"
 SHORT_VERSION="${SHORT_VERSION:-0.1.0}"
 DIST_DIR="${DIST_DIR:-dist}"
 ICON_SRC="${ICON_SRC:-Sources/PushText/Resources/AppIcon.png}"
-# LSMinimumSystemVersion. Phase 0 ships against a mock engine and runs on Sequoia; this moves to
-# 26.0 in the same commit that bumps Package.swift's platform to .v26 (PLAN.md sec 2.5).
-MIN_SYSTEM_VERSION="${MIN_SYSTEM_VERSION:-14.0}"
+# LSMinimumSystemVersion, and it must TRACK Package.swift's platform floor (#16). A value below
+# the floor is worse than a wrong number: Gatekeeper would let the app launch on an OS where
+# SpeechAnalyzer does not exist, so the failure lands on the user as a broken app rather than on
+# the installer as a refusal.
+MIN_SYSTEM_VERSION="${MIN_SYSTEM_VERSION:-26.0}"
 # Sparkle appcast URL (Info.plist SUFeedURL) - 404s until the first release publishes appcast.xml.
 SU_FEED_URL="${SU_FEED_URL:-https://github.com/EvanCNavarro/PushText/releases/latest/download/appcast.xml}"
 # Sparkle EdDSA PUBLIC key - safe to commit, and REQUIRED before the first release: generate with
