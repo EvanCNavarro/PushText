@@ -262,8 +262,11 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   on screen, frontmost was still iTerm2 and PushText's AXFocusedWindow was `missing value`, which is
   what keeps the synthetic Command-V landing in the user's document. Two races found by the
   integration tests: cancel closed the mic asynchronously, and an in-flight openUtterance reopened
-  it for an utterance that had already ended (TRAP-31). Screenshot-verified against Bobby's
-  reference.)
+  it for an utterance that had already ended (TRAP-31). Redesigned mid-build on Bobby's direction:
+  HORIZONTAL rather than vertical, and hanging from the menu-bar item as a slim dropdown rather than
+  floating on screen. The anchor is the real status-item window, found by class name with a
+  fallback, because MenuBarExtra does not expose its NSStatusItem and a private class name is not a
+  contract. Screenshot-verified under the icon: anchor=1051,1084.)
   blocked-by: none. Supersedes #7, whose non-activating NSPanel mechanics remain the hard part - the
   panel must not take key focus or the injected Command-V lands in the HUD instead of the document.
   Order: interaction model in Core (DONE) -> double-press recogniser (pure, testable: the timing is a

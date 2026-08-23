@@ -96,6 +96,9 @@ struct PushTextApp: App {
             let level = Double(ProcessInfo.processInfo.environment["PUSHTEXT_HUD_PROBE_LEVEL"] ?? "") ?? 0.6
             launchDelegate.onLaunch = {
                 Task { @MainActor in
+                    // Wait for the status item to exist: MenuBarExtra creates it after launch, and
+                    // anchoring before it exists is what sent the first probe to the fallback.
+                    try? await Task.sleep(for: .seconds(2))
                     let hud = DictationHUDController()
                     hud.show(phase: .recording, onCancel: {}, onConfirm: {})
                     hud.update(phase: .recording, level: level)
