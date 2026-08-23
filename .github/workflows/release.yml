@@ -187,6 +187,19 @@ jobs:
           # The notes are embedded now — don't ship the loose .md as a release asset.
           rm -f "dist/PushText-${GITHUB_REF_NAME}.md"
 
+      # Verify the appcast exactly as a Sparkle CLIENT will: signature checked against the
+      # SUPublicEDKey compiled into THIS build, not against the key that produced it. Nothing else
+      # in this workflow connects the SPARKLE_ED_PRIVATE_KEY secret to the shipped public key, and
+      # `sign_update --verify` cannot - it derives the public key from the private one it is given,
+      # so it agrees with itself whichever key that is. A mismatch publishes cleanly and breaks
+      # updates for every existing user at their NEXT check.
+      - name: Verify appcast signature against the shipped public key
+        run: |
+          scripts/verify-appcast-signature.sh \
+            "${{ steps.build.outputs.app_path }}" \
+            dist/appcast.xml \
+            "${{ steps.package.outputs.zip }}"
+
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4
         with:
