@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import OSLog
+import MacFaceKit
 import PushTextCore
 
 /// The floating recording indicator (#46, supersedes #7).
@@ -77,8 +78,9 @@ struct DictationHUDView: View {
     }
 
     private var active: some View {
-        HStack(spacing: 12) {
-            control(symbol: "xmark", help: "Discard this dictation", action: onCancel)
+        HStack(spacing: Tokens.inset) {
+            control(symbol: "xmark", help: "Discard this dictation",
+                    destructive: true, action: onCancel)
 
             levels
                 .frame(width: 96, height: 26)
@@ -86,14 +88,18 @@ struct DictationHUDView: View {
 
             control(symbol: "checkmark", help: "Finish and insert the text", action: onConfirm)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, Tokens.inset + 2)
+        .padding(.vertical, Tokens.space + 1)
+        // Same surface as the overflow dropdown - `Tokens.field` on a `Tokens.line` hairline - so the
+        // HUD reads as part of the app's menu rather than as a foreign floating widget.
         .background(
-            Capsule(style: .continuous)
-                .fill(.black.opacity(0.86))
-                .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+            RoundedRectangle(cornerRadius: Tokens.radius + 4, style: .continuous)
+                .fill(Tokens.field)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Tokens.radius + 4, style: .continuous)
+                        .strokeBorder(Tokens.line, lineWidth: 1))
         )
-        .shadow(color: .black.opacity(0.35), radius: 16, y: 5)
+        .shadow(color: .black.opacity(0.4), radius: 16, y: 5)
     }
 
     /// Symmetric about the centre, tallest in the middle, so a low level reads as a flat line rather
@@ -102,7 +108,7 @@ struct DictationHUDView: View {
         HStack(alignment: .center, spacing: 3) {
             ForEach(0..<barCount, id: \.self) { index in
                 Capsule()
-                    .fill(phase == .recording ? Color.white : Color.white.opacity(0.45))
+                    .fill(phase == .recording ? Tokens.text : Tokens.quiet)
                     .frame(width: 3, height: barHeight(at: index))
             }
         }
@@ -118,13 +124,19 @@ struct DictationHUDView: View {
         return CGFloat(minimum + (maximum - minimum) * level * shape)
     }
 
-    private func control(symbol: String, help: String, action: @escaping () -> Void) -> some View {
+    /// Cancel is tinted with `Tokens.warning` and confirm stays neutral, so the destructive control
+    /// is distinguishable at a glance rather than only by its glyph - the two sit a thumb apart and
+    /// one of them throws the utterance away.
+    private func control(symbol: String, help: String, destructive: Bool = false,
+                         action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.black)
-                .frame(width: 24, height: 24)
-                .background(Circle().fill(.white.opacity(0.92)))
+                .foregroundStyle(destructive ? Tokens.warning : Tokens.text)
+                .frame(width: Tokens.controlButton, height: Tokens.controlButton)
+                .background(
+                    RoundedRectangle(cornerRadius: Tokens.radius - 2, style: .continuous)
+                        .fill(Tokens.row))
         }
         .buttonStyle(.plain)
         .help(help)

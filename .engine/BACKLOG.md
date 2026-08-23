@@ -275,7 +275,14 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   REAL audio; a decorative animation would move while a dead capture path delivers nothing, which is
   the exact failure AudioProbe exists to catch.
 
-#47 - MacFaceKit is linked but never used - the UI is unstyled SwiftUI - S0
+#47 - MacFaceKit is linked but never used - the UI is unstyled SwiftUI - DONE
+  (2026-08-22: the menu is now AppIdentityCard + SectionCard + Tokens, matching TermTile so the two
+  apps read as one family; the ... overflow carries the same three actions TermTile has - Check for
+  Updates via a real Sparkle SPUStandardUpdaterController, Quit, and a destructive Uninstall that
+  confirms first and says plainly that macOS keeps the TCC grants because no app can revoke its own.
+  The HUD was restyled onto the same tokens - Tokens.field surface, Tokens.line hairline,
+  warning-tinted cancel - so it reads as part of the menu rather than a foreign widget.
+  Screenshot-verified: menu, overflow dropdown, and HUD during a live hold.)
   blocked-by: none. `grep -rn MacFaceKit Sources/` returns nothing while Package.swift both declares
   and links it, so the app pays the dependency cost and looks like a prototype. Do it with #46 so
   the HUD is built from the same components rather than adding a second visual language.
