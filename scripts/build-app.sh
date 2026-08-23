@@ -23,9 +23,22 @@ MIN_SYSTEM_VERSION="${MIN_SYSTEM_VERSION:-26.0}"
 # Sparkle appcast URL (Info.plist SUFeedURL) - 404s until the first release publishes appcast.xml.
 SU_FEED_URL="${SU_FEED_URL:-https://github.com/EvanCNavarro/PushText/releases/latest/download/appcast.xml}"
 # Sparkle EdDSA PUBLIC key - safe to commit, and REQUIRED before the first release: generate with
-# Sparkle's generate_keys, which stores the private half in the login Keychain. Empty until then,
+# Sparkle's generate_keys, which stores the private half in the login Keychain. Set below,
 # and an empty value is checked below so a release cannot ship unsigned updates by accident.
-SU_PUBLIC_ED_KEY="${SU_PUBLIC_ED_KEY:-}"
+# The EdDSA PUBLIC key that verifies Sparkle updates. Safe to commit - it is the public half.
+#
+# NOT newly generated, and generating one would have been the wrong move. Sparkle's own
+# `generate_keys --help`: "You only need one signing key, no matter how many apps you embed Sparkle
+# in", and "If a private key was already generated in your Keychain, that key will be used and not
+# overridden." A key was already there, and `generate_keys -p` printed this value - byte-identical
+# to the SUPublicEDKey that /Applications/TermTile.app already ships. Same developer, same machine,
+# one key, exactly as Sparkle intends.
+#
+# The consequence worth stating: ONE private key now signs updates for two shipped products, so
+# losing or leaking it affects both. That is Sparkle's recommended model, not an accident of this
+# repo, and the alternative - a per-app key via `--account` - buys isolation at the cost of a second
+# secret to protect. Revisit only if the two apps stop sharing an owner.
+SU_PUBLIC_ED_KEY="${SU_PUBLIC_ED_KEY:-mIAUkTNj+kRPNqkAX1Z1EaqFqyLaFQ37pwEIGduj4Zs=}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
