@@ -20,7 +20,11 @@ public enum InjectionProbe {
     public static func runAndExit() -> Never {
         let env = ProcessInfo.processInfo.environment
         let text = env["PUSHTEXT_INJECT_TEXT"] ?? "pushtext probe"
-        let injector = PasteboardTextInjector()
+        // Settle delay overridable so #27 can SWEEP it per application rather than assert one
+        // value. The delay is a race, and the only way to learn what a given app needs is to find
+        // where it starts failing.
+        let settleMillis = Double(env["PUSHTEXT_INJECT_SETTLE_MS"] ?? "") ?? 120
+        let injector = PasteboardTextInjector(pasteSettleDelay: settleMillis / 1000)
 
         print("INJECT_PROBE trusted=\(injector.isTrusted)")
         print("INJECT_PROBE pasteKeyCode="
