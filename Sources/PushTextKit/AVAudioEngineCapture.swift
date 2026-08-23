@@ -43,10 +43,25 @@ public final class AVAudioEngineCapture: AudioCapture, @unchecked Sendable {
     private var drainTimer: DispatchSourceTimer?
     private var handler: (@Sendable (AudioBuffer) -> Void)?
     private var sampleRate: Double = 0
-    /// Frames emitted so far. The only source of `AudioBuffer.startTime`, which makes timestamps
+    /// Seconds emitted so far. The only source of `AudioBuffer.startTime`, which makes timestamps
     /// monotonic BY CONSTRUCTION rather than by hoping the host clock behaves — non-monotonic
     /// `bufferStartTime` is one of the three suspected causes of FB22149971 (docs/research/01).
-    private var emittedFrames: Int = 0
+    ///
+    /// Seconds rather than a frame count because a device change can alter the sample rate MID
+    /// utterance (#70): `frames / rate` would then jump backwards or forwards at the moment the new
+    /// rate applied, breaking the very monotonicity this exists to guarantee. An accumulated
+    /// duration is rate-independent, and still exactly contiguous.
+    private var emittedSeconds: Double = 0
+
+    /// Set while an utterance is open, so a configuration change knows whether to restart.
+    private var isCapturing = false
+
+    private var configurationObserver: NSObjectProtocol?
+
+    /// Restarts performed and restarts that failed, both reported by `AudioProbe` (#70). A restart
+    /// that silently fails is the original bug wearing a hat.
+    public private(set) var restartCount = 0
+    public private(set) var restartFailures = 0
 
     /// - Parameters:
     ///   - ringCapacityFrames: default holds ~2s at 48 kHz, so a stalled drain loses nothing.
@@ -76,8 +91,32 @@ public final class AVAudioEngineCapture: AudioCapture, @unchecked Sendable {
 
         handler = onBuffer
         ring.reset()
-        emittedFrames = 0
+        emittedSeconds = 0
+        restartCount = 0
+        restartFailures = 0
+        isCapturing = true
 
+        // Registered BEFORE the engine starts: a change that lands during start-up is exactly the
+        // case a later registration would miss.
+        observeConfigurationChanges()
+
+        do {
+            try attachAndRun()
+        } catch {
+            isCapturing = false
+            stopObservingConfigurationChanges()
+            throw error
+        }
+
+        startDrain()
+    }
+
+    /// Builds a sink at the CURRENT input device's format and starts the engine.
+    ///
+    /// Separate from `start` because a configuration change has to redo exactly this and nothing
+    /// else - the handler, the ring's contents and the emitted-seconds clock all belong to the
+    /// utterance, not to the device.
+    private func attachAndRun() throws {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
@@ -127,11 +166,53 @@ public final class AVAudioEngineCapture: AudioCapture, @unchecked Sendable {
             teardown()
             throw CaptureError.engineStartFailed(error.localizedDescription)
         }
+    }
 
-        startDrain()
+    /// Rebuilds capture when the audio device changes underneath a running utterance (#70).
+    ///
+    /// Measured before this existed: switching the default input mid-capture stopped audio dead at
+    /// the switch - 2.71s of an 8s capture - while `monotonic`, `contiguous` and `dropped=0` all
+    /// still reported healthy, because none of them can see frames that never arrived.
+    ///
+    /// `AVAudioEngine` stops itself on a configuration change and the input node's format may now
+    /// differ, so the sink has to be detached and rebuilt rather than reused - the sink node does
+    /// not convert formats.
+    private func observeConfigurationChanges() {
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleConfigurationChange()
+        }
+    }
+
+    private func stopObservingConfigurationChanges() {
+        if let configurationObserver {
+            NotificationCenter.default.removeObserver(configurationObserver)
+        }
+        configurationObserver = nil
+    }
+
+    /// Serialised on the drain queue so a restart cannot race a `flush` reading `sampleRate`.
+    private func handleConfigurationChange() {
+        drainQueue.async { [weak self] in
+            guard let self, self.isCapturing else { return }
+            self.teardown()
+            do {
+                try self.attachAndRun()
+                self.restartCount += 1
+            } catch {
+                // Nothing left to capture with. Counted rather than swallowed: the utterance is
+                // about to come up short, and a silent short utterance reads as bad recognition.
+                self.restartFailures += 1
+            }
+        }
     }
 
     public func stop() {
+        isCapturing = false
+        stopObservingConfigurationChanges()
         drainTimer?.cancel()
         drainTimer = nil
         if engine.isRunning { engine.stop() }
@@ -160,8 +241,8 @@ public final class AVAudioEngineCapture: AudioCapture, @unchecked Sendable {
     private func flush() {
         let samples = ring.drain()
         guard !samples.isEmpty, let handler, sampleRate > 0 else { return }
-        let startTime = Double(emittedFrames) / sampleRate
-        emittedFrames += samples.count
+        let startTime = emittedSeconds
+        emittedSeconds += Double(samples.count) / sampleRate
         handler(AudioBuffer(samples: samples, sampleRate: sampleRate, startTime: startTime))
     }
 }

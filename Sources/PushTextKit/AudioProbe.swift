@@ -56,11 +56,37 @@ public enum AudioProbe {
         print("AUDIO_PROBE buffers=\(result.buffers) frames=\(result.frames) "
             + "sampleRate=\(result.sampleRate) dropped=\(capture.droppedFrames)")
         print("AUDIO_PROBE timestampsMonotonic=\(result.monotonic) contiguous=\(result.contiguous)")
+        print("AUDIO_PROBE restarts=\(capture.restartCount) restartFailures=\(capture.restartFailures)")
+
+        reportCompleteness(frames: result.frames, sampleRate: result.sampleRate, seconds: seconds)
         print(String(format: "AUDIO_PROBE peak=%.5f rms=%.5f silent=%@",
                      result.peak, result.rms, result.peak < 1e-6 ? "true" : "false"))
         print("AUDIO_PROBE finished")
         fflush(stdout)
         exit(0)
+    }
+
+    /// Exits non-zero if capture stopped early (#70).
+    ///
+    /// `monotonic`, `contiguous` and `dropped=0` all describe only the frames that DID arrive, so
+    /// they are blind to truncation BY CONSTRUCTION - every one of them passed on runs that lost 5
+    /// of 8 seconds to a device change. Elapsed wall time is the one signal here that a missing
+    /// frame cannot forge.
+    ///
+    /// 15% covers ordinary start-up latency and the final partial drain. The failure this catches
+    /// lost 66%, so the threshold is nowhere near the signal it has to separate.
+    private static func reportCompleteness(frames: Int, sampleRate: Double, seconds: Double) {
+        let expected = seconds * sampleRate
+        let ratio = expected > 0 ? Double(frames) / expected : 0
+        let complete = ratio >= 0.85
+        print(String(format: "AUDIO_PROBE expectedFrames=%.0f completeness=%.3f complete=%@",
+                     expected, ratio, complete ? "true" : "false"))
+        fflush(stdout)
+        guard complete else {
+            print("AUDIO_PROBE capture=truncated - stopped early while reporting healthy frames")
+            fflush(stdout)
+            exit(4)
+        }
     }
 }
 
