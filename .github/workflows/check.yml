@@ -28,6 +28,21 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          # conventional-subjects.sh diffs against the base branch; the default shallow clone has
+          # no merge base, and the check would silently fall back to the PR title alone.
+          fetch-depth: 0
+      # The squash header comes from the COMMIT subject on a one-commit PR and the PR TITLE on a
+      # multi-commit one, so both are gated. Two non-conventional subjects are already on master
+      # from PRs whose commits were fine and whose titles were not.
+      #
+      # PR_TITLE goes through `env`, never `${{ }}` inside `run` - a PR title is text a contributor
+      # controls, and interpolating it into a shell is a script injection.
+      - name: Commit subjects and PR title are conventional
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_REF: ${{ github.event.pull_request.base.ref && format('origin/{0}', github.event.pull_request.base.ref) || 'origin/master' }}
+        run: .engine/checks/conventional-subjects.sh
       - name: Report Swift and SDK versions
         run: |
           swift --version
