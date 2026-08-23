@@ -41,25 +41,7 @@ struct PushTextApp: App {
 
     init() {
         // Headless proof of the event tap, before any UI exists. Never returns when requested.
-        if HotkeyProbe.isRequested {
-            HotkeyProbe.runAndExit()
-        }
-        if AudioProbe.isRequested {
-            AudioProbe.runAndExit()
-        }
-        if InjectionProbe.isRequested {
-            InjectionProbe.runAndExit()
-        }
-        // Gated on the SDK, not the OS: TranscriptionProbe drives SpeechAnalyzer, whose symbols do
-        // not exist when building against an older SDK (CI's macos-15 runner).
-        #if canImport(FoundationModels)
-        if TranscriptionProbe.isRequested {
-            TranscriptionProbe.runAndExit()
-        }
-        if CleanupProbe.isRequested {
-            CleanupProbe.runAndExit()
-        }
-        #endif
+        Self.runProbeIfRequested()
         // No probe took over, so any probe-tuning variable still set is a misconfiguration that
         // would otherwise launch the UI and look like a hung probe.
         ProbeActivation.enforceOrExit()
@@ -84,7 +66,10 @@ struct PushTextApp: App {
                 dictationLog.info("hotkey edge=\(String(describing: edge), privacy: .public)")
                 Task { @MainActor in model.handle(edge) }
             }
-            dictationLog.info("hotkey tap armed")
+            let provenance = LaunchProvenance.current()
+            dictationLog.info("""
+                hotkey tap armed; \(provenance.description, privacy: .public)
+                """)
         } catch {
             dictationLog.error("hotkey tap FAILED: \(String(describing: error), privacy: .public)")
             model.reportStartupFailure(
@@ -111,6 +96,30 @@ struct PushTextApp: App {
                 }
             }
         }
+    }
+
+    /// Headless proofs of each OS-touching capability, before any UI exists. Never returns when one
+    /// is requested.
+    private static func runProbeIfRequested() {
+        if HotkeyProbe.isRequested {
+            HotkeyProbe.runAndExit()
+        }
+        if AudioProbe.isRequested {
+            AudioProbe.runAndExit()
+        }
+        if InjectionProbe.isRequested {
+            InjectionProbe.runAndExit()
+        }
+        // Gated on the SDK, not the OS: these drive SpeechAnalyzer and FoundationModels, whose
+        // symbols do not exist when building against an older SDK (CI's macos-15 runner, TRAP-23).
+        #if canImport(FoundationModels)
+        if TranscriptionProbe.isRequested {
+            TranscriptionProbe.runAndExit()
+        }
+        if CleanupProbe.isRequested {
+            CleanupProbe.runAndExit()
+        }
+        #endif
     }
 
     /// Asks for the microphone once AppKit is running.

@@ -191,7 +191,29 @@ grep -q "HOTKEY_PROBE finished" "$PROBE_LOG" || {
 	fail "hotkey probe did not finish"
 }
 
-PROBE_TRUSTED="$(sed -n 's/^HOTKEY_PROBE trusted=\(.*\)$/\1/p' "$PROBE_LOG")"
+# Parse the FIRST token after trusted=, not the rest of the line. The line now also carries
+# selfResponsible= and parent= (#44), and a greedy capture swallowed them - which made this read
+# "not trusted" on a trusted machine and SKIP the tap assertion while still printing OK. A gate that
+# goes quiet when its input changes shape is worse than no gate, so an unparseable value now FAILS.
+PROBE_TRUSTED="$(sed -n 's/^HOTKEY_PROBE trusted=\([^ ]*\).*$/\1/p' "$PROBE_LOG")"
+PROBE_SELF="$(sed -n 's/^HOTKEY_PROBE .*selfResponsible=\([^ ]*\).*$/\1/p' "$PROBE_LOG")"
+case "$PROBE_TRUSTED" in
+	true|false) ;;
+	*)
+		sed 's/^/probe: /' "$PROBE_LOG" >&2 || true
+		fail "could not parse 'HOTKEY_PROBE trusted=' (got: '$PROBE_TRUSTED') - refusing to skip silently"
+		;;
+esac
+
+# Whose grant is it? Terminal-parented runs inherit the terminal's Accessibility, so `trusted=true`
+# there proves nothing about the app's own identity (#44). Recorded in the note either way, so this
+# gate's green can never again be read as "the shipped app has permission".
+if [ "$PROBE_SELF" = "true" ]; then
+	GRANT_NOTE="app's own grant"
+else
+	GRANT_NOTE="grant INHERITED from the launching process - not proof the app has one"
+fi
+
 if [ "$PROBE_TRUSTED" = "true" ]; then
 	grep -q "HOTKEY_PROBE tap=armed" "$PROBE_LOG" || {
 		sed 's/^/probe: /' "$PROBE_LOG" >&2 || true
@@ -212,10 +234,10 @@ if [ "$PROBE_TRUSTED" = "true" ]; then
 		sed 's/^/killtap: /' "$KILL_LOG" >&2 || true
 		fail "tap was disabled and never came back"
 	}
-	PROBE_NOTE="tap armed, recovered from forced disable"
+	PROBE_NOTE="tap armed, recovered from forced disable ($GRANT_NOTE)"
 else
 	# Not a failure: an untrusted process (CI, a fresh machine) legitimately cannot arm a tap.
-	PROBE_NOTE="not Accessibility-trusted, tap assertion skipped"
+	PROBE_NOTE="not Accessibility-trusted, tap assertion skipped ($GRANT_NOTE)"
 fi
 
 # --- Audio probe -------------------------------------------------------------------------------
