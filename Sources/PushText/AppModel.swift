@@ -188,8 +188,11 @@ private let engine: any TranscriptionEngine
             Task { await self.closeUtterance() }
 
         case .cleaning:
-            // No CleanupProvider yet (#14). The machine requires this transition, so pass the
-            // transcript through unchanged rather than inventing a stage.
+            // No CleanupProvider is WIRED yet (#94). One exists - `FoundationModelsCleanup`,
+            // implemented and measured - but nothing constructs it here, so the machine's required
+            // transition passes the transcript through unchanged. The comment this replaces said
+            // "no CleanupProvider yet (#14)", which was wrong twice over: the type exists, and #14
+            // is closed.
             if case .transcriptFinalized(let text) = event {
                 pendingText = text
                 lastTranscript = text
