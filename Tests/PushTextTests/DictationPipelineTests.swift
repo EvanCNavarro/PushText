@@ -168,7 +168,7 @@ struct DictationPipelineTests {
         let model = makeModel(engine: MockTranscriptionEngine(configuration: .init(latency: .milliseconds(1))),
                               capture: capture)
 
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
 
         #expect(await settle { capture.startCount == 1 })
         #expect(await settle { model.machine.state == .recording })
@@ -180,10 +180,10 @@ struct DictationPipelineTests {
         let capture = SpyCapture()
         let model = makeModel(engine: engine, capture: capture)
 
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         #expect(await settle { model.machine.state == .recording })
         capture.deliver(5)
-        model.handle(.released)
+        model.handle(.released, at: 1)
 
         #expect(await settle { model.machine.state == .idle })
         // The engine counts what it was fed - a capture path that delivers nothing would otherwise
@@ -199,10 +199,10 @@ struct DictationPipelineTests {
         let injector = SpyInjector()
         let model = makeModel(engine: engine, capture: capture, injector: injector)
 
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         #expect(await settle { model.machine.state == .recording })
         capture.deliver(2)
-        model.handle(.released)
+        model.handle(.released, at: 1)
 
         #expect(await settle { injector.injected == ["hello from pushtext"] })
         #expect(await settle { model.machine.state == .idle })
@@ -217,10 +217,10 @@ struct DictationPipelineTests {
         let injector = SpyInjector()
         let model = makeModel(engine: engine, capture: capture, injector: injector)
 
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         #expect(await settle { model.machine.state == .recording })
         capture.deliver(1)
-        model.handle(.released)
+        model.handle(.released, at: 1)
 
         #expect(await settle { model.machine.state == .failed(.transcriptionFailed) })
         #expect(capture.isRunning == false, "a failed utterance must not leave the mic open")
@@ -235,9 +235,9 @@ struct DictationPipelineTests {
         let injector = SpyInjector()
         let model = makeModel(engine: engine, capture: capture, injector: injector)
 
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         #expect(await settle { model.machine.state == .recording })
-        model.handle(.released)
+        model.handle(.released, at: 1)
 
         #expect(await settle { model.machine.state == .failed(.noSpeechDetected) })
         #expect(injector.injected.isEmpty)
@@ -250,7 +250,7 @@ struct DictationPipelineTests {
         let model = makeModel(engine: MockTranscriptionEngine(configuration: .init(latency: .milliseconds(1))),
                               capture: capture)
 
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
 
         #expect(await settle { model.machine.state == .failed(.permissionDenied) })
     }
@@ -263,9 +263,9 @@ struct DictationPipelineTests {
         let injector = SpyInjector(shouldFail: true)
         let model = makeModel(engine: engine, capture: capture, injector: injector)
 
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         #expect(await settle { model.machine.state == .recording })
-        model.handle(.released)
+        model.handle(.released, at: 1)
 
         #expect(await settle { model.machine.state == .failed(.injectionFailed) })
     }

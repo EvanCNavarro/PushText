@@ -185,3 +185,36 @@ struct DictationInputModeTests {
         #expect(machine.inputMode == .hold)
     }
 }
+
+extension DictationInputModeTests {
+
+    /// #105, measured on the real event tap: capture starts ~70 ms after `arming` and a tap releases
+    /// ~74 ms after the press, so the machine is already `.recording` when the release lands and the
+    /// existing `(.arming, .hotkeyReleased) -> .idle` guard never fires.
+    ///
+    /// `audioStarted` is delivered here ON PURPOSE. Without it the machine is still `.arming`, the
+    /// old guard handles the release, and the test passes on the broken code while proving nothing -
+    /// which is exactly how this defect survived a suite that already covered tap handling.
+    @Test("A tap that outruns capture start still leaves the machine idle")
+    func tapAfterAudioStartedAbortsRatherThanTranscribing() {
+        var machine = DictationMachine()
+        machine.apply(.hotkeyPressed)
+        machine.apply(.audioStarted)
+        #expect(machine.state == .recording, "precondition: capture won the race")
+
+        machine.apply(.hotkeyTapReleased)
+        #expect(machine.state == .idle,
+                "a tap is not an utterance; got \(machine.state)")
+    }
+
+    /// The other half: a real hold must still transcribe. A fix that aborted every release would
+    /// pass the test above and break dictation entirely.
+    @Test("A held press still ends in transcription")
+    func holdReleaseStillTranscribes() {
+        var machine = DictationMachine()
+        machine.apply(.hotkeyPressed)
+        machine.apply(.audioStarted)
+        machine.apply(.hotkeyReleased)
+        #expect(machine.state == .transcribing)
+    }
+}

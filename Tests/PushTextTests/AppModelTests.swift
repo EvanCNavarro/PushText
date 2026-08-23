@@ -30,7 +30,7 @@ struct AppModelTests {
     @Test("A key press maps to hotkeyPressed and the menu bar symbol changes")
     func pressStartsCapture() {
         let model = makeModel()
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         #expect(model.machine.state == .arming)
         #expect(model.machine.isCapturing)
         #expect(model.menuBarSymbol == "waveform.circle.fill")
@@ -40,11 +40,11 @@ struct AppModelTests {
     @Test("A key release during recording moves to transcribing and stops capturing")
     func releaseEndsCapture() {
         let model = makeModel()
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         model.apply(.audioStarted)
         #expect(model.statusText == "Listening")
 
-        model.handle(.released)
+        model.handle(.released, at: 1)
         #expect(model.machine.state == .transcribing)
         #expect(!model.machine.isCapturing)
         #expect(model.menuBarSymbol == "waveform")
@@ -72,7 +72,7 @@ struct AppModelTests {
     @Test("A failure is terminal and surfaces its own message")
     func failureSurfaces() {
         let model = makeModel()
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         model.apply(.failure(.permissionDenied))
         #expect(model.machine.isTerminal)
         #expect(model.statusText == "Permission needed")
@@ -94,10 +94,10 @@ struct AppModelWatchdogTests {
         let model = makeModel(maxDuration: 120)
         #expect(!model.isCaptureWatchdogArmed)
 
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         #expect(model.isCaptureWatchdogArmed)
 
-        model.handle(.released)
+        model.handle(.released, at: 1)
         #expect(!model.isCaptureWatchdogArmed)
     }
 
@@ -106,7 +106,7 @@ struct AppModelWatchdogTests {
     @Test("A capture whose release never arrives is force-closed by elapsed time")
     func forceClosesStuckCapture() async throws {
         let model = makeModel(maxDuration: 0.2)
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         model.apply(.audioStarted)
         #expect(model.machine.isCapturing)
 
@@ -120,9 +120,9 @@ struct AppModelWatchdogTests {
     @Test("A capture that ends normally is never force-closed")
     func normalCaptureSurvives() async throws {
         let model = makeModel(maxDuration: 0.2)
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         model.apply(.audioStarted)
-        model.handle(.released)
+        model.handle(.released, at: 1)
         #expect(model.machine.state == .transcribing)
 
         try await Task.sleep(for: .milliseconds(400))
@@ -140,7 +140,7 @@ struct AppModelWatchdogTests {
     @Test("A zero duration disables the watchdog entirely")
     func zeroDurationDisables() {
         let model = makeModel(maxDuration: 0)
-        model.handle(.pressed)
+        model.handle(.pressed, at: 0)
         #expect(!model.isCaptureWatchdogArmed)
     }
 }
