@@ -298,3 +298,15 @@ research that found them is not read on every cycle, and the trap is.
   which state they are in. `(.failed, .hotkeyPressed) -> .arming` now retries. And: a menu-bar app
   with no console, no window and no HUD (#7) is undiagnosable from the outside - diagnostics are not
   a nicety there, they are the only observability that exists.
+
+### TRAP-29: a boundary test placed outside the boundary passes on the broken version
+- what happened: `PressPatternRecognizer` rejects a backwards timestamp with `time >= lastTap`
+  rather than `abs(...)`, so a wall clock stepping back cannot fake a double press. The test for it
+  stepped back 1.05s against a 0.4s window - outside the window in EITHER direction - so planting
+  the `abs()` version left the suite green. The test asserted nothing about the guard it existed to
+  protect. Stepping back only 0.15s, inside the window, makes the plant fail immediately.
+- warning: for any test of a directional or bounded rule, put the input where the two
+  implementations DISAGREE, not merely where the correct one succeeds. The generic form of the
+  question is the one worth asking before writing the assertion: what would still be true if the
+  property were absent? Here, everything - which is why only the plant exposed it. A boundary test
+  that never approaches the boundary is decoration.
