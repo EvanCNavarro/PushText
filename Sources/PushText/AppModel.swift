@@ -327,6 +327,11 @@ final class AppModel {
            captureError == .microphoneNotAuthorized {
             return .permissionDenied
         }
+        // "Transcription failed" would send the user looking for a fault that does not exist; this
+        // one resolves itself once the download `prepare()` started has finished (#36).
+        if let engineError = error as? AppleSpeechEngine.EngineError, engineError == .modelNotReady {
+            return .modelNotReady
+        }
         return .transcriptionFailed
     }
 

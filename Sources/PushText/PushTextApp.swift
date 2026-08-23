@@ -50,11 +50,23 @@ struct PushTextApp: App {
         // SDK and #11 confirmed the streaming path works on this OS build. Systems that cannot run
         // it get an engine that REFUSES rather than the mock, whose canned phrases would otherwise
         // be typed into a real document — see TranscriptionEngineFactory.
-        let model = AppModel(engine: TranscriptionEngineFactory.makeDefault(),
+        let engine = TranscriptionEngineFactory.makeDefault()
+        let model = AppModel(engine: engine,
                              capture: AVAudioEngineCapture(),
                              injector: PasteboardTextInjector(),
                              indicator: DictationHUDController())
         self.model = model
+
+        // Install the on-device model NOW rather than on the first key-down (#36). Detached and
+        // unawaited on purpose: launch must not block on a download either, and a failure here is
+        // not fatal - `beginUtterance` reports `.modelNotReady` and the user is told to wait.
+        Task.detached(priority: .utility) {
+            do {
+                try await engine.prepare()
+            } catch {
+                dictationLog.error("model prepare failed: \(String(describing: error), privacy: .public)")
+            }
+        }
 
         // The tap is the only thing that can fail at launch, and it fails for one reason worth
         // telling the user about: Accessibility is not granted. Surfaced in the menu rather than
