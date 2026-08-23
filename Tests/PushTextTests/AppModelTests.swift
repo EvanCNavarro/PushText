@@ -127,8 +127,14 @@ struct AppModelWatchdogTests {
 
         try await Task.sleep(for: .milliseconds(400))
 
-        // Still transcribing - the watchdog must not fire after capture ended.
-        #expect(model.machine.state == .transcribing)
+        // Assert what this test is ACTUALLY about: the watchdog did not force-close a capture that
+        // ended normally. It must NOT assert `.transcribing`, which was a race - the mock engine's
+        // default latency is also 400 ms, so the pipeline may legitimately have advanced to
+        // cleaning, injecting or idle by now. That assertion passed locally and failed on CI on a
+        // coin flip, and it was never the property under test.
+        #expect(model.machine.state != .failed(.cancelled),
+                "the watchdog fired after capture had already ended")
+        #expect(!model.isCaptureWatchdogArmed, "the watchdog stayed armed after capture ended")
     }
 
     @Test("A zero duration disables the watchdog entirely")

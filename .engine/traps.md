@@ -310,3 +310,17 @@ research that found them is not read on every cycle, and the trap is.
   question is the one worth asking before writing the assertion: what would still be true if the
   property were absent? Here, everything - which is why only the plant exposed it. A boundary test
   that never approaches the boundary is decoration.
+
+### TRAP-30: asserting an intermediate state of an async pipeline is a coin flip
+- what happened: "A capture that ends normally is never force-closed" asserted
+  `state == .transcribing` after a 400 ms sleep. `MockTranscriptionEngine`'s default latency is also
+  400 ms, so once #39 wired the pipeline the state legitimately advanced to cleaning, injecting or
+  idle in that window. It passed locally and failed on CI - a genuine race, not a flake to retry,
+  and `.transcribing` was never the property the test was about.
+- warning: assert the INVARIANT, not the position along the way. Here that is "the watchdog did not
+  force-close a normal capture" and "the watchdog was disarmed", both of which hold no matter how
+  far the pipeline has advanced. Two plants were needed to establish that the new assertions still
+  bite: firing the timer early did NOT fail them, because releasing the key legitimately cancels the
+  watchdog first - the plant did not create the failure condition. Removing the disarm did fail
+  them. A plant that does not reproduce the defect proves nothing about the test, and stopping at
+  the first plant would have left a false sense of coverage.
