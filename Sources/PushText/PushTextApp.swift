@@ -36,6 +36,8 @@ struct PushTextApp: App {
     @State private var model: AppModel
     /// Held for the process lifetime: releasing the monitor tears down the event tap.
     private let hotkey: CGEventTapHotkeyMonitor
+    /// Owns the Sparkle updater, so it outlives the menu being opened and closed.
+    private let actions = AppActions()
 
     init() {
         // Headless proof of the event tap, before any UI exists. Never returns when requested.
@@ -139,7 +141,7 @@ struct PushTextApp: App {
 
     var body: some Scene {
         MenuBarExtra("PushText", systemImage: model.menuBarSymbol) {
-            MenuContent(model: model)
+            MenuContent(model: model, actions: actions)
         }
         .menuBarExtraStyle(.window)
     }
