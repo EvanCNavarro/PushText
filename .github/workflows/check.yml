@@ -14,21 +14,44 @@ permissions:
   issues: read
 
 jobs:
+  # ONE job on macos-26, not two. Until #16 the package floor was v15, so this job built with the
+  # macOS 15 SDK and `#if canImport(FoundationModels)` compiled the speech engine OUT - a green
+  # that proved nothing about the most consequential code in the repo. A separate `check-macos26`
+  # job existed to cover that hole. The floor is now .v26 and the `#if` scaffolding is gone, so a
+  # macos-15 runner cannot resolve the manifest at all and the second job would be a duplicate.
+  #
+  # `runs-on` is pinned to the floor by .engine/checks/platform-floor-consistent.sh, which also
+  # covers release.yml - that one fires only on a tag, so its drift would surface at the first
+  # release rather than in the PR that caused it.
   check:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-      - name: Select Xcode (Swift 6 toolchain)
-        run: sudo xcode-select -switch /Applications/Xcode.app
-      - name: Report Swift version
-        run: swift --version
+      - name: Report Swift and SDK versions
+        run: |
+          swift --version
+          xcrun --show-sdk-version
+      # A diagnostic, not a gate against silent exclusion - with the `#if` gone, a wrong SDK is a
+      # compile error rather than a quiet omission. It turns that error from a wall of "cannot find
+      # type 'SpeechTranscriber'" into one line naming the actual cause.
+      - name: Assert the macOS 26 SDK is in use
+        run: |
+          sdk="$(xcrun --show-sdk-version)"
+          case "$sdk" in
+            26.*) echo "SDK $sdk - the speech engine will compile" ;;
+            *) echo "SDK $sdk is not 26.x; the package floor is macOS 26" >&2; exit 1 ;;
+          esac
       # Sparkle is a local binaryTarget vendored into gitignored Vendor/ — fetch it before ANY
       # swift build/test, or the binary target has no artifact and the build fails.
       - name: Vendor Sparkle
         run: scripts/fetch-sparkle.sh
       - name: Core purity (ADR-0001)
         run: .engine/checks/core-purity.sh
+      # Cheap, and it covers release.yml - which fires only on a tag, so nothing else in a PR
+      # would notice its runner drifting below the package floor (#16).
+      - name: Platform floor is consistent
+        run: .engine/checks/platform-floor-consistent.sh
       # Fail-open without gh auth, so a fork PR cannot be blocked by it.
       - name: Cited docs exist
         run: .engine/checks/cited-docs-exist.sh
@@ -45,32 +68,3 @@ jobs:
       - name: Lint
         run: swiftlint --strict
 
-  # The macos-15 job above builds with the macOS 15 SDK, where SpeechAnalyzer does not exist and
-  # AppleSpeechEngine is compiled OUT by `#if canImport(FoundationModels)`. Without this job the
-  # engine - the most consequential code in the repo - would never be compiled by CI at all, and the
-  # gate that hides it would look like coverage. This job builds against the macOS 26 SDK so the
-  # engine and its tests actually run.
-  check-macos26:
-    runs-on: macos-26
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-      - name: Report Swift and SDK versions
-        run: |
-          swift --version
-          xcrun --show-sdk-version
-      - name: Vendor Sparkle
-        run: scripts/fetch-sparkle.sh
-      # Fails the job if the engine was silently compiled out - a green build proves nothing about
-      # AppleSpeechEngine if the SDK gate excluded it, and the two are indistinguishable otherwise.
-      - name: Assert the macOS 26 SDK is actually in use
-        run: |
-          sdk="$(xcrun --show-sdk-version)"
-          case "$sdk" in
-            26.*) echo "SDK $sdk - AppleSpeechEngine will be compiled" ;;
-            *) echo "SDK $sdk is not 26.x; this job exists to compile the macOS 26 engine" >&2; exit 1 ;;
-          esac
-      - name: Build
-        run: swift build
-      - name: Test
-        run: swift test

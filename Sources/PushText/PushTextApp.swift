@@ -110,16 +110,12 @@ struct PushTextApp: App {
         if InjectionProbe.isRequested {
             InjectionProbe.runAndExit()
         }
-        // Gated on the SDK, not the OS: these drive SpeechAnalyzer and FoundationModels, whose
-        // symbols do not exist when building against an older SDK (CI's macos-15 runner, TRAP-23).
-        #if canImport(FoundationModels)
         if TranscriptionProbe.isRequested {
             TranscriptionProbe.runAndExit()
         }
         if CleanupProbe.isRequested {
             CleanupProbe.runAndExit()
         }
-        #endif
     }
 
     /// Asks for the microphone once AppKit is running.

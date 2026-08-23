@@ -1,27 +1,27 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 
 import PackageDescription
 
 let package = Package(
     name: "PushText",
     platforms: [
-        // NOTE — this is deliberately v14, not v26, and it is a PHASE-0 setting.
+        // The SHIPPED product floor, and now the build floor too (#16).
         //
-        // The shipped product floor is macOS 26: SpeechAnalyzer and FoundationModels exist
-        // nowhere below it, and legacy SFSpeechRecognizer (throttled, 1-minute cap) is not a
-        // product. But the development machine is on Sequoia 15.1 with the 15.2 SDK, and ~70%
-        // of this app — hotkey tap, audio capture, text injection, HUD, permissions, packaging —
-        // neither needs nor references macOS 26.
+        // `SpeechAnalyzer` and `FoundationModels` exist nowhere below macOS 26, and legacy
+        // `SFSpeechRecognizer` — throttled, with a 1-minute cap — is not a product. Phase 0 built
+        // at v15 against a `MockTranscriptionEngine` because the development machine was on
+        // Sequoia with the 15.2 SDK; that is over, and holding a lower floor now would only keep
+        // alive an `#if canImport(FoundationModels)` scaffold guarding a configuration nobody
+        // can build.
         //
-        // So: build at v14 today against a MockTranscriptionEngine, keep every macOS 26 call
-        // behind `#if canImport(FoundationModels)` + `@available(macOS 26, *)`, and bump this
-        // single line to .v26 in Phase 2 once Xcode 26 is installed. Info.plist's
-        // LSMinimumSystemVersion moves with it. See PLAN.md §2.5.
-        // v15, not v14: AudioRingBuffer uses Synchronization.Atomic (macOS 15+) for a lock-free
-        // producer/consumer handoff, because AVAudioSinkNode's block runs on the realtime thread
-        // where a lock is a blocking call. The shipped floor is still macOS 26 (PLAN.md sec 2.5);
-        // v14 was only ever a Phase 0 convenience and nothing depends on it.
-        .macOS(.v15)
+        // Three things move together with this line, and CI does not catch two of them:
+        //   - `MIN_SYSTEM_VERSION` in scripts/build-app.sh (Info.plist LSMinimumSystemVersion)
+        //   - `runs-on:` in .github/workflows/check.yml AND release.yml — a macos-15 runner
+        //     cannot resolve a v26 manifest at all, and release.yml only fires on a tag, so its
+        //     failure would surface at the first release rather than in a PR.
+        //
+        // swift-tools-version is 6.2 because `.v26` does not exist in PackageDescription 6.0.
+        .macOS(.v26)
     ],
     products: [
         .executable(name: "PushText", targets: ["PushText"])

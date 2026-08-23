@@ -1,7 +1,6 @@
 import Foundation
 import PushTextCore
 
-#if canImport(FoundationModels)
 import FoundationModels
 
 /// Optional LLM polish, on-device, behind the drift guard (#14).
@@ -16,7 +15,6 @@ import FoundationModels
 /// responses, and the nine `GenerationError` cases - is testable without a model. Those paths could
 /// otherwise only be reached by provoking a real model into misbehaving, which is neither repeatable
 /// nor assertable.
-@available(macOS 26, *)
 public actor FoundationModelsCleanup: CleanupProvider {
 
     /// Takes the prompt, returns the model's text.
@@ -108,4 +106,3 @@ public actor FoundationModelsCleanup: CleanupProvider {
         "Clean up this dictated text:\n\n\(raw)"
     }
 }
-#endif

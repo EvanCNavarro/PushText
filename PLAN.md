@@ -119,9 +119,10 @@ The failure this prevents: you dictate "what is the capital of France" and the m
 types **"Paris"** into your document.
 
 ### 2.7 Engines and cleanup sit behind protocols from commit one.
-`TranscriptionEngine` and `CleanupProvider`, with `#if canImport(FoundationModels)` +
-`@available(macOS 26, *)`. Gives us a mock engine to build against on Sequoia today,
-and keeps Parakeet as an option we can add without surgery.
+`TranscriptionEngine` and `CleanupProvider`. These were originally wrapped in
+`#if canImport(FoundationModels)` + `@available(macOS 26, *)` so a mock engine could be
+built against on Sequoia; that scaffolding was removed with the floor bump (#16) and the
+protocols are what remain. They keep Parakeet an option we can add without surgery.
 
 ### 2.8 Guardrails: `SystemLanguageModel.Guardrails.permissiveContentTransformations`.
 Apple describes it as permissively transforming input *"including potentially unsafe
