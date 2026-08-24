@@ -10,6 +10,22 @@ The tag name is the source of the marketing version: `CFBundleShortVersionString
 its leading `v`. `CFBundleVersion` - the number Sparkle actually compares - stays the monotonic
 `git rev-list --count`, which is why the workflow checks out with `fetch-depth: 0`.
 
+## What belongs in release notes
+
+They are read by USERS, in two places: the GitHub release body and Sparkle's "What's new" pane, which
+appears in the update dialog before anyone has agreed to install. So they answer "what changed for
+me?" and nothing else.
+
+**Do NOT include a "Not in this release" section.** 0.2.0 shipped one, listing withdrawn features and
+an untested internal code path, and it read to the person being asked to install it as a list of
+things that do not work. Bobby: *"what's not in the release is a bad thing to include in the release,
+makes no sense."* Unfinished work belongs in `.engine/BACKLOG.md` and the issue tracker, which is
+where it already is.
+
+Measurements are worth keeping when they inform a CHOICE the user makes - the cleanup latency numbers
+explain why that setting defaults to off. They are not worth keeping as a record of engineering
+diligence.
+
 Write `release-notes/<version>.md` **before** tagging. That one file is both the GitHub release body
 and the "What's new" pane Sparkle shows. Without it the release still ships, with auto-generated
 notes and no Sparkle notes, and the workflow logs a warning.
