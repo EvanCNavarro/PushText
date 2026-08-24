@@ -230,8 +230,12 @@ because the stream hangs in the field). Then `FoundationModelsCleanup` behind th
 guard, few-shot prompt, 2.5–4s budget with deterministic non-LLM fallback.
 
 ### Phase 3 — ship
-Context-aware formatting (terminal → no smart quotes, etc.), release notes, notarize,
-appcast, tag.
+Release notes, notarize, appcast, tag.
+
+~~Context-aware formatting (terminal → no smart quotes, etc.)~~ — **withdrawn, measured 2026-08-23.**
+The example does not occur: `SpeechTranscriber` emits straight quotes (7 straight, 0 curly across 80
+real transcripts), on-device cleanup returns pure ASCII, and macOS smart-quote substitution does not
+fire on a paste. See `docs/verification/task18-context-formatting.md`.
 
 ---
 
