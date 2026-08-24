@@ -10,6 +10,38 @@ import PushTextCore
 /// Activated by `PUSHTEXT_PERMISSION_PROBE=1`. Exits non-zero when anything is not granted, so it
 /// is usable as a gate - but note the honest limit: run from a terminal-parented process it reports
 /// the grant that was INHERITED from the terminal, not the app's own (#44).
+/// Drives the REAL uninstall against an injected library root (#150).
+///
+/// The removal itself is unit-tested, but the wiring - the app reaching for its library, building an
+/// `Uninstaller`, and acting on the outcome - is not something a unit test executes. This runs that
+/// path for real, against a directory the caller supplies, so it can be proven without pointing
+/// anything at `~/Library`.
+public enum UninstallProbe {
+    public static var isRequested: Bool {
+        ProcessInfo.processInfo.environment["PUSHTEXT_UNINSTALL_PROBE"] == "1"
+    }
+
+    @MainActor
+    public static func runAndExit() -> Never {
+        guard let root = ProcessInfo.processInfo.environment["PUSHTEXT_UNINSTALL_PROBE_LIBRARY"] else {
+            print("UNINSTALL_PROBE missing PUSHTEXT_UNINSTALL_PROBE_LIBRARY")
+            exit(2)
+        }
+        let library = URL(fileURLWithPath: root, isDirectory: true)
+        // A repairer whose runner does nothing: the probe is about the FILE removal, and shelling
+        // out to tccutil here would clear the developer's own grants.
+        let repairer = TCCPermissionRepairer(bundleID: "dev.ecn.apps.pushtext.probe",
+                                             runner: { _, _ in 0 })
+        let uninstaller = Uninstaller(library: library, repairer: repairer)
+        let reports = uninstaller.resetPermissions()
+        let data = uninstaller.removeData()
+        print("UNINSTALL_PROBE resets=\(reports.count) removed=\(data.removed.count) failed=\(data.failed.count)")
+        for url in data.removed { print("UNINSTALL_PROBE removed \(url.lastPathComponent)") }
+        fflush(stdout)
+        exit(data.failed.isEmpty ? 0 : 1)
+    }
+}
+
 /// Asks macOS for Accessibility trust and reports what happened (#146).
 ///
 /// Separate from the read-only probe on purpose: this one has a SIDE EFFECT. It raises the system
