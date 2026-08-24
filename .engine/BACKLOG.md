@@ -629,3 +629,22 @@ that. The narrative for each lives in the issue.
   (needs the popover open) and the menu-bar icon (not in the probe window) - both covered by tests,
   neither looked at in place. Evidence: docs/verification/task138-update-indicator.md.)
 
+#142 - conventional-subjects fails on every push: a push event has no PR title - DONE
+  (2026-08-24: master's push CI had been red ALL DAY - 8 of 8 runs - while every pull-request check
+  was green, so watching PRs could never have shown it. Each failed in ~12s at "the PR title is
+  empty".
+  The script distinguished a local run from CI by whether PR_TITLE was SET, with a comment arguing
+  that set-but-empty means a broken workflow expression. Sound reasoning, false premise: GitHub's
+  env: block ALWAYS defines the variable, so on a push event the pull_request title expression
+  evaluates to an empty string and the script read a push as a PR with a blank title.
+  Keyed off GITHUB_EVENT_NAME now. The original worry is PRESERVED rather than dropped - an empty
+  title on a real pull_request event still fails, because a gate that passes while checking zero
+  things reads identically to green. Five cases driven: push+empty passes, pull_request+empty fails,
+  pull_request+good passes, pull_request+bad fails, local passes. The commit-subject half still gates
+  a push, proven by planting a bad subject on a scratch branch.
+  HOW IT HID, and this is the transferable part: I had been polling `gh pr view --json
+  statusCheckRollup`, which only ever returns the PULL-REQUEST runs. Push runs are a different set.
+  CLAUDE.md already records "pushed 6 times and never once looked"; this is the same failure in a new
+  costume - I did look, at the wrong list. It surfaced only because I listed workflow runs WITH
+  DURATIONS while chasing something else, and a column of 12-second failures stood out.)
+

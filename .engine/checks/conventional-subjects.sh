@@ -50,10 +50,22 @@ check() {
     fi
 }
 
-# `+set`, not `:-`: an UNSET PR_TITLE means a local run with nothing to check, but a SET-BUT-EMPTY
-# one means CI asked for a title and got nothing - a broken workflow expression. Treating those the
-# same is how a gate ends up passing while checking zero things, which reads identically to green.
-if [ -n "${PR_TITLE+set}" ]; then
+# Keyed off the EVENT, not off whether PR_TITLE is set.
+#
+# The previous version reasoned that an UNSET PR_TITLE meant a local run with nothing to check, and
+# a SET-BUT-EMPTY one meant CI asked for a title and got nothing. The reasoning was sound and the
+# premise was false: GitHub's `env:` block ALWAYS defines the variable, so on a `push` event
+# `github.event.pull_request.title` evaluates to an empty string and the script read a push as a
+# pull request with a blank title. Every push to master failed - 8 of 8 on 2026-08-24 - while every
+# PR check was green, so nobody watching pull requests could see it.
+#
+# The original worry stands and is preserved: a gate that passes while checking zero things reads
+# identically to green. That is why this asserts PR_TITLE is non-empty when the event IS a pull
+# request, rather than skipping whenever it happens to be blank.
+if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
+    check "the PR title" "$PR_TITLE"
+elif [ -z "${GITHUB_EVENT_NAME:-}" ] && [ -n "${PR_TITLE:-}" ]; then
+    # Local run with a title supplied by hand, e.g. to rehearse a PR title before opening one.
     check "the PR title" "$PR_TITLE"
 fi
 
