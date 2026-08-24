@@ -439,4 +439,84 @@ struct CaptureHealthTests {
         #expect(injector.injected == ["hello there [cleaned]"])
     }
 
+    /// A cleanup stub that blocks until released, so a test can hold the machine in `.cleaning` and
+    /// cancel it MID-FLIGHT. Cancellation is a property that only exists during the operation - a
+    /// test that inspects the end state after cleanup finished cannot see it at all.
+    private actor GatedCleanup: CleanupProvider {
+        private var release: CheckedContinuation<Void, Never>?
+        private var released = false
+        let calls = Calls()
+        var isAvailable: Bool { true }
+        func clean(_ transcript: Transcript) async throws -> String {
+            calls.recordClean()
+            if !released {
+                await withCheckedContinuation { self.release = $0 }
+            }
+            return transcript.text + " [cleaned]"
+        }
+        func open() { released = true; release?.resume(); release = nil }
+    }
+
+    private func enabledSettings() -> FakeSettings {
+        FakeSettings(settings: AppSettings(cleanupEnabled: true,
+                                           hotkeyKeyCode: HotkeyBinding.rightOption.keyCode))
+    }
+
+    @Test("Cancelling while transcribing injects nothing")
+    func cancelDuringTranscribing() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["unwanted words"],
+                                                                  latency: .seconds(3)))
+        let injector = SpyInjector()
+        let model = AppModel(engine: engine, capture: LossyCapture(health: CaptureHealth()),
+                             injector: injector)
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        model.handle(.released, at: 1)
+        _ = await settle { model.machine.state == .transcribing }
+
+        model.apply(.cancelRequested)
+        #expect(model.machine.state == .idle, "cancel was refused while transcribing")
+        _ = await settle { false }
+        #expect(injector.injected.isEmpty, "cancelled text was injected anyway")
+    }
+
+    /// The one the issue did not anticipate: history is written INSIDE the cleaning stage, so a
+    /// cancel there could record a transcript that was never typed - breaking the invariant #97
+    /// established, that history equals what the user actually got.
+    @Test("Cancelling while cleaning records nothing in history")
+    func cancelDuringCleaningLeavesNoHistory() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["unwanted words"],
+                                                                  latency: .milliseconds(1)))
+        let injector = SpyInjector()
+        let history = SpyHistory()
+        let cleanup = GatedCleanup()
+        let model = AppModel(engine: engine, capture: LossyCapture(health: CaptureHealth()),
+                             injector: injector, history: history, cleanup: cleanup,
+                             settingsStore: enabledSettings())
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        model.handle(.released, at: 1)
+        _ = await settle { model.machine.state == .cleaning }
+
+        model.apply(.cancelRequested)
+        #expect(model.machine.state == .idle, "cancel was refused while cleaning")
+        await cleanup.open()
+        _ = await settle { false }
+
+        #expect(injector.injected.isEmpty, "cancelled text was injected")
+        #expect(history.load().isEmpty, "cancelled text was written to history")
+    }
+
+    /// The discriminator. `.injecting` is too late - the paste is in flight - so cancel must NOT be
+    /// accepted there. A change that simply allowed cancel everywhere would pass both tests above.
+    @Test("Cancelling while injecting is refused")
+    func cancelDuringInjectingIsRefused() async {
+        let machine = DictationMachine(state: .injecting)
+        var copy = machine
+        copy.apply(.cancelRequested)
+        #expect(copy.state == .injecting, "cancel was accepted after the paste started")
+    }
+
 }

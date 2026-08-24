@@ -44,9 +44,13 @@ final class HUDDriver {
         case .arming, .recording:
             indicator.show(phase: .recording, onCancel: onCancel, onConfirm: onConfirm)
             startLevelTimer(isCapturing: isCapturing)
-        case .transcribing, .cleaning, .injecting:
+        case .transcribing, .cleaning:
             stopLevelTimer()
             indicator.update(phase: .working, level: 0)
+        // Its own phase because cancel is still accepted above and refused here (#109).
+        case .injecting:
+            stopLevelTimer()
+            indicator.update(phase: .inserting, level: 0)
         case .idle, .failed:
             stopLevelTimer()
             indicator.hide()

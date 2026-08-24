@@ -38,7 +38,7 @@ final class AppModel {
 
 private let engine: any TranscriptionEngine
     private let capture: (any AudioCapture)?
-    private let injector: (any TextInjector)?
+    let injector: (any TextInjector)?
     private let feed: AudioFeed
     /// The HUD, owned by its own type - see HUDDriver.
     private let hud: HUDDriver
@@ -51,7 +51,7 @@ private let engine: any TranscriptionEngine
     private var pressPattern = PressPatternRecognizer()
     private let watchdog = CaptureWatchdog()
     /// Text waiting to be injected, held between `transcriptFinalized` and `injectionFinished`.
-    private var pendingText: String?
+    var pendingText: String?
 
     private let advisor = PermissionAdvisor()   // see PermissionAdvisor
 
@@ -97,7 +97,7 @@ private let engine: any TranscriptionEngine
     /// which is not a measurement anyone can re-read later. Emitting the elapsed value makes every
     /// real dictation a data point. `ContinuousClock` because it does not jump when the wall clock
     /// is adjusted mid-utterance.
-    private var releasedAt: ContinuousClock.Instant?
+    var releasedAt: ContinuousClock.Instant?
 
     /// Longest a single utterance may hold the microphone before it is force-closed.
     /// Forwarded to `CaptureWatchdog`, which owns the timer and the reasoning.
@@ -193,7 +193,10 @@ private let engine: any TranscriptionEngine
     ) {
         // Reaching idle from an ACTIVE utterance means the user cancelled; reaching it from
         // `.injecting` is an utterance that completed normally and needs no teardown.
+        // Reaching idle from any of these is a CANCEL. `.injecting` is absent because idle
+        // after injecting is the normal ending, not an abandonment (#109).
         let previousWasActive = previous == .arming || previous == .recording
+            || previous == .transcribing || previous == .cleaning
         updateIndicator(for: state)
 
         switch state {
@@ -325,40 +328,19 @@ private let engine: any TranscriptionEngine
     private func finishText() async {
         let transcript = pendingTranscript ?? Transcript(text: "", duration: 0)
         pendingTranscript = nil
-        let text = await finisher.finish(transcript, cleanupEnabled: preferences.cleanupEnabled)
+        // `shouldCommit` is checked INSIDE the finisher, before the dictionary and history,
+        // because cleanup can take seconds and the user can cancel during it. History is the
+        // durable record: a cancelled utterance that still appeared there would break the
+        // invariant #97 established, that history equals what was injected.
+        guard let text = await finisher.finish(transcript,
+                                               cleanupEnabled: preferences.cleanupEnabled,
+                                               shouldCommit: { [weak self] in
+                                                   self?.machine.state == .cleaning
+                                               })
+        else { return }
         pendingText = text
         lastTranscript = text
         apply(.cleanupFinished(text))
-    }
-
-    private func injectText(_ text: String) async {
-        guard let injector else {
-            apply(.injectionFinished)
-            return
-        }
-        do {
-            try await injector.inject(text)
-            // This spans mic teardown, finalize, injection AND the injector's post-paste settle
-            // wait, so it is strictly larger than the engine's own finalize time - the probe
-            // measures that part alone (docs/verification/task15-latency.md).
-            if let releasedAt {
-                let elapsed = ContinuousClock.now - releasedAt
-                let millis = Double(elapsed.components.seconds) * 1000
-                    + Double(elapsed.components.attoseconds) / 1_000_000_000_000_000
-                // `privacy: .public` or os_log redacts this to <private> - which is exactly what
-                // the first real dictation after #15 shipped logged. This line exists to be read.
-                let ms = String(format: "%.0f", millis)
-                dictationLog.info("injected chars=\(text.count) releaseToText=\(ms, privacy: .public)ms")
-            } else {
-                dictationLog.info("injected chars=\(text.count)")
-            }
-            releasedAt = nil
-            pendingText = nil
-            apply(.injectionFinished)
-        } catch {
-            dictationLog.error("inject FAILED: \(String(describing: error), privacy: .public)")
-            apply(.failure(.injectionFailed))
-        }
     }
 
     /// Runs on every failure path. The microphone staying open is the worst outcome this app has -

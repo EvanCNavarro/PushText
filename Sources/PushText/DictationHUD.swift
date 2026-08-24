@@ -25,12 +25,17 @@ enum HUDPhase: Equatable {
     case resting
     case recording
     case working
+    /// The paste is in flight. Distinct from `.working` because cancel is REFUSED here and the
+    /// control must not be offered (#109) - the machine accepts `cancelRequested` from
+    /// transcribing and cleaning, never from injecting.
+    case inserting
 
     var label: String {
         switch self {
         case .resting: "Ready"
         case .recording: "Listening"
         case .working: "Transcribing"
+        case .inserting: "Inserting"
         }
     }
 
@@ -93,13 +98,10 @@ struct DictationHUDView: View {
                 .frame(width: 16, height: 7)
 
             HStack(spacing: Tokens.inset) {
-                if phase == .working {
-                    // Both controls go, not just confirm. Confirm has nothing left to confirm, and
-                    // cancel CANNOT be honoured here: `cancelRequested` is accepted only from
-                    // `.arming` and `.recording` (DictationState), so leaving it on screen would
-                    // replace one dead button with another. A spinner on each side keeps the pill
-                    // the same width, so the phase change reads as the same object working rather
-                    // than as the controls jumping.
+                // Cancel stays live while the machine still accepts it - transcribing and
+                // cleaning type nothing, so "do not type that" is still satisfiable there (#109).
+                // It disappears only for `.inserting`, where the paste is already in flight.
+                if phase == .inserting {
                     spinner
                 } else {
                     control(symbol: "xmark", help: "Discard this dictation",
@@ -110,7 +112,8 @@ struct DictationHUDView: View {
                     .frame(width: 96, height: 26)
                     .accessibilityLabel(Text("\(phase.label), input level \(Int(level * 100)) percent"))
 
-                if phase == .working {
+                // Confirm has nothing left to confirm once the utterance is over.
+                if phase == .working || phase == .inserting {
                     spinner
                 } else {
                     control(symbol: "checkmark", help: "Finish and insert the text",

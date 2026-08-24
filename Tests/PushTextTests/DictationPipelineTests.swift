@@ -419,3 +419,38 @@ extension DictationPipelineTests {
         #expect(indicator.refusals == 0, "a repeating key-down pulsed the HUD")
     }
 }
+
+extension DictationPipelineTests {
+
+    /// #109. The HUD must offer cancel in exactly the phases the MACHINE accepts it. If these two
+    /// ever disagree the UI is lying: either a dead button, or a live one the user cannot find.
+    @Test("The HUD phase distinguishes cancellable work from the paste")
+    func hudPhaseMatchesWhatTheMachineAccepts() {
+        for state in [DictationState.transcribing, .cleaning] {
+            var machine = DictationMachine(state: state)
+            machine.apply(.cancelRequested)
+            #expect(machine.state == .idle, "\(state) should accept cancel")
+        }
+        var injecting = DictationMachine(state: .injecting)
+        injecting.apply(.cancelRequested)
+        #expect(injecting.state == .injecting, "injecting must refuse cancel")
+
+        // And the HUD must draw that same line - one phase for the cancellable stages, another for
+        // the paste. Same phase for both would put a dead cancel button on screen.
+        #expect(HUDPhase.working != HUDPhase.inserting)
+    }
+
+    /// And the DRIVER must route each state to the matching phase. Asserting the phases merely
+    /// differ would pass while the driver sent `.injecting` to `.working`, putting the dead cancel
+    /// button back on screen.
+    @Test("The driver routes injecting to its own phase")
+    func driverRoutesInjectingSeparately() {
+        let indicator = SpyIndicator()
+        let driver = HUDDriver(indicator: indicator)
+        driver.update(for: .cleaning, isCapturing: { false }, onCancel: {}, onConfirm: {})
+        driver.update(for: .injecting, isCapturing: { false }, onCancel: {}, onConfirm: {})
+
+        #expect(indicator.phases.suffix(2) == [.working, .inserting],
+                "got \(indicator.phases.suffix(2))")
+    }
+}

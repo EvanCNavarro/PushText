@@ -35,7 +35,9 @@ struct TranscriptFinisher {
     /// `cleanupEnabled` is passed per call rather than captured at construction, matching how
     /// `HUDDriver` takes `isCapturing`: the setting can change between one utterance and the next,
     /// and a value frozen at init would keep the old answer until relaunch.
-    func finish(_ transcript: Transcript, cleanupEnabled: Bool) async -> String {
+    /// Returns `nil` when the utterance was abandoned mid-flight - see `shouldCommit`.
+    func finish(_ transcript: Transcript, cleanupEnabled: Bool,
+                shouldCommit: @MainActor () -> Bool) async -> String? {
         // `clean` returns the raw transcript on EVERY failure path by contract, so there is no
         // error branch to write - a model that is missing, rate-limited or refused simply means no
         // polish. `isAvailable` first only to skip building a session that cannot answer.
@@ -51,6 +53,11 @@ struct TranscriptFinisher {
                 dictationLog.info("cleanup warm=\(warm, privacy: .public) respondMs=\(ms, privacy: .public)")
             }
         }
+
+        // Cleanup can take seconds, and the user can cancel during it (#109). Checked HERE -
+        // after the model call, before the dictionary and history - because everything below this
+        // line is a COMMITMENT: history is durable, and a cancelled utterance must leave none.
+        guard shouldCommit() else { return nil }
 
         // The user's own vocabulary (#82). #13 measured that the engine cannot be biased at all,
         // so this post-pass is the only mechanism there is for proper nouns.
