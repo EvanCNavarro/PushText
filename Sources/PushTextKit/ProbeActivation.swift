@@ -35,7 +35,8 @@ public enum ProbeActivation {
         ]),
         ("PUSHTEXT_AUDIO_PROBE", [
             "PUSHTEXT_AUDIO_PROBE_SECONDS",
-            "PUSHTEXT_AUDIO_PROBE_PROMPT"
+            "PUSHTEXT_AUDIO_PROBE_PROMPT",
+            "PUSHTEXT_AUDIO_PROBE_STALL"
         ]),
         ("PUSHTEXT_INJECT_PROBE", [
             "PUSHTEXT_INJECT_TEXT",

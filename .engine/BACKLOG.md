@@ -443,7 +443,7 @@ that. The narrative for each lives in the issue.
   issue turned out to be a confirmed silent data-loss bug and was split out to #70; this is now only
   the coverage gap. TRIGGER: a genuinely multi-channel interleaved input device.
 
-#124 - AudioProbe's completeness ratio trusts a wall-clock window it does not measure - S0
+#124 - AudioProbe's completeness ratio trusts a wall-clock window it does not measure - DONE
   blocked-by: none. Found while re-verifying capture for #24. reportCompleteness divides frames by
   seconds * sampleRate and only fails BELOW 0.85, but RunLoop.main.run(until:) is not bounded to
   `seconds`. Three runs on a build that started Sparkle at launch gave completeness 1.394 / 2.965 /
@@ -451,7 +451,19 @@ that. The narrative for each lives in the issue.
   build gave 1.003 each time. Correlated, cause unverified: confirming it would mean re-running the
   build that puts a Sparkle failure dialog on Bobby's screen. Matters because this is the ONLY guard
   against silent truncation (#70) and it fails only in the low direction, so an inflated ratio hides
-  loss. TRIGGER: before the ratio is cited as evidence again.
+  loss.
+  (2026-08-23: confirmed by INTERVENING rather than by correlation. A PUSHTEXT_AUDIO_PROBE_STALL knob
+  blocks the main run loop, and with STALL=6000 a 3.000s request produced a 6.219s window and a
+  2.073 ratio under the old maths. The dangerous direction demonstrated end to end: half the audio
+  discarded inside a stalled window scores 0.500 and exits 4 under the measured window, where the
+  requested-seconds denominator scores 1.036 and PASSES - the exact failure the guard exists to catch
+  sailing through it. Fixed by measuring the window with ContinuousClock and dividing by that; both
+  numbers are printed so a stretch is visible rather than folded into the ratio. The arithmetic moved
+  to CaptureCompleteness in Core, because the probe and the wrong denominator agreed with each other
+  and no amount of running the probe would have shown it. A zero or negative window scores 0 - for a
+  truncation guard, failing closed is the only safe direction. The stall knob is PERMANENT, like
+  PUSHTEXT_HOTKEY_PROBE_STALL: a guard you cannot make go red on demand is a guard nobody has tested.
+  Evidence: docs/verification/task124-completeness-window.md.)
 
 #73 - Grounding rejects inflection changes it cannot tell from invention - DONE
   (2026-08-23: grounding now accepts a token that is another token plus one inflectional ending, and
