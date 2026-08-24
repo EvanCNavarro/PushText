@@ -46,8 +46,13 @@ let package = Package(
             name: "PushText",
             dependencies: ["PushTextKit", "PushTextCore", "Sparkle",
                            .product(name: "MacFaceKit", package: "MacFaceKit")],
-            // No app icon yet — build-app.sh no-ops when ICON_SRC is absent. Add
-            // Sources/PushText/Resources/AppIcon.png plus a `.copy` here once there is art.
+            // The app icon. `.copy` (not `.process`) takes the PNG verbatim — no SVG source, no
+            // actool pass. build-app.sh does NOT read it from here (it sips/iconutils the source
+            // path in ICON_SRC directly), so this entry is not what makes the .icns; without it
+            // SPM warns "found 1 file(s) which are unhandled" on every build, and the copy keeps
+            // the icon reachable from Bundle should the branded update dialog ever want it the way
+            // TermTile's does. Sparkle's standard dialog reads CFBundleIconFile off the .app.
+            resources: [.copy("Resources/AppIcon.png")],
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]),

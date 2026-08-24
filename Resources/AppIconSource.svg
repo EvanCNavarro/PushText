@@ -1,0 +1,31 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- App icon (#logo): a 5-tile voice waveform sitting above one full-width text line - hold the
+       key, speak, release, and the words land as a line of text. Deliberately a SIBLING of
+       TermTile's icon, not a copy: same 1024 canvas, same squircle (x/y 64, 896 square, rx 205),
+       same vertical gradient, same white tile vocabulary (86 wide, rx 30) on the same five-column
+       grid (x 212/341/470/599/728), so the two sit together in a Dock. Only the mark differs -
+       TermTile arranges the tiles into a "T"; PushText re-lengthens them into a level meter. The
+       mark is also what the app already shows elsewhere (menu-bar SF Symbol `waveform`, HUD
+       waveform), so icon and glyph say the same thing, the way TermTile's do. Composition is
+       balanced on the vertical: tallest bar top (161) to text-line bottom (863) leaves 97px of
+       squircle above and below. Rendered to Sources/PushText/Resources/AppIcon.png via
+       rsvg-convert; build-app.sh makes the .icns from that PNG. -->
+  <defs>
+    <linearGradient id="bg" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#26202f"/>
+      <stop offset="1" stop-color="#0e0b14"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="205" fill="url(#bg)"/>
+  <rect x="64" y="64" width="896" height="896" rx="205" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="10"/>
+  <g fill="#f4f5f7">
+    <!-- waveform: 5 tiles, heights 170/350/520/350/170, all centred on y=421 -->
+    <rect x="212" y="336" width="86" height="170" rx="30"/>
+    <rect x="341" y="246" width="86" height="350" rx="30"/>
+    <rect x="470" y="161" width="86" height="520" rx="30"/>
+    <rect x="599" y="246" width="86" height="350" rx="30"/>
+    <rect x="728" y="336" width="86" height="170" rx="30"/>
+    <!-- the inserted text: one line spanning the same 602px the waveform does -->
+    <rect x="212" y="777" width="602" height="86" rx="30"/>
+  </g>
+</svg>
