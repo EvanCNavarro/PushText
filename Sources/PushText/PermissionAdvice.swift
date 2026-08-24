@@ -14,6 +14,16 @@ struct PermissionAdvice: Equatable {
     let settingsURL: URL?
     /// True when the app itself can raise the system prompt, which is only ever the first ask.
     let canPromptInApp: Bool
+    /// True when the fix is to CLEAR this app's stale TCC row before opening Settings (#136).
+    ///
+    /// Only a broken keyboard grant. TCC binds a grant to the app's code identity, so after a
+    /// re-sign the listed entry belongs to a build that no longer exists and toggling it re-grants
+    /// that old one - the user is left switching something that cannot work. Clearing the row is
+    /// what lets the current app be granted. Ported from TermTile, which has shipped this for
+    /// exactly the same reason.
+    var repairs: Bool = false
+    /// Which grant this row is about, so a repair knows what to reset.
+    var permission: Permission?
 
     static func forStatus(_ status: PermissionStatus, of permission: Permission) -> PermissionAdvice? {
         let title = Self.title(of: permission)
@@ -33,7 +43,8 @@ struct PermissionAdvice: Equatable {
                 detail: "PushText has not been given \(Self.noun(of: permission)) access yet.",
                 actionLabel: canPrompt ? "Allow..." : "Open Settings...",
                 settingsURL: canPrompt ? nil : pane,
-                canPromptInApp: canPrompt)
+                canPromptInApp: canPrompt,
+                permission: permission)
 
         case .grantBroken:
             return Self.repairAdvice(title: title, pane: pane, of: permission)
@@ -46,7 +57,8 @@ struct PermissionAdvice: Equatable {
                     + "until it is turned on.",
                 actionLabel: "Open Settings...",
                 settingsURL: pane,
-                canPromptInApp: false)
+                canPromptInApp: false,
+                permission: permission)
         }
     }
 
@@ -69,10 +81,13 @@ struct PermissionAdvice: Equatable {
             return PermissionAdvice(
                 title: title,
                 detail: "Access was granted before and has stopped working - usually after an "
-                    + "update. Switch PushText off and on again in the list.",
-                actionLabel: "Open Settings...",
+                    + "update. System Settings may still list an older copy of PushText, which "
+                    + "cannot be switched back on. Clear that entry and allow this copy.",
+                actionLabel: "Reset & Open Settings...",
                 settingsURL: pane,
-                canPromptInApp: false)
+                canPromptInApp: false,
+                repairs: true,
+                permission: permission)
         }
         return PermissionAdvice(
             title: title,
@@ -80,7 +95,8 @@ struct PermissionAdvice: Equatable {
                 + "update. PushText can ask for it again.",
             actionLabel: "Allow Again...",
             settingsURL: nil,
-            canPromptInApp: true)
+            canPromptInApp: true,
+            permission: permission)
     }
 
     private static func title(of permission: Permission) -> String {

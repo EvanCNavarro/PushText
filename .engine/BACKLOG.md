@@ -581,3 +581,31 @@ that. The narrative for each lives in the issue.
   Verified on the PUBLISHED v0.2.1: downloaded, run on a Mac that never built it, exit 124, menu
   rendered, 0 new crash reports, and no /Users/runner string in the binary at all.)
 
+#136 - The Accessibility notice is a dead-end sentence; TermTile gives it a button - DONE
+  (2026-08-24: from Bobby's screenshot of 0.2.1. MenuContent rendered startupFailure as a bare Text -
+  a sentence naming a Settings path, no button - sitting directly above PermissionRows that have one.
+  Two code paths for "a grant is missing" and only one actionable.
+  Read TermTile rather than recalled it: MenuBarContent switches on a three-state AccessibilityState
+  and renders MacFaceKit's NoticeCard, with "Allow Accessibility" for a first grant and "Reset & Open
+  Settings" for a broken one, the second calling PermissionRepairer before opening the pane. PushText
+  already had the three-state probe and row-with-button rendering; what it lacked was the repair
+  action and a route from a startup failure into that machinery.
+  THIS REVERSES #6, and #6 was wrong. That issue declined a repairer because resetting forces the
+  user to re-ADD the app, which is more work than toggling a row already present - true only if
+  toggling WORKS. TCC binds a grant to the app's code identity, so after a re-sign the listed row
+  belongs to a build that no longer exists and toggling it re-grants the old one. Observed the same
+  day: replacing a dev-signed PushText with the Developer ID release left Accessibility asking for a
+  grant already given. The old reasoning was checked against the wrong case - a revoked grant, where
+  the row is current - and never considered the stale row grantBroken exists for.
+  Also: a runtime failure now outranks the probe. The tap failing to arm is DIRECT evidence
+  Accessibility is unusable, where AXIsProcessTrusted() is second-hand and can report granted while
+  nothing works. It downgrades rather than appends, so a permission the probe already flags is not
+  duplicated.
+  Four plants caught, including the safety one - dropping the bundle id from tccutil reset, which
+  would clear the grant for EVERY app on the machine. A fifth did not land (string mismatch) and is
+  not counted.
+  NOT SHOWN: no tccutil has been run against a real grant. Every test injects the runner on purpose,
+  since a test that shelled out would destroy the developer's own grants - so the reset is verified
+  as the right command, correctly scoped, with failures reported, NOT as clearing a real stale row.
+  Evidence: docs/verification/task136-permission-fixit-row.md.)
+

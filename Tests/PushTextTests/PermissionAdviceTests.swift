@@ -41,7 +41,11 @@ struct PermissionAdviceTests {
             let broken = PermissionAdvice.forStatus(.grantBroken, of: permission)
             let text = ((broken?.detail ?? "") + " " + (broken?.actionLabel ?? "")).lowercased()
 
-            #expect(text.contains("again") || text.contains("re-") || text.contains("off and on"),
+            // "reset" and "clear" joined the list when the keyboard permissions started offering
+            // to clear a stale TCC row (#136). The test's premise is unchanged - a broken grant
+            // must read as a REPAIR - only its vocabulary was too narrow to recognise one.
+            let repairWords = ["again", "re-", "off and on", "reset", "clear"]
+            #expect(repairWords.contains(where: { text.contains($0) }),
                     "\(permission) broken copy does not describe a repair: \(text)")
         }
     }
@@ -100,6 +104,43 @@ struct PermissionAdviceTests {
                 #expect(advice?.settingsURL != nil, "\(permission)/\(status) has no way out")
             }
         }
+    }
+
+    /// A broken keyboard grant offers to CLEAR the stale row, not just to open Settings (#136).
+    ///
+    /// Ported from TermTile, whose repairer's docstring is the argument: it "only clears TermTile's
+    /// own old rows so the current signed app can be granted normally". #6 declined a repairer on
+    /// the grounds that resetting forces the user to re-ADD the app - which assumes toggling the
+    /// existing row WORKS. It does not when that row belongs to a build that no longer exists.
+    @Test("A broken keyboard grant offers a reset, because toggling a stale row does nothing")
+    func brokenKeyboardGrantOffersReset() {
+        for permission in [Permission.accessibility, .postEvent] {
+            let advice = PermissionAdvice.forStatus(.grantBroken, of: permission)
+            #expect(advice?.repairs == true, "\(permission) broken offers no reset")
+            #expect(advice?.actionLabel.lowercased().contains("reset") == true,
+                    "\(permission): \(advice?.actionLabel ?? "nil")")
+        }
+    }
+
+    /// Only the BROKEN state resets. A first grant has no stale row to clear, and a denial is a
+    /// decision - clearing it to ask again would be arguing with the user.
+    @Test("Nothing else offers to reset anything")
+    func onlyBrokenGrantsReset() {
+        for permission in Permission.allCases {
+            for status in [PermissionStatus.needsFirstGrant, .denied] {
+                #expect(PermissionAdvice.forStatus(status, of: permission)?.repairs == false,
+                        "\(permission)/\(status) offers a reset it should not")
+            }
+        }
+    }
+
+    /// The microphone is the exception: its broken state is `.notDetermined`, so there is no row to
+    /// clear and the app can simply ask again (#128).
+    @Test("A broken microphone grant prompts rather than resetting")
+    func microphoneRepairsByPrompting() {
+        let advice = PermissionAdvice.forStatus(.grantBroken, of: .microphone)
+        #expect(advice?.repairs == false)
+        #expect(advice?.canPromptInApp == true)
     }
 
     /// An explicit denial is neither a first grant nor a break, and saying "try again" to someone

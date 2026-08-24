@@ -41,6 +41,15 @@ different actions.
 
 ## 2. `TCCPermissionRepairer` was specified and is not being built
 
+> **SUPERSEDED 2026-08-24 by #136.** The section below argues against a repairer on the grounds that
+> resetting forces the user to re-ADD the app, which is more work than toggling a row that is already
+> there. That assumes toggling WORKS, and it does not when the row is stale: TCC binds a grant to the
+> app's code identity, so after a re-sign the listed entry belongs to a build that no longer exists.
+> TermTile has shipped a repairer for exactly this reason. The reasoning below was checked against
+> the wrong case - a grant the user revoked, where the row is current - and never considered the
+> stale row that `grantBroken` exists for. Kept rather than rewritten, because the argument's shape
+> is the useful part: see `task136-permission-fixit-row.md`.
+
 The issue asked for `tccutil reset <SERVICE> <bundleID>` behind a fix-it button. It should not exist,
 for a different reason per permission:
 

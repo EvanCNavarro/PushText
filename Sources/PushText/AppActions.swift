@@ -34,8 +34,24 @@ final class AppActions {
             Task { _ = await AVAudioEngineCapture.requestMicrophoneAccess() }
             return
         }
+        // Clear the stale row BEFORE opening Settings, so the pane the user lands on no longer
+        // lists a copy of PushText that cannot be switched back on (#136). Reported, not assumed:
+        // a refused reset must not leave the user believing they have a clean slate.
+        if advice.repairs, let permission = advice.permission {
+            for report in repairer.reset([permission]) where !report.succeeded {
+                dictationLog.error("tccutil reset failed exit=\(report.exitCode, privacy: .public)")
+            }
+        }
         guard let url = advice.settingsURL else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    /// Clears this app's stale TCC rows. Injectable so tests never shell out to `tccutil`, which
+    /// would destroy the developer's own grants.
+    private let repairer: any PermissionRepairing
+
+    init(repairer: any PermissionRepairing = TCCPermissionRepairer()) {
+        self.repairer = repairer
     }
 
     /// Where history lives, so the two actions below agree on one path.
