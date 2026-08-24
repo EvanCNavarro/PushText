@@ -16,12 +16,25 @@ final class AppActions {
     /// immediately; automatic checks stay off (`SUEnableAutomaticChecks` is false in Info.plist),
     /// because a dictation utility that phones home on its own schedule is not what was promised.
     ///
-    /// Until #17 lands there is no published appcast and no `SUPublicEDKey`, so a check reports "no
-    /// update" or a feed error rather than finding something. That is the honest pre-release state,
-    /// and wiring it now means the menu item works the moment the first release exists.
-    private let updater = SPUStandardUpdaterController(startingUpdater: true,
-                                                       updaterDelegate: nil,
-                                                       userDriverDelegate: nil)
+    /// The delegate exists to drive the update DOT (#138) - it records what a check found so the
+    /// menu can mark itself. It never presents UI; the passive probe uses Sparkle's
+    /// non-presenting `checkForUpdateInformation()`, which is the whole reason a mark can appear
+    /// without a dialog interrupting the user.
+    private let updateWatcher = UpdateWatcher()
+
+    private lazy var updater = SPUStandardUpdaterController(startingUpdater: true,
+                                                            updaterDelegate: updateWatcher,
+                                                            userDriverDelegate: nil)
+
+    /// Asks Sparkle what is out there WITHOUT showing anything, so the dot can appear on its own.
+    /// A dictation utility that opens a dialog unprompted is not what was promised; a quiet mark is.
+    func refreshUpdateAvailability() {
+        updateWatcher.onChange = { [weak self] availability in
+            self?.updateAvailability = availability
+        }
+        updateAvailability = .checking
+        updater.updater.checkForUpdateInformation()
+    }
 
     /// Acts on a permission row: prompt if the app can, otherwise open the right Settings pane.
     ///
@@ -49,6 +62,12 @@ final class AppActions {
     /// Clears this app's stale TCC rows. Injectable so tests never shell out to `tccutil`, which
     /// would destroy the developer's own grants.
     private let repairer: any PermissionRepairing
+
+    /// Where this app is in its update cycle, which decides whether the menu shows a mark (#138).
+    ///
+    /// `checking` and `failed` deliberately do not mark: a dot that appears while merely checking
+    /// teaches the user to ignore dots. See `MacFaceKit.UpdateAvailability`.
+    var updateAvailability: UpdateAvailability = .unknown
 
     init(repairer: any PermissionRepairing = TCCPermissionRepairer()) {
         self.repairer = repairer
@@ -92,7 +111,12 @@ final class AppActions {
 
     func menuActions() -> [MenuAction] {
         [
-            MenuAction(title: "Check for Updates", systemImage: "arrow.triangle.2.circlepath") { [weak self] in
+            // The dot rides on THIS action, and MacFaceKit lifts it onto the `...` button for
+            // free - `OverflowMenu` marks itself when any action is marked (#138). So one flag
+            // lights two of the three places TermTile shows an update.
+            MenuAction(title: "Check for Updates", systemImage: "arrow.triangle.2.circlepath",
+                       attention: updateAvailability.hasAvailableUpdate,
+                       attentionAccessibilityHint: "Update available") { [weak self] in
                 self?.checkForUpdates()
             },
             MenuAction(title: "Edit Dictionary", systemImage: "character.book.closed") { [weak self] in
@@ -160,5 +184,32 @@ final class AppActions {
                 NSApplication.shared.terminate(nil)
             }
         }
+    }
+}
+
+/// Records what a Sparkle check found, so the menu can show a mark (#138).
+///
+/// Separate from `AppActions` because it must be an `NSObject` conforming to `SPUUpdaterDelegate`,
+/// and because it has one job: translate Sparkle's callbacks into `UpdateAvailability`.
+@MainActor
+final class UpdateWatcher: NSObject, SPUUpdaterDelegate {
+    var onChange: ((UpdateAvailability) -> Void)?
+
+    nonisolated func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        let version = item.displayVersionString
+        Task { @MainActor in self.onChange?(.available(version: version)) }
+    }
+
+    nonisolated func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        Task { @MainActor in self.onChange?(.unavailable) }
+    }
+
+    /// A failed check is NOT "up to date". Reporting it as unavailable would tell the user they are
+    /// current when the app has no idea - which is the same shape as a CI summary where zero checks
+    /// and all-green render identically.
+    nonisolated func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
+                             error: (any Error)?) {
+        guard error != nil else { return }
+        Task { @MainActor in self.onChange?(.failed) }
     }
 }

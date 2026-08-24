@@ -1,4 +1,5 @@
 import SwiftUI
+import MacFaceKit
 import AVFoundation
 import OSLog
 import PushTextCore
@@ -131,7 +132,15 @@ struct PushTextApp: App {
             if isRecording { controller.suspend() } else { controller.resume() }
         }
 
-        launchDelegate.onLaunch = { Self.requestMicrophone(for: model) }
+        // Bound to a local first: capturing the stored property directly is a mutable capture of
+        // `self` while init is still running, which Swift 6 refuses in an escaping closure.
+        let launchActions = actions
+        launchDelegate.onLaunch = {
+            Self.requestMicrophone(for: model)
+            // Ask what is out there WITHOUT showing anything, so the dot can appear on its own
+            // (#138). Sparkle's automatic checks stay off - this is the quiet probe, not a dialog.
+            launchActions.refreshUpdateAvailability()
+        }
 
         // Visual verification hook (#46). UI cannot be proven by a unit test - this shows the HUD
         // at a fixed level so it can be screenshotted and judged. Deliberately NOT animated: a
@@ -163,6 +172,11 @@ struct PushTextApp: App {
                 // Force a fix-it row so it can be looked at (#136). Same idea as
                 // PUSHTEXT_HUD_PROBE_REFUSE: a state that only occurs when a grant is genuinely
                 // missing cannot be screenshotted on a machine where the grant is present.
+                // Force an available update so the mark can be looked at - a dot that only
+                // appears when a real release is newer cannot be screenshotted on demand.
+                if ProcessInfo.processInfo.environment["PUSHTEXT_MENU_PROBE_UPDATE"] == "1" {
+                    actions.updateAvailability = .available(version: "9.9.9")
+                }
                 if let name = ProcessInfo.processInfo.environment["PUSHTEXT_MENU_PROBE_PERMISSION"] {
                     switch name {
                     case "accessibility": model.reportPermissionFailure(.accessibility)
@@ -264,8 +278,20 @@ struct PushTextApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("PushText", systemImage: model.menuBarSymbol) {
+        // The icon carries the update mark too (#138), composited into ONE image rather than
+        // layered: MenuBarExtra flattens and tints its label, so an overlaid badge is re-tinted to
+        // the glyph colour and disappears. MacFaceKit.MenuBarBadge is that workaround, shared.
+        MenuBarExtra {
             MenuContent(model: model, actions: actions)
+        } label: {
+            if let badged = MenuBarBadge.badged(systemImage: model.menuBarSymbol,
+                                                attention: actions.updateAvailability
+                                                    .hasAvailableUpdate) {
+                Image(nsImage: badged)
+            } else {
+                // A symbol that will not resolve must still leave a reachable menu.
+                Image(systemName: model.menuBarSymbol)
+            }
         }
         .menuBarExtraStyle(.window)
     }

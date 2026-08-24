@@ -609,3 +609,23 @@ that. The narrative for each lives in the issue.
   as the right command, correctly scoped, with failures reported, NOT as clearing a real stale row.
   Evidence: docs/verification/task136-permission-fixit-row.md.)
 
+#138 - No update indicator: TermTile marks the icon, the ellipsis and the row - DONE
+  (2026-08-24: capability-grep FIRST, and it paid. MacFaceKit already had AttentionDot,
+  IconButton(attention:) and an OverflowMenu that lifts the mark from any MenuAction onto the `...`
+  button - PushText had simply never passed attention:. Two of the three surfaces were one flag away.
+  What genuinely lived only in TermTile: the UpdateAvailability state that decides WHEN, and the
+  menu-bar badge that composites the dot INTO one NSImage rather than layering it, because
+  MenuBarExtra flattens and tints SwiftUI label overlays so a layered badge disappears. Both are the
+  "rule for all apps" half, so both went to MacFaceKit 0.5.0 rather than into PushText.
+  checking and failed deliberately do NOT mark: a dot that appears while merely checking teaches the
+  user to ignore dots, and a failed check is not the same as being up to date - collapsing them would
+  claim currency the app cannot know. The probe is Sparkle's non-presenting
+  checkForUpdateInformation(), so a mark can appear without a dialog interrupting anyone.
+  Six plants across both repos. One of them found a VACUOUS test of mine: the badge test compared
+  plain and badged TIFFs and asserted they differed, which passed on an implementation that drew
+  nothing - the badged canvas is wider by the inset, so the bytes differ whatever is painted.
+  Rewritten to sample the corner for a warning-coloured pixel, which a resize cannot satisfy.
+  SEEN: the `...` button carrying the dot, rendered and looked at. NOT SEEN: the dropdown row's mark
+  (needs the popover open) and the menu-bar icon (not in the probe window) - both covered by tests,
+  neither looked at in place. Evidence: docs/verification/task138-update-indicator.md.)
+
