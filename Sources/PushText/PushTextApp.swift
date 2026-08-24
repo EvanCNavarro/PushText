@@ -111,9 +111,10 @@ struct PushTextApp: App {
                 Task { @MainActor in model.handle(edge) }
             },
             onFailure: { _ in
-                model.reportStartupFailure(
-                    "Hold-to-dictate needs Accessibility. Grant it in System Settings > Privacy & "
-                    + "Security > Accessibility, then relaunch PushText.")
+                // A fix-it ROW, not a sentence (#136). The tap failing is the strongest evidence
+                // there is that Accessibility is unusable, so it drives the same actionable row as
+                // every other missing grant instead of a dead-end string naming a Settings path.
+                model.reportPermissionFailure(.accessibility)
             })
         self.hotkey = controller
         controller.start()
@@ -159,6 +160,17 @@ struct PushTextApp: App {
                                       backing: .buffered,
                                       defer: false)
                 window.title = "PushText menu (probe)"
+                // Force a fix-it row so it can be looked at (#136). Same idea as
+                // PUSHTEXT_HUD_PROBE_REFUSE: a state that only occurs when a grant is genuinely
+                // missing cannot be screenshotted on a machine where the grant is present.
+                if let name = ProcessInfo.processInfo.environment["PUSHTEXT_MENU_PROBE_PERMISSION"] {
+                    switch name {
+                    case "accessibility": model.reportPermissionFailure(.accessibility)
+                    case "postEvent": model.reportPermissionFailure(.postEvent)
+                    case "microphone": model.reportPermissionFailure(.microphone)
+                    default: break
+                    }
+                }
                 window.contentView = NSHostingView(rootView: MenuContent(model: model,
                                                                          actions: actions))
                 window.orderFrontRegardless()
@@ -246,9 +258,7 @@ struct PushTextApp: App {
             let after = AVCaptureDevice.authorizationStatus(for: .audio).rawValue
             dictationLog.info("microphone request granted=\(granted) status after=\(after)")
             if !granted {
-                model.reportStartupFailure(
-                    "PushText needs the Microphone to dictate. Grant it in System Settings > "
-                    + "Privacy & Security > Microphone, then relaunch PushText.")
+                model.reportPermissionFailure(.microphone)
             }
         }
     }

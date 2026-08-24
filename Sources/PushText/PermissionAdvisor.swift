@@ -14,6 +14,15 @@ final class PermissionAdvisor {
     /// is what the state-machine tests want.
     var probe: (any PermissionProbe)?
 
+    /// Permissions a subsystem ACTUALLY failed on, which outranks the probe (#136).
+    ///
+    /// The event tap failing to arm is observed evidence that Accessibility is unusable;
+    /// `AXIsProcessTrusted()` is a second-hand report of the same thing, and after a re-sign the two
+    /// disagree - the system lists an entry for a build that no longer exists, so the probe says
+    /// granted while nothing works. When they disagree, the thing that actually failed wins, and it
+    /// is treated as a BROKEN grant because that is exactly what it is.
+    var runtimeFailures: Set<Permission> = []
+
     private(set) var advice: [(permission: Permission, advice: PermissionAdvice)] = []
 
     /// Recomputed on menu OPEN rather than polled: the user changes these in System Settings while
@@ -21,8 +30,11 @@ final class PermissionAdvisor {
     func refresh() {
         guard let probe else { advice = []; return }
         advice = Permission.allCases.compactMap { permission in
-            guard let entry = PermissionAdvice.forStatus(probe.status(of: permission),
-                                                         of: permission) else { return nil }
+            // A failure downgrades the reading rather than adding a second row, so a permission the
+            // probe already flags is never duplicated.
+            let status = runtimeFailures.contains(permission) ? .grantBroken
+                                                              : probe.status(of: permission)
+            guard let entry = PermissionAdvice.forStatus(status, of: permission) else { return nil }
             return (permission, entry)
         }
     }

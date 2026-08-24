@@ -64,6 +64,18 @@ private let engine: any TranscriptionEngine
 
     func refreshPermissionAdvice() { advisor.refresh() }
 
+    /// Records that a subsystem actually failed for want of a grant (#136).
+    ///
+    /// Replaces a dead-end sentence. The tap failing used to set `startupFailure` to prose naming a
+    /// Settings path - unactionable text sitting directly above rows that have buttons. Routing it
+    /// through the advisor gives it the same fix-it row as every other missing grant, and the
+    /// failure is stronger evidence than the probe: after a re-sign, `AXIsProcessTrusted()` can
+    /// report granted while nothing works.
+    func reportPermissionFailure(_ permission: Permission) {
+        advisor.runtimeFailures.insert(permission)
+        advisor.refresh()
+    }
+
     /// Model installation, owned by its own type - see ModelPreparer.
     private let preparer = ModelPreparer()
 
