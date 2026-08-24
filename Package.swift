@@ -28,7 +28,7 @@ let package = Package(
     ],
     dependencies: [
         // Shared 400faces macOS design system (tokens + components), same pin as TermTile 0.4.x.
-        .package(url: "https://github.com/400faces/MacFaceKit.git", .upToNextMinor(from: "0.5.0"))
+        .package(url: "https://github.com/400faces/MacFaceKit.git", .upToNextMinor(from: "0.5.1"))
     ],
     targets: [
         // Functional core: the dictation state machine, the cleanup drift guard, the dictionary

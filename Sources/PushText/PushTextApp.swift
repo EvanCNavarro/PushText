@@ -277,6 +277,12 @@ struct PushTextApp: App {
         }
     }
 
+    /// White in dark mode, black in light - the tint the menu bar would have applied itself if the
+    /// badged image were still a template. Same approach as TermTile's glyph.
+    private var menuBarGlyphColor: NSColor {
+        NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .white : .black
+    }
+
     var body: some Scene {
         // The icon carries the update mark too (#138), composited into ONE image rather than
         // layered: MenuBarExtra flattens and tints its label, so an overlaid badge is re-tinted to
@@ -284,9 +290,13 @@ struct PushTextApp: App {
         MenuBarExtra {
             MenuContent(model: model, actions: actions)
         } label: {
+            // The glyph colour is passed explicitly because a badged image is not a template, so
+            // the menu bar no longer tints it - without this the symbol draws in its default black
+            // and disappears on a dark menu bar. Caught by rendering it, not by any assertion.
             if let badged = MenuBarBadge.badged(systemImage: model.menuBarSymbol,
                                                 attention: actions.updateAvailability
-                                                    .hasAvailableUpdate) {
+                                                    .hasAvailableUpdate,
+                                                glyphColor: menuBarGlyphColor) {
                 Image(nsImage: badged)
             } else {
                 // A symbol that will not resolve must still leave a reachable menu.
