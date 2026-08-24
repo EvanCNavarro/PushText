@@ -18,23 +18,7 @@ public enum AudioProbe {
         let env = ProcessInfo.processInfo.environment
         let seconds = Double(env["PUSHTEXT_AUDIO_PROBE_SECONDS"] ?? "") ?? 4
 
-        print("AUDIO_PROBE micAuthorized=\(AVAudioEngineCaptureAuthorization.isAuthorized)")
-        fflush(stdout)
-
-        if !AVAudioEngineCaptureAuthorization.isAuthorized {
-            if env["PUSHTEXT_AUDIO_PROBE_PROMPT"] == "1" {
-                print("AUDIO_PROBE requesting microphone access (system dialog)")
-                fflush(stdout)
-                let granted = AVAudioEngineCaptureAuthorization.requestBlocking(timeout: 60)
-                print("AUDIO_PROBE micGranted=\(granted)")
-                fflush(stdout)
-            }
-            if !AVAudioEngineCaptureAuthorization.isAuthorized {
-                print("AUDIO_PROBE capture=skipped reason=not-authorized")
-                fflush(stdout)
-                exit(2)
-            }
-        }
+        ensureAuthorizedOrExit(env: env)
 
         let capture = AVAudioEngineCapture()
         let stats = CaptureStats()
@@ -49,8 +33,24 @@ public enum AudioProbe {
         print("AUDIO_PROBE capture=started seconds=\(seconds)")
         fflush(stdout)
 
+        // PUSHTEXT_AUDIO_PROBE_STALL blocks the MAIN run loop for N ms, which is the only way to
+        // reproduce #124 on demand: `RunLoop.main.run(until:)` is not bounded to its date, so a
+        // stalled main loop makes the real window longer than the requested one. Same purpose as
+        // PUSHTEXT_HOTKEY_PROBE_STALL - a guard you cannot make go red is a guard nobody has tested.
+        if let stall = Double(env["PUSHTEXT_AUDIO_PROBE_STALL"] ?? "") {
+            Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { _ in
+                Thread.sleep(forTimeInterval: stall / 1000)
+            }
+        }
+        let started = ContinuousClock.now
         RunLoop.main.run(until: Date().addingTimeInterval(seconds))
+        let windowSeconds = Double(started.duration(to: .now).components.seconds)
+            + Double(started.duration(to: .now).components.attoseconds) / 1e18
         capture.stop()
+        // Both printed: a gap between them is the #124 failure becoming visible instead of
+        // silently inflating the ratio below.
+        print(String(format: "AUDIO_PROBE window requested=%.3f actual=%.3f", seconds, windowSeconds))
+        fflush(stdout)
 
         let result = stats.snapshot()
         print("AUDIO_PROBE buffers=\(result.buffers) frames=\(result.frames) "
@@ -58,12 +58,36 @@ public enum AudioProbe {
         print("AUDIO_PROBE timestampsMonotonic=\(result.monotonic) contiguous=\(result.contiguous)")
         print("AUDIO_PROBE restarts=\(capture.restartCount) restartFailures=\(capture.restartFailures)")
 
-        reportCompleteness(frames: result.frames, sampleRate: result.sampleRate, seconds: seconds)
+        reportCompleteness(frames: result.frames, sampleRate: result.sampleRate,
+                           windowSeconds: windowSeconds)
         print(String(format: "AUDIO_PROBE peak=%.5f rms=%.5f silent=%@",
                      result.peak, result.rms, result.peak < 1e-6 ? "true" : "false"))
         print("AUDIO_PROBE finished")
         fflush(stdout)
         exit(0)
+    }
+
+    /// Reports the microphone grant and leaves with exit 2 when there is none.
+    ///
+    /// Exit 2 rather than a warning: a probe that reports healthy numbers from a run it never made
+    /// is the failure this whole file exists to avoid.
+    private static func ensureAuthorizedOrExit(env: [String: String]) {
+        print("AUDIO_PROBE micAuthorized=\(AVAudioEngineCaptureAuthorization.isAuthorized)")
+        fflush(stdout)
+        guard !AVAudioEngineCaptureAuthorization.isAuthorized else { return }
+
+        if env["PUSHTEXT_AUDIO_PROBE_PROMPT"] == "1" {
+            print("AUDIO_PROBE requesting microphone access (system dialog)")
+            fflush(stdout)
+            let granted = AVAudioEngineCaptureAuthorization.requestBlocking(timeout: 60)
+            print("AUDIO_PROBE micGranted=\(granted)")
+            fflush(stdout)
+        }
+        guard !AVAudioEngineCaptureAuthorization.isAuthorized else { return }
+
+        print("AUDIO_PROBE capture=skipped reason=not-authorized")
+        fflush(stdout)
+        exit(2)
     }
 
     /// Exits non-zero if capture stopped early (#70).
@@ -73,12 +97,14 @@ public enum AudioProbe {
     /// of 8 seconds to a device change. Elapsed wall time is the one signal here that a missing
     /// frame cannot forge.
     ///
-    /// 15% covers ordinary start-up latency and the final partial drain. The failure this catches
-    /// lost 66%, so the threshold is nowhere near the signal it has to separate.
-    private static func reportCompleteness(frames: Int, sampleRate: Double, seconds: Double) {
-        let expected = seconds * sampleRate
-        let ratio = expected > 0 ? Double(frames) / expected : 0
-        let complete = ratio >= 0.85
+    /// The window is the one that ACTUALLY elapsed, not the one requested (#124). `RunLoop.main
+    /// .run(until:)` is not bounded to its date, and the arithmetic lives in Core so it can be
+    /// tested against a stretched window without needing one.
+    private static func reportCompleteness(frames: Int, sampleRate: Double, windowSeconds: Double) {
+        let expected = windowSeconds * sampleRate
+        let ratio = CaptureCompleteness.ratio(frames: frames, sampleRate: sampleRate,
+                                              windowSeconds: windowSeconds)
+        let complete = CaptureCompleteness.isComplete(ratio)
         print(String(format: "AUDIO_PROBE expectedFrames=%.0f completeness=%.3f complete=%@",
                      expected, ratio, complete ? "true" : "false"))
         fflush(stdout)
