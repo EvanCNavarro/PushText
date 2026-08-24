@@ -9,8 +9,11 @@ this file is the narrative record — the reasoning, the measurements, the dispr
 them consistent; when they disagree, GitHub is right about state and this file is right about why.
 
 **#1, #2 and #3 predate that migration and COLLIDE with PRs #1, #2 and #3.** They are done and must
-never be cited bare — write "backlog item 3", not "#3". `.engine/checks/backlog-ids-resolve.sh`
-enforces the rest.
+never be cited bare — write "backlog item 3", not "#3". `.engine/checks/backlog-matches-github.sh`
+enforces the rest: every id ≥ 4 resolves, and every `DONE`/`S0` marker agrees with the issue's state.
+It fails closed on `closed upstream, still pending here` — the direction that misdirects "what's
+next" — and only NOTEs the transient mirror, since an issue closes at the merge and a PR that marks
+its own line `DONE` would otherwise be red before the merge and after it.
 
 *Why this exists:* these ids were originally file-local, and stayed file-local after the repo gained
 a GitHub remote — at which point `#19` silently became a claim about a GitHub issue that did not
@@ -62,9 +65,16 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   Never Input Monitoring. Port TermTile's trusted/needsFirstGrant/grantBroken model and its tccutil
   repairer. Authority: docs/research/04 sec 4, docs/research/05.
 
-#7 - HUD: non-activating NSPanel over full-screen apps - S0
-  blocked-by: #3. `canBecomeKey = false` is load-bearing: stealing focus breaks injection, which is
-  the entire product. Authority: docs/research/04 sec 7.
+#7 - HUD: non-activating NSPanel over full-screen apps - DONE
+  (2026-08-23: superseded by #46 and delivered in PR #50/#54/#56. DictationHUDPanel is a
+  .nonactivatingPanel with canBecomeKey and canBecomeMain both false, shown with
+  orderFrontRegardless rather than makeKeyAndOrderFront; .canJoinAllSpaces + .fullScreenAuxiliary +
+  .stationary put it over full-screen apps where a plain window would not appear. The focus
+  requirement - the whole reason this issue existed, since a HUD that took focus would receive the
+  injected Command-V instead of the user's document - was VERIFIED rather than assumed: with the HUD
+  on screen, the frontmost app was iTerm2 and PushText's AXFocusedWindow read `missing value` while
+  it owned one window. Original note kept because it is still the load-bearing constraint:
+  `canBecomeKey = false` breaks injection if it ever flips. Authority: docs/research/04 sec 7.)
 
 #8 - isPlausibleCleanup drift guard + tests - DONE
   blocked-by: none. Pure function in Core, red-first. The differentiator: Handy (30k stars),
@@ -76,8 +86,18 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   blocked-by: none. Longest-match-first, NFC-normalized, fenced by \p{L}\p{N} lookarounds rather than
   \b, phrase parts joined with [\s\-]* so "CloudCode" matches. Authority: docs/research/03.
 
-#10 - History persistence (JSONL) - S0
-  blocked-by: #3, #4.
+#10 - History persistence (JSONL) - DONE
+  (2026-08-23: PR #85. Greenfield - a capability-grep found no history, no JSONL and no Application
+  Support code anywhere - so the model, the store AND the wiring shipped together, deliberately:
+  three components in this repo already had tests and zero call sites, and a fourth was not worth
+  adding. JSONL because appending is one write of one line, so a crash mid-write costs the last
+  entry, where a JSON array is read-parse-mutate-rewrite per utterance and can lose everything. The
+  same property governs reads, which is why decodeFile SKIPS unparseable lines rather than throwing:
+  a decoder that gave up on the first bad line would return an empty history and discard the exact
+  durability the format was chosen for. Trimming keeps the newest and happens on READ, not on
+  append, so the cap never reintroduces the whole-file write on the latency-sensitive path. Split
+  per ADR-0001: record + codec are pure Foundation in Core; JSONLHistoryStore sits in Kit behind a
+  port so AppModel never touches a file. Six plants, one of which lied and was rebuilt.)
 
 ## Phase 1 - requires macOS 26 AND Xcode 26
 
@@ -167,12 +187,45 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   no longer be reached, and unsupported HARDWARE was never a version question - AppleSpeechEngine
   already throws EngineError.unavailable for it.)
 
-#17 - Sparkle EdDSA keypair + first release - S0
-  blocked-by: #16. build-app.sh currently refuses to ship without SU_PUBLIC_ED_KEY in CI and warns
-  locally; generate_keys puts the private half in the login Keychain.
+#17 - Sparkle EdDSA keypair + first release - DONE
+  (2026-08-23: v0.1.0 published. The keypair half needed NO keypair, and generating one would have
+  been actively harmful: Sparkle keeps one key at a single well-known Keychain slot, one was already
+  there, and `generate_keys -p` (lookup only) printed a value byte-identical to the SUPublicEDKey
+  that /Applications/TermTile.app already ships - so a careless generate_keys here could have broken
+  update signing for every installed TermTile user. This entry's own premise, "generate_keys puts
+  the private half in the login Keychain", implied one had to be generated and was wrong.
+  Verified against the DOWNLOADED artifact rather than the build log: shasum -a 256 -c OK; chain
+  Developer ID Application -> Developer ID CA -> Apple Root, team XG9SBNWNXT; stapler validate finds
+  the ticket; Gatekeeper accepted, source=Notarized Developer ID; the appcast signature verifies
+  against the SUPublicEDKey compiled into the shipped app.
+  The certificate was obtained the long way round. The login keychain's password no longer unlocks
+  it - the dialog wants the Mac login password and that credential no longer matches - so `security
+  export` could not produce a .p12 however many times it was attempted. Routed around rather than
+  fought: a fresh key generated locally with openssl, a CSR through developer.apple.com, and a NEW
+  Developer ID Application certificate issued against it (G2 Sub-CA, expires 2031-08-24). The
+  private half was therefore never in the keychain and needed no export, and the earlier certificate
+  is untouched, so TermTile is unaffected. Backup: ~/Downloads/pushtext-signing-backup/ - Apple
+  cannot reissue a private key, so if that folder and the GitHub secret are both lost the only
+  remedy is another certificate.
+  Two defects found on the way: #96, provenance attestation can never work on a user-owned private
+  repo and ran AFTER notarization, so the first v0.1.0 run spent a real Apple notary submission and
+  died one step before publishing; and #95, release notes describing a build from months ago, whose
+  claim-by-claim check also surfaced #94.)
 
-#18 - Context-aware formatting per frontmost app - S0
-  blocked-by: #14.
+#18 - Context-aware formatting per frontmost app - DONE
+  (2026-08-23: WITHDRAWN unbuilt, PR #120 - the one problem it ever named does not occur. Its whole
+  specification was PLAN.md's "terminal -> no smart quotes, etc." plus a blocked-by on #14, closed
+  long before. Measured: SpeechTranscriber emits STRAIGHT quotes - 7 straight, 0 curly across 80
+  real transcripts in history.jsonl, and zero curly quotes, en dashes, em dashes or ellipses in any
+  of them. On-device cleanup returns pure ASCII, checked at code-point level rather than by eye
+  because the two apostrophes are near-indistinguishable in a terminal. And the receiving app does
+  not convert them either: macOS smart-quote substitution is enabled here but applies to TYPED
+  input, and did not fire on a pasted control - which was the last mechanism by which a curly quote
+  could reach a user's document, since PushText injects by pasteboard. Closed rather than re-scoped
+  because nothing in the issue, the backlog or the plan named a second case, and building the
+  framework would have meant inventing requirements for it. NOT ruled out: another locale, or a
+  future recognizer that formats differently - all 80 transcripts are en-US on one machine.
+  Evidence: docs/verification/task18-context-formatting.md.)
 
 ## Gaps left open by #3
 
@@ -217,8 +270,21 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
 
 ## Gaps left open by #11
 
-#32 - Format mismatch into SpeechAnalyzer is an uncatchable SIGTRAP, not an error - S0
-  blocked-by: none; constraint on #12. Planted deliberately during the #11 spike: 48 kHz buffers fed
+#32 - Format mismatch into SpeechAnalyzer is an uncatchable SIGTRAP, not an error - DONE
+  (2026-08-23: PR #37, alongside #12. Corrected first, off the SDK rather than inferred: the
+  mismatch is not merely a different RATE. bestAvailableAudioFormat(compatibleWith:) returned
+  16000 Hz ch=1 common=3, and AVAudioFormat.h defines 3 as AVAudioPCMFormatInt16, while
+  AVAudioEngineCapture emits 48 kHz Float32 - so a resample-only fix would have handed the analyzer
+  a format it did not ask for and, by the evidence below, trapped anyway. AppleSpeechEngine
+  .beginUtterance now derives the target from bestAvailableAudioFormat and builds AudioFormatConverter
+  from it; append cannot bypass the converter; AudioFormatConverterTests asserts sampleRate == 16000
+  AND commonFormat == .pcmFormatInt16, both, per that correction. Battle-tested rather than trusted:
+  a converter planted to emit SILENCE failed ONLY the signal test - every format assertion still
+  passes on a silent converter, so without that test silent and working are indistinguishable - and
+  a planted "rates match, nothing to do" shortcut, the exact shape this issue warns about, failed
+  only the same-rate test.)
+  Original note, blocked-by: none; constraint on #12. Planted deliberately during the #11 spike:
+  48 kHz buffers fed
   to an analyzer whose bestAvailableAudioFormat was 16 kHz mono produced EXIT=133 (SIGTRAP) inside
   Speech.SpeechRecognizerWorker.preRunRecognition(), with no throw to catch. AVAudioEngineCapture
   delivers the device's native rate, so the two differ by default - #12 must convert at the boundary
@@ -243,12 +309,21 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   What this did NOT prove moved to #39: the probe collects buffers then feeds them (realtime=false),
   so appending WHILE capture runs has still never executed.)
 
-#36 - First utterance can block on a model download inside beginUtterance - S0
-  blocked-by: none. ensureModelInstalled awaits downloadAndInstall on a machine where the asset is
-  absent, and push-to-talk means the user is already speaking. The download path was OBSERVED
-  during the #11 spike (status supported -> installed inside one run); its DURATION and the user's
-  view of it were not measured, because this machine has been warm ever since. Best done with #6,
-  which needs the same non-blocking "not ready" state.
+#36 - First utterance can block on a model download inside beginUtterance - DONE
+  (2026-08-23: PR #77. Installation moved to TranscriptionEngine.prepare(), called detached at
+  launch; the dictation path now REFUSES instead of downloading - EngineError.modelNotReady ->
+  DictationFailure.modelNotReady -> "Preparing model...". Refusing in milliseconds is the point:
+  "Transcription failed" sends the user looking for a fault that does not exist when the honest
+  answer is that waiting fixes it. prepare() has a protocol default of no-op so no other engine
+  implements it, and launch never blocks either. Two injectable seams, neither a convenience: the
+  not-installed state CANNOT occur on this machine - AssetInventory exposes reserve/release/status/
+  assetInstallationRequest and no uninstall - so without a seam "beginUtterance no longer downloads"
+  could only be re-read, never run; and CI supplied the second, since the macos-26 runner has no
+  Neural Engine and throws .unavailable before any model check. Still NOT measured, then or now: the
+  download's DURATION and the user's view of it, because this machine has been warm since #11.)
+  Original note, blocked-by: none. ensureModelInstalled awaits downloadAndInstall on a machine
+  where the asset is absent, and push-to-talk means the user is already speaking. The download path
+  was OBSERVED during the #11 spike (status supported -> installed inside one run).
 
 #39 - The dictation pipeline is never assembled - the app cannot dictate - DONE
   (2026-08-22: AudioFeed carries capture buffers across the sync-to-async boundary in order via one
@@ -308,3 +383,30 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   blocked-by: none. `grep -rn MacFaceKit Sources/` returns nothing while Package.swift both declares
   and links it, so the app pays the dependency cost and looks like a prototype. Do it with #46 so
   the HUD is built from the same components rather than adding a second visual language.
+
+## Filed on GitHub after this file stopped being the capture surface
+
+Later work went straight to `gh issue create` and to `docs/verification/`, so these two never got a
+line here. They are OPEN, and this section exists so the file stops disagreeing with GitHub about
+that. The narrative for each lives in the issue.
+
+#24 - Audio capture: the interleaved-stereo branch has never executed - S0
+  blocked-by: hardware that does not exist on this machine. AVAudioEngineCapture's sink-node block
+  has an else-branch for interleaved multi-channel input that extracts channel 0 sample by sample;
+  it requires `buffers.count == 1 && channels > 1`, is written from the AudioBufferList contract
+  rather than from observation, and has never run. Measured, not assumed: every input device on this
+  machine reports 1 channel, so it cannot be exercised here. The device-change half of the original
+  issue turned out to be a confirmed silent data-loss bug and was split out to #70; this is now only
+  the coverage gap. TRIGGER: a genuinely multi-channel interleaved input device.
+
+#73 - Grounding rejects inflection changes it cannot tell from invention - S0
+  blocked-by: none. Residual of #68, which fixed the numeral false positives and measured the rest.
+  Measured in shadow mode over 20 real SpeechTranscriber transcripts x 3 model runs
+  (docs/verification/task68-cleanup-shadow-mode.md): after the numeral fix, 4 of 60 runs still
+  reject, and one of them is not drift - the model changed "fails" to "fail" for subject-verb
+  agreement against a plural subject, which is a grammatical correction rather than invented
+  content, and grounding cannot tell them apart because it compares surface tokens. The others ARE
+  correct rejections: "faming" -> "failing" is the model guessing at a misrecognition. That
+  distinction - inflection of a word that IS present, versus substitution of a word that is not - is
+  the whole issue, and closing it needs a stemmer. LOW priority: the fallback is the raw transcript,
+  which is already punctuated and capitalised.
