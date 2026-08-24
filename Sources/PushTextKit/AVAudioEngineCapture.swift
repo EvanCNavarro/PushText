@@ -132,7 +132,6 @@ public final class AVAudioEngineCapture: AudioCapture, @unchecked Sendable {
                                                    channels: format.channelCount)
         }
         sampleRate = format.sampleRate
-        let channels = Int(format.channelCount)
         let ring = self.ring
 
         // REALTIME THREAD. No allocation, no locks, no Swift runtime calls that could take one.
@@ -143,23 +142,19 @@ public final class AVAudioEngineCapture: AudioCapture, @unchecked Sendable {
                   let raw = first.mData else { return noErr }
             let samples = raw.assumingMemoryBound(to: Float.self)
 
-            if channels == 1 || buffers.count > 1 {
-                // Mono, or non-interleaved multi-channel: buffer 0 IS channel 0.
-                let wanted = Int(frameCount)
-                let accepted = ring.write(samples, count: wanted)
-                // The audio thread cannot retry - whatever the ring refused is gone. Reporting it
-                // here rather than inferring it inside the ring is the point: only this caller knows.
-                ring.recordDropped(wanted - accepted)
-            } else {
-                // Interleaved stereo in a single buffer - take channel 0 only. Done sample by
-                // sample deliberately: a stride-copy helper would allocate.
-                var accepted = 0
-                for frame in 0..<Int(frameCount) {
-                    var value = samples[frame * channels]
-                    accepted += ring.write(&value, count: 1)
-                }
-                ring.recordDropped(Int(frameCount) - accepted)
-            }
+            // Layout comes from the buffer's OWN channel count, not from the format's, and the
+            // decision and the strided copy both live in Core (#24). The old code inferred layout
+            // from `channels == 1 || buffers.count > 1`, which was unreachable here without
+            // multi-channel hardware and so had never executed - and was wrong for 4 channels
+            // delivered as 2 buffers of 2. As pure functions these are covered by
+            // `AudioBufferLayoutTests`.
+            let wanted = Int(frameCount)
+            let stride = AudioBufferLayout.channelZeroStride(
+                bufferChannels: Int(first.mNumberChannels))
+            let accepted = ring.writeChannelZero(from: samples, frameCount: wanted, stride: stride)
+            // The audio thread cannot retry - whatever the ring refused is gone. Reporting it here
+            // rather than inferring it inside the ring is the point: only this caller knows.
+            ring.recordDropped(wanted - accepted)
             return noErr
         }
 
