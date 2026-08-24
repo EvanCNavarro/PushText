@@ -32,12 +32,15 @@ struct TranscriptFinisher {
     /// 2. **History equals what was injected.** History was previously written in
     ///    `closeUtterance`, before any cleanup stage existed, which would have left it recording
     ///    pre-cleanup text while the user pasted post-cleanup text.
-    func finish(_ transcript: Transcript) async -> String {
+    /// `cleanupEnabled` is passed per call rather than captured at construction, matching how
+    /// `HUDDriver` takes `isCapturing`: the setting can change between one utterance and the next,
+    /// and a value frozen at init would keep the old answer until relaunch.
+    func finish(_ transcript: Transcript, cleanupEnabled: Bool) async -> String {
         // `clean` returns the raw transcript on EVERY failure path by contract, so there is no
         // error branch to write - a model that is missing, rate-limited or refused simply means no
         // polish. `isAvailable` first only to skip building a session that cannot answer.
         var text = transcript.text
-        if let cleanup, await cleanup.isAvailable {
+        if cleanupEnabled, let cleanup, await cleanup.isAvailable {
             text = (try? await cleanup.clean(transcript)) ?? text
             // #94 step 1. `warm` is the discriminator the earlier measurements lacked: a slow call
             // with warm=false means the key-down prewarm never completed, and a slow one with
