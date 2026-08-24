@@ -283,6 +283,18 @@ public struct DictationMachine: Sendable {
     }
 }
 
+public extension DictationState {
+    /// The states where a new hotkey press is REFUSED and the speech that follows it is LOST (#99).
+    ///
+    /// Deliberately NOT every state that refuses a press. `.recording` refuses one too, but that is
+    /// a duplicate key-down from the hardware repeating, which happens constantly and costs the user
+    /// nothing - acknowledging it would flash the HUD throughout every dictation. These three are
+    /// the ones where a human deliberately pressed the key, got nothing, and will start talking.
+    var isProcessing: Bool {
+        self == .transcribing || self == .cleaning || self == .injecting
+    }
+}
+
 /// How far along the on-device model's installation is (#76).
 ///
 /// #36 moved the download OFF the dictation path so the first key-down no longer blocks. This is

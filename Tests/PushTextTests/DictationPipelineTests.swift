@@ -99,6 +99,9 @@ struct DictationPipelineTests {
             levels.append(level)
         }
 
+        private(set) var refusals = 0
+        func acknowledgeRefusal() { refusals += 1 }
+
         func hide() { hidden += 1 }
     }
 
@@ -373,5 +376,46 @@ struct DictationPipelineTests {
 
         #expect(await settle { model.machine.state == .idle })
         #expect(injector.injected.isEmpty)
+    }
+}
+
+extension DictationPipelineTests {
+
+    /// #99. A press that arrives while the pipeline is working is refused and the speech that
+    /// follows it is lost. The HUD shows a working state, so "busy" is visible - "your press did
+    /// nothing" is not.
+    @Test("A press refused while processing is acknowledged")
+    func refusedPressWhileProcessingIsAcknowledged() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["hello"],
+                                                                  latency: .seconds(2)))
+        let indicator = SpyIndicator()
+        let model = AppModel(engine: engine, capture: SpyCapture(), injector: SpyInjector(),
+                             indicator: indicator)
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        model.handle(.released, at: 1)
+        _ = await settle { model.machine.state == .transcribing }
+
+        model.handle(.pressed, at: 2)
+        #expect(indicator.refusals == 1, "the user pressed during processing and was told nothing")
+    }
+
+    /// The discriminator. `.recording` also refuses a press - it is the hardware repeating a
+    /// key-down - and acknowledging THAT would flash the HUD throughout every dictation. A fix that
+    /// pulsed on every refusal would pass the test above and make the app unusable.
+    @Test("A duplicate key-down while recording is NOT acknowledged")
+    func duplicateKeyDownWhileRecordingIsSilent() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["hello"],
+                                                                  latency: .milliseconds(1)))
+        let indicator = SpyIndicator()
+        let model = AppModel(engine: engine, capture: SpyCapture(), injector: SpyInjector(),
+                             indicator: indicator)
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        model.apply(.hotkeyPressed)
+
+        #expect(indicator.refusals == 0, "a repeating key-down pulsed the HUD")
     }
 }
