@@ -168,7 +168,8 @@ extension PermissionRowSnapshotTests {
         let phases: [(String, HUDPhase, Double)] = [
             ("resting", .resting, 0),
             ("recording", .recording, 0.7),
-            ("working", .working, 0)
+            ("working", .working, 0),
+            ("inserting", .inserting, 0)
         ]
         for (name, phase, level) in phases {
             let view = DictationHUDView(phase: phase, level: level, isPresented: true,

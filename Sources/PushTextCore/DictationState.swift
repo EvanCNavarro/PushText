@@ -196,7 +196,14 @@ public struct DictationMachine: Sendable {
         // Cancel reaches idle WITHOUT passing through transcribing: anything that reaches
         // transcribing eventually injects, and the point of cancel is that nothing is typed. It is
         // not routed through `.failed` either - the user did exactly what they meant to.
-        case (.arming, .cancelRequested), (.recording, .cancelRequested):
+        // Cancel is honoured right up until the paste starts. Nothing has been typed during
+        // `transcribing` or `cleaning`, so the user's "do not type that" is still satisfiable -
+        // and with cleanup enabled that window is seconds long, not milliseconds (#109).
+        //
+        // `.injecting` is excluded deliberately: the paste is already in flight, so accepting a
+        // cancel there would report success for something that already happened.
+        case (.arming, .cancelRequested), (.recording, .cancelRequested),
+             (.transcribing, .cancelRequested), (.cleaning, .cancelRequested):
             return .to(.idle)
 
         default:
