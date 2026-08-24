@@ -190,11 +190,48 @@ stop one dictation's context leaking into the next - and if residency is tied to
 those two goals looked mutually exclusive. With that initialiser they are not. Whether residency is
 tied to a live session at all is UNTESTED and is #94's next step.
 
+## 4d. Residency: three arms, one answer
+
+#94's last open question was whether the ~3.5 s model call could be made to go away. Two levers were
+named in its trigger. Both were run, six dictations each, same phrases, same 22 s spacing, same
+session, cleanup enabled through the setting.
+
+| arm | n | mean | median | fast (<1 s) | values |
+| --- | --- | --- | --- | --- | --- |
+| A - session spent per utterance (shipping) | 6 | 3744 ms | 3491 ms | **0/6** | 3416, 3466, 3476, 3506, 3534, 5065 |
+| B - one session held across utterances | 6 | 4496 ms | 3958 ms | **0/6** | 3776, 3856, 3865, 4050, 4308, 7124 |
+| C - `prewarm(promptPrefix:)` | 6 | 2432 ms | 3488 ms | 2/6 | 213, 328, 3465, 3512, 3523, 3549 |
+
+**B is disproved.** Holding a session is not merely no better, it is worse - and it costs context
+growth, since `LanguageModelSession` carries its transcript. Model residency is not tied to a live
+session.
+
+**C is not evidence.** Two fast samples out of six looks encouraging until it is compared to the
+variance the UNMODIFIED path already shows.
+
+### The observation that settles it
+
+The same shipping configuration measured **6/12 fast (50%)** in an earlier session and **0/6 fast**
+in arm A today.
+
+That between-session swing is larger than any between-arm difference measured today. Whatever
+governs whether the assets are resident is not something this process sets - not the session, not
+the prewarm shape. Arm C's 2/6 sits inside that spread.
+
+The slow mode itself is remarkably tight in every arm: 3416-3549 in A, 3465-3549 in C. A cost that
+reproducible is a discrete load step, not contention.
+
+### Neither seam was kept
+
+Both experiment flags were removed. A disproved flag left in shipping code invites the next reader to
+try it again, and the measurements live here instead. Re-adding either is about ten lines, and this
+section says exactly what they were.
+
 ## 5. What ships
 
 `TranscriptFinisher` and the ordering it enforces (cleanup, then the user's dictionary, then
 history), plus the key-down prewarm. `PushTextApp` still does **not** construct a cleanup provider,
 so behaviour is unchanged and transcripts ship as the recognizer produced them.
 
-Enabling it is one line. What has to be true first is section 4c: stop half of all dictations paying
-a ~3.2 s asset load that the key-down prewarm does not prevent. Tracked in #94.
+Cleanup is now a user-facing toggle, default off, with the cost stated in the menu (#103). Section 4d
+records why it is not on by default: the asset load cannot be prevented from inside this process.
