@@ -227,4 +227,86 @@ struct CleanupDriftGuardTests {
                                           cleaned: "The second release.") != .plausible)
     }
 
+    // MARK: - Inflection (#73)
+
+    /// The measured near-miss from `docs/verification/task68-cleanup-shadow-mode.md`.
+    ///
+    /// The model changed "fails" to "fail" for subject-verb agreement against a plural subject.
+    /// That is a grammatical correction of a word that IS present, and grounding rejected it because
+    /// it compares surface tokens.
+    @Test("An inflection of a word that IS in the transcript is grounded")
+    func inflectionOfAPresentWordIsGrounded() {
+        let raw = "The tests with us is locally, but fails in continuous integration."
+        let cleaned = "The tests with us is locally, but fail in continuous integration."
+        #expect(CleanupDriftGuard.verdict(raw: raw, cleaned: cleaned) == .plausible)
+    }
+
+    /// THE regression this relaxation could cause, from the same measured batch.
+    ///
+    /// "faming" is what was heard; "failing" is the model guessing at the misrecognition. It must
+    /// stay rejected - if a stem match let this through, the relaxation would have traded the guard
+    /// for the near-miss it was meant to fix.
+    @Test("A guessed substitution is still ungrounded, inflection relaxation or not")
+    func guessedSubstitutionStaysRejected() {
+        let raw = "The build is faming on the winter again."
+        let cleaned = "The build is failing on the linter again."
+        #expect(CleanupDriftGuard.verdict(raw: raw, cleaned: cleaned)
+                == .rejected(.ungroundedContent(token: "failing")))
+    }
+
+    /// A near-homophone substitution is not an inflection of anything in the transcript, so the
+    /// relaxation must not reach it. ("loss" and "lose" are not related by any suffix in the list -
+    /// this asserts the VERDICT, and the floor that separates short stems is asserted directly in
+    /// `theStemFloorRefusesShortWords` below, because this case would pass without it.)
+    @Test("A near-homophone substitution is still ungrounded")
+    func nearHomophoneStaysRejected() {
+        let raw = "That was a real loss for the whole team this quarter, honestly."
+        let cleaned = "That was a real lose for the whole team this quarter, honestly."
+        #expect(CleanupDriftGuard.verdict(raw: raw, cleaned: cleaned)
+                == .rejected(.ungroundedContent(token: "lose")))
+    }
+
+    /// The 4-character floor, asserted where it actually bites.
+    ///
+    /// Measured over `/usr/share/dict/words` (221,702 entries): dropping the floor to 1 merges 833
+    /// additional pairs, and they are not all inflections - `an`/`and`, `ai`/`aid`, `ad`/`as` and
+    /// `ami`/`amid` are distinct words that a 1-character stem collapses together. A false MERGE
+    /// lets invention past the guard, which is the failure the guard exists to prevent.
+    ///
+    /// It costs real coverage and that is the accepted trade: `act`/`acting`, `aim`/`aiming` and
+    /// `air`/`airing` are genuine inflections the floor also refuses. A refusal costs the user the
+    /// raw transcript, which is already punctuated and capitalised; a false merge costs them text
+    /// they never said.
+    @Test("Stems shorter than four characters do not count as inflections")
+    func theStemFloorRefusesShortWords() {
+        #expect(CleanupDriftGuard.isInflectionPair("an", "and") == false)
+        #expect(CleanupDriftGuard.isInflectionPair("ai", "aid") == false)
+        #expect(CleanupDriftGuard.isInflectionPair("act", "acts") == false)
+        // Long enough, so they do relate - and the relation holds whichever way round it is asked.
+        #expect(CleanupDriftGuard.isInflectionPair("request", "requests"))
+        #expect(CleanupDriftGuard.isInflectionPair("requests", "request"))
+        #expect(CleanupDriftGuard.isInflectionPair("fails", "fail"))
+        // The pair a stem-key version got wrong: "build" reduced to "buil" and never met "building".
+        #expect(CleanupDriftGuard.isInflectionPair("build", "building"))
+        // Not related by any single ending, however similar they look.
+        #expect(CleanupDriftGuard.isInflectionPair("faming", "failing") == false)
+        #expect(CleanupDriftGuard.isInflectionPair("loss", "lose") == false)
+    }
+
+    /// The case the guard exists for is untouched: no inflection relates a country to a city.
+    @Test("Answering a dictated question is still ungrounded")
+    func answeringAQuestionStaysRejected() {
+        let verdict = CleanupDriftGuard.verdict(raw: "what is the capital of france",
+                                                cleaned: "Paris")
+        #expect(verdict == .rejected(.ungroundedContent(token: "paris")))
+    }
+
+    /// Each raw word grounds ONE cleaned word, and the relaxation must not spend a token twice.
+    @Test("An inflection consumes its source token, so a repeat is still ungrounded")
+    func inflectionConsumesItsSource() {
+        let verdict = CleanupDriftGuard.verdict(raw: "the request timed out",
+                                                cleaned: "the requests requests timed out")
+        #expect(verdict == .rejected(.ungroundedContent(token: "requests")))
+    }
+
 }

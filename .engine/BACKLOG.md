@@ -423,7 +423,24 @@ that. The narrative for each lives in the issue.
   issue turned out to be a confirmed silent data-loss bug and was split out to #70; this is now only
   the coverage gap. TRIGGER: a genuinely multi-channel interleaved input device.
 
-#73 - Grounding rejects inflection changes it cannot tell from invention - S0
+#73 - Grounding rejects inflection changes it cannot tell from invention - DONE
+  (2026-08-23: grounding now accepts a token that is another token plus one inflectional ending, and
+  the shape of that rule matters. A canonical STEM KEY was written first and was wrong: "building"
+  minus -ing is "build" while "build" minus -d is "buil", so two forms of one word landed on
+  different keys - a one-pass suffix strip is not consistent across a word's own forms. The real
+  model produced exactly that pair and rejected it; reading the code had predicted a match. Replaced
+  by a RELATION between the two tokens actually present, which cannot have that defect and makes
+  nonsense stems free. Exact match is still tried first, so nothing previously grounded stops being
+  grounded, and the matched raw token is still consumed so one raw word cannot ground two.
+  The 4-character base floor is measured, not chosen: over /usr/share/dict/words, lowering it to 1
+  merges 833 further pairs including an/and, ai/aid, ad/as and ami/amid, which are distinct words. It
+  also refuses genuine pairs like act/acting, and that is the trade - a refusal costs the raw
+  transcript, a false merge costs text the user never said. 39 of a 40-pair sample of what the
+  relation admits are ordinary inflections.
+  Real path, both directions: the near-miss is accepted 3/3, and of 11 runs of the guess-prone
+  sentence the 5 that actually guessed were all refused, including "famishing". The other 6 returned
+  the text unchanged, so the guard was not exercised in them and they are not evidence either way.
+  Evidence: docs/verification/task73-inflection-grounding.md.)
   blocked-by: none. Residual of #68, which fixed the numeral false positives and measured the rest.
   Measured in shadow mode over 20 real SpeechTranscriber transcripts x 3 model runs
   (docs/verification/task68-cleanup-shadow-mode.md): after the numeral fix, 4 of 60 runs still
