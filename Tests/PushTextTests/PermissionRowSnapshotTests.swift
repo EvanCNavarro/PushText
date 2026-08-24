@@ -32,6 +32,13 @@ struct PermissionRowSnapshotTests {
 
         let states: [(String, PermissionStatus, Permission)] = [
             ("microphone-first", .needsFirstGrant, .microphone),
+            // The two repair rows side by side, because they now say OPPOSITE things: the
+            // microphone offers to ask again, Accessibility sends the user to a list. If that
+            // asymmetry reads as inconsistency rather than as two different problems, it reads
+            // that way here first. This fixture stacks two Microphone rows, which cannot happen
+            // live - one permission has one status - and is deliberate: the point is to see the
+            // first-grant and repair copy against each other.
+            ("microphone-broken", .grantBroken, .microphone),
             ("accessibility-broken", .grantBroken, .accessibility),
             ("postevent-denied", .denied, .postEvent)
         ]

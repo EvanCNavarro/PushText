@@ -36,15 +36,7 @@ struct PermissionAdvice: Equatable {
                 canPromptInApp: canPrompt)
 
         case .grantBroken:
-            // The app IS already in the list, so "allow" is an instruction the user cannot follow.
-            // Toggling off and on is what actually re-associates the grant with the new signature.
-            return PermissionAdvice(
-                title: title,
-                detail: "Access was granted before and has stopped working - usually after an "
-                    + "update. Switch PushText off and on again in the list.",
-                actionLabel: "Open Settings...",
-                settingsURL: pane,
-                canPromptInApp: false)
+            return Self.repairAdvice(title: title, pane: pane, of: permission)
 
         case .denied:
             // A decision, not a fault. Stated as something they can revisit rather than an error.
@@ -56,6 +48,39 @@ struct PermissionAdvice: Equatable {
                 settingsURL: pane,
                 canPromptInApp: false)
         }
+    }
+
+    /// A grant that worked and stopped, which is a different problem from never having asked.
+    ///
+    /// The microphone recovers by ASKING AGAIN, and the other two do not, because they are not the
+    /// same situation underneath. `SystemPermissionProbe` derives a broken microphone grant from
+    /// `AVAuthorizationStatus.notDetermined` - the same reading as a first grant, separated only by
+    /// our own latch - and `requestAccess(for:)` prompts whenever the status is `.notDetermined`.
+    /// So the prompt is available, and sending the user to System Settings instead is worse than a
+    /// detour: with no TCC entry recorded there is nothing in that list to toggle.
+    ///
+    /// Accessibility and PostEvent break the other way. Their entry IS still in the list, ticked
+    /// and ineffective, so "allow" is an instruction the user cannot follow and toggling off and on
+    /// is what re-associates the grant with the new signature.
+    private static func repairAdvice(title: String,
+                                     pane: URL?,
+                                     of permission: Permission) -> PermissionAdvice {
+        guard permission == .microphone else {
+            return PermissionAdvice(
+                title: title,
+                detail: "Access was granted before and has stopped working - usually after an "
+                    + "update. Switch PushText off and on again in the list.",
+                actionLabel: "Open Settings...",
+                settingsURL: pane,
+                canPromptInApp: false)
+        }
+        return PermissionAdvice(
+            title: title,
+            detail: "Access was granted before and has stopped working - usually after an "
+                + "update. PushText can ask for it again.",
+            actionLabel: "Allow Again...",
+            settingsURL: nil,
+            canPromptInApp: true)
     }
 
     private static func title(of permission: Permission) -> String {
