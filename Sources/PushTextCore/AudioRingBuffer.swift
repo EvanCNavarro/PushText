@@ -86,6 +86,43 @@ public final class AudioRingBuffer: @unchecked Sendable {
         return toWrite
     }
 
+    /// Producer side for a strided source: copies channel 0 out of an interleaved block.
+    ///
+    /// Realtime-safe on the same terms as `write`: no allocation, no locks, and the same
+    /// acquire/release pairing on the indices.
+    ///
+    /// A `stride` of 1 delegates to `write`, which copies in at most two bulk chunks. Striding is
+    /// necessarily sample-by-sample - there is no contiguous run to hand to `update(from:)` - but it
+    /// resolves the free space ONCE rather than per frame, which the previous per-sample
+    /// `write(&value, count: 1)` at the call site did not.
+    ///
+    /// Loss is still the CALLER's to report, via `recordDropped(_:)`. See `droppedFrames` for why
+    /// the ring must not infer it from a short write.
+    ///
+    /// - Returns: frames actually written. Less than `frameCount` means the ring was full.
+    @discardableResult
+    public func writeChannelZero(from source: UnsafePointer<Float>,
+                                 frameCount: Int,
+                                 stride: Int) -> Int {
+        guard frameCount > 0 else { return 0 }
+        let step = max(1, stride)
+        if step == 1 { return write(source, count: frameCount) }
+
+        let write = writeIndex.load(ordering: .relaxed)
+        let read = readIndex.load(ordering: .acquiring)
+        let free = capacity - (write - read)
+        let toWrite = min(frameCount, free)
+        guard toWrite > 0 else { return 0 }
+
+        for frame in 0..<toWrite {
+            storage[(write + frame) % capacity] = source[frame * step]
+        }
+
+        // Release: the copy above must be visible before the consumer can see the new index.
+        writeIndex.store(write + toWrite, ordering: .releasing)
+        return toWrite
+    }
+
     /// Consumer side.
     /// - Returns: frames actually read, up to `count`.
     @discardableResult

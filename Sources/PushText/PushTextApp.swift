@@ -37,7 +37,16 @@ struct PushTextApp: App {
     /// Held for the process lifetime: releasing the monitor tears down the event tap.
     private let hotkey: HotkeyController
     /// Owns the Sparkle updater, so it outlives the menu being opened and closed.
-    private let actions = AppActions()
+    ///
+    /// Assigned in `init()` and NOT given a default here, which is load-bearing rather than a style
+    /// choice. Swift runs every stored-property default BEFORE the body of `init()` - verified by
+    /// running it, not recalled - so `private let actions = AppActions()` constructed
+    /// `SPUStandardUpdaterController(startingUpdater: true)` on the way past, ahead of the probe
+    /// gate below. Every headless probe run therefore started Sparkle, and in a bare SPM binary with
+    /// no proper bundle it failed and put up "Unable to Check For Updates ... the latest version of
+    /// debug" on the user's screen. `.engine/checks/probe-gate-runs-first.sh` fails closed if a
+    /// default comes back.
+    private let actions: AppActions
 
     init() {
         // Headless proof of the event tap, before any UI exists. Never returns when requested.
@@ -45,6 +54,9 @@ struct PushTextApp: App {
         // No probe took over, so any probe-tuning variable still set is a misconfiguration that
         // would otherwise launch the UI and look like a hung probe.
         ProbeActivation.enforceOrExit()
+
+        // Only now, past the probe gate: this starts Sparkle's updater.
+        actions = AppActions()
 
         // Phase 1 wiring (#12, #39): Apple's on-device SpeechAnalyzer, now that Xcode 26 ships the
         // SDK and #11 confirmed the streaming path works on this OS build. Systems that cannot run

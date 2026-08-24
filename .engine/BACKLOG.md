@@ -414,7 +414,27 @@ Later work went straight to `gh issue create` and to `docs/verification/`, so th
 line here. They are OPEN, and this section exists so the file stops disagreeing with GitHub about
 that. The narrative for each lives in the issue.
 
-#24 - Audio capture: the interleaved-stereo branch has never executed - S0
+#24 - Audio capture: the interleaved-stereo branch has never executed - DONE
+  (2026-08-23: the branch was unreachable because it was welded inside a realtime callback, so the
+  only way to run it was to own multi-channel hardware. Every input here still measures 1 channel,
+  re-measured rather than cited. The decision and the strided copy moved to Core as pure functions
+  and are now driven by interleaved stereo and interleaved 5.1 fixtures with no audio device
+  involved.
+  Extraction exposed a SECOND defect the branch had. "channels == 1 || buffers.count > 1" describes
+  layout by inference and is wrong for 4 channels delivered as 2 buffers of 2: that reads as
+  non-interleaved, strides by 1, and would interleave two channels into the ring as if they were
+  one. Fixed by reading AudioBuffer.mNumberChannels, which states how many channels are packed into
+  THAT buffer and is right for all three shapes. The field was measured before being relied on -
+  temporary instrumentation on the real capture path printed bufferCount=1 bufferChannels=1
+  formatChannels=1 over two runs - and that shows it is FILLED IN, not that it reports interleaving
+  correctly, since mono is the only layout available here.
+  Five plants, all detected: stride always 1, infer from the format, ignore the stride in the ring,
+  off by one channel, ignore the ring's free space. Channel 1 carries the negated frame index in the
+  fixtures, so reading the wrong channel shows up in the VALUES rather than only in the counts.
+  Real mono path unaffected: 3 runs, buffers=60 frames=144384 dropped=0 contiguous=true exit 0.
+  STILL UNOBSERVED and said so: no device here delivers mNumberChannels > 1, so the interleaved path
+  has never executed against real audio. It is no longer UNEXECUTABLE, which is what this issue was
+  about. Evidence: docs/verification/task24-interleaved-branch.md.)
   blocked-by: hardware that does not exist on this machine. AVAudioEngineCapture's sink-node block
   has an else-branch for interleaved multi-channel input that extracts channel 0 sample by sample;
   it requires `buffers.count == 1 && channels > 1`, is written from the AudioBufferList contract
@@ -422,6 +442,16 @@ that. The narrative for each lives in the issue.
   machine reports 1 channel, so it cannot be exercised here. The device-change half of the original
   issue turned out to be a confirmed silent data-loss bug and was split out to #70; this is now only
   the coverage gap. TRIGGER: a genuinely multi-channel interleaved input device.
+
+#124 - AudioProbe's completeness ratio trusts a wall-clock window it does not measure - S0
+  blocked-by: none. Found while re-verifying capture for #24. reportCompleteness divides frames by
+  seconds * sampleRate and only fails BELOW 0.85, but RunLoop.main.run(until:) is not bounded to
+  `seconds`. Three runs on a build that started Sparkle at launch gave completeness 1.394 / 2.965 /
+  0.999 - 2.965 is 8.9 seconds of audio in a nominal 3-second window - and three runs on the fixed
+  build gave 1.003 each time. Correlated, cause unverified: confirming it would mean re-running the
+  build that puts a Sparkle failure dialog on Bobby's screen. Matters because this is the ONLY guard
+  against silent truncation (#70) and it fails only in the low direction, so an inflated ratio hides
+  loss. TRIGGER: before the ratio is cited as evidence again.
 
 #73 - Grounding rejects inflection changes it cannot tell from invention - DONE
   (2026-08-23: grounding now accepts a token that is another token plus one inflectional ending, and

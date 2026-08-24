@@ -70,6 +70,8 @@ jobs:
       # Fail-open without gh auth, so a fork PR cannot be blocked by it.
       - name: Cited docs exist
         run: .engine/checks/cited-docs-exist.sh
+      - name: Probe gate runs first
+        run: .engine/checks/probe-gate-runs-first.sh
       - name: Backlog agrees with GitHub
         run: .engine/checks/backlog-matches-github.sh
         env:
