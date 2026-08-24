@@ -70,8 +70,37 @@ plant now fails it.
 **Seen:** the `...` button carrying the dot, rendered through `PUSHTEXT_MENU_PROBE_UPDATE=1` and
 looked at. MacFaceKit lifted it from the `MenuAction` with no PushText code involved.
 
-**NOT seen:** the dropdown row's own mark, which needs the popover open, and the menu-bar icon, which
-is not in the probe window. Both are covered by tests - `MenuBarBadge` by a pixel assertion,
-`MenuAction.attention` by the indicator suite, and `OverflowMenu`'s propagation by MacFaceKit's own
-`OverflowAttentionTests` - but neither has been looked at in place. That is the gap, and it is the
-kind rendering exists to close.
+**NOT seen at first:** the menu-bar icon. Closing that gap found a real defect - see below.
+
+**Still not seen:** the dropdown row's own mark, which needs the popover open. Covered by
+`MacFaceKit`'s `OverflowAttentionTests` and by the indicator suite, but not looked at in place.
+
+## 8. The menu-bar glyph was invisible, and only a render showed it
+
+Rendering the badged image beside the plain one showed a BLACK waveform on a dark background.
+
+Every assertion passed on that version: `isTemplate == false`, and a warning-coloured dot really was
+painted. Both true, and the icon unusable.
+
+The cause is the fix for the previous defect. A badged image is deliberately not a template so the
+menu bar cannot flatten the dot away - and the same flag stops the menu bar tinting the GLYPH, so the
+SF Symbol falls back to its default black. TermTile draws its glyph with an explicit colour taken
+from the colour scheme; that step was missing.
+
+Fixed in MacFaceKit 0.5.1: `badged(...)` takes a `glyphColor` and fills the symbol with it, and
+PushText passes white or black from `NSApp.effectiveAppearance`. The test samples the LEFT half of
+the image - glyph, not dot - and asserts a light pixel exists; planting the missing tint fails it.
+
+That test also CRASHED on its first run: `whiteComponent` throws on a `deviceRGB` colour. Reading the
+RGB components instead is something only executing it could have found.
+
+## 9. A difference that turned out to be my own harness
+
+The badged glyph still looked dimmer than the plain one side by side, and the obvious next move was
+to change the compositing operation. It would have been wrong. The comparison image composites the
+badge at native size and then upscales it, while the plain one is tinted AFTER scaling - so the
+badged glyph goes through an extra resample and softens. At native size the assertion requires every
+channel above 0.8 and passes.
+
+A `.sourceAtop` -> `.sourceIn` change was written, could not be shown to improve anything, and was
+reverted rather than shipped.

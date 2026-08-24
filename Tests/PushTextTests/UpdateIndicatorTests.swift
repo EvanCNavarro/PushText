@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import AppKit
 @testable import PushText
 import MacFaceKit
 import PushTextKit
@@ -57,6 +58,50 @@ struct UpdateIndicatorTests {
     func markedRowIsAnnounced() {
         let marked = actions(.available(version: "1.0.0")).first { $0.attention }
         #expect(marked?.attentionAccessibilityHint?.isEmpty == false)
+    }
+
+    /// Writes the plain and badged menu-bar images side by side so the dot can be LOOKED AT.
+    ///
+    /// Opt-in via PUSHTEXT_SNAPSHOT_DIR, like the other snapshots: CI has no reason to rasterise.
+    /// The template is tinted white here because that is what the menu bar does to it - comparing an
+    /// untinted template against a badged non-template would flatter the difference.
+    @Test("Render the menu bar images, badged and not",
+          .enabled(if: ProcessInfo.processInfo.environment["PUSHTEXT_SNAPSHOT_DIR"] != nil))
+    func renderMenuBarImages() throws {
+        let directory = try #require(ProcessInfo.processInfo.environment["PUSHTEXT_SNAPSHOT_DIR"])
+        let scale: CGFloat = 8
+        let canvas = NSImage(size: NSSize(width: 70 * scale, height: 24 * scale))
+        canvas.lockFocus()
+        NSColor(calibratedWhite: 0.11, alpha: 1).setFill()
+        NSRect(origin: .zero, size: canvas.size).fill()
+        var x: CGFloat = 6 * scale
+        for attention in [false, true] {
+            guard let image = MenuBarBadge.badged(systemImage: "waveform", attention: attention)
+            else { continue }
+            let size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
+            let scaled = NSImage(size: size)
+            scaled.lockFocus()
+            image.draw(in: NSRect(origin: .zero, size: size),
+                       from: NSRect(origin: .zero, size: image.size),
+                       operation: NSCompositingOperation.sourceOver, fraction: 1)
+            if image.isTemplate {
+                NSColor.white.setFill()
+                NSRect(origin: .zero, size: size).fill(using: NSCompositingOperation.sourceIn)
+            }
+            scaled.unlockFocus()
+            scaled.draw(in: NSRect(x: x, y: 4 * scale, width: size.width, height: size.height),
+                        from: NSRect(origin: .zero, size: size),
+                        operation: NSCompositingOperation.sourceOver, fraction: 1)
+            x += size.width + 10 * scale
+        }
+        canvas.unlockFocus()
+
+        let tiff = try #require(canvas.tiffRepresentation)
+        let rep = try #require(NSBitmapImageRep(data: tiff))
+        let png = try #require(rep.representation(using: .png, properties: [:]))
+        let url = URL(fileURLWithPath: directory).appendingPathComponent("menu-bar-badge.png")
+        try png.write(to: url)
+        print("SNAPSHOT \(url.path) bytes=\(png.count)")
     }
 
     /// The menu-bar icon is the third place, and it must change with the state rather than being
