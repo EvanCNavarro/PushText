@@ -53,6 +53,10 @@ final class HUDDriver {
         }
     }
 
+    func acknowledgeRefusal() {
+        indicator?.acknowledgeRefusal()
+    }
+
     /// 20 Hz: fast enough that the bars track speech, slow enough that it is not a per-buffer hop.
     private func startLevelTimer(isCapturing: @escaping @MainActor () -> Bool) {
         guard levelTimer == nil else { return }

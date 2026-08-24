@@ -53,8 +53,13 @@ struct DictationHUDView: View {
     /// before it can animate in - flipping it after the panel is on screen is what makes the motion
     /// happen at all.
     let isPresented: Bool
+    /// Increments on each refused press (#99). The VALUE is meaningless; the CHANGE is the signal,
+    /// which is why it is a counter and not a Bool - two refusals in a row must pulse twice.
+    var refusals: Int = 0
     let onCancel: () -> Void
     let onConfirm: () -> Void
+
+    @State private var pulsing = false
 
     private let barCount = 13
 
@@ -124,6 +129,17 @@ struct DictationHUDView: View {
             )
         }
         .shadow(color: .black.opacity(0.4), radius: 16, y: 5)
+        // A refused press pulses the pill (#99). Scale rather than colour: the HUD is already
+        // showing a working state, so the thing to communicate is "that keypress bounced off",
+        // which is motion, not a new status.
+        .scaleEffect(pulsing ? 1.07 : 1.0)
+        .onChange(of: refusals) {
+            withAnimation(.spring(response: 0.14, dampingFraction: 0.5)) { pulsing = true }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                withAnimation(.spring(response: 0.22, dampingFraction: 0.7)) { pulsing = false }
+            }
+        }
     }
 
     /// Symmetric about the centre, tallest in the middle, so a low level reads as a flat line rather
@@ -194,6 +210,9 @@ final class DictationHUDController {
         var phase: HUDPhase = .resting
         var isPresented = false
         var level: Double = 0
+        /// Bumped on each refused press. A COUNTER rather than a Bool: two refusals in a row must
+        /// produce two pulses, and a Bool that is already true animates nothing the second time.
+        var refusals = 0
         var onCancel: () -> Void = {}
         var onConfirm: () -> Void = {}
     }
@@ -221,6 +240,10 @@ final class DictationHUDController {
                 model.isPresented = true
             }
         }
+    }
+
+    func acknowledgeRefusal() {
+        model.refusals += 1
     }
 
     func update(phase: HUDPhase, level: Double) {
@@ -355,6 +378,7 @@ private struct HUDHost: View {
             phase: model.phase,
             level: model.level,
             isPresented: model.isPresented,
+            refusals: model.refusals,
             onCancel: model.onCancel,
             onConfirm: model.onConfirm)
     }

@@ -7,6 +7,12 @@ import PushTextCore
 protocol DictationIndicator: AnyObject {
     func show(phase: HUDPhase, onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void)
     func update(phase: HUDPhase, level: Double)
+    /// Tell the user their press was REFUSED, as distinct from the app merely being busy (#99).
+    ///
+    /// The HUD already shows a working state, so "something is happening" is visible. What is not
+    /// visible is that the key they just pressed did nothing - and the speech they are about to
+    /// give it will not be captured.
+    func acknowledgeRefusal()
     func hide()
 }
 

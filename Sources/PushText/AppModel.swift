@@ -155,6 +155,19 @@ private let engine: any TranscriptionEngine
         }
 
         guard machine.state != previous else {
+            // A press the user MEANT, refused because the pipeline is still working (#99).
+            // The HUD already shows a busy state, so "something is happening" is visible;
+            // that the key just pressed did NOTHING is not, and the speech about to follow
+            // it will be lost.
+            //
+            // Logged at INFO, not debug: the debug line below is invisible to
+            // `log stream --info`, which is what every investigation here actually runs, so
+            // a swallowed press has read as "no press arrived" more than once.
+            if previous.isProcessing, event == .hotkeyPressed || event == .hotkeyDoublePressed {
+                let refusedIn = String(describing: previous)
+                dictationLog.info("hotkey REFUSED in state=\(refusedIn, privacy: .public)")
+                hud.acknowledgeRefusal()
+            }
             dictationLog.debug("""
                 event=\(String(describing: event), privacy: .public) \
                 ignored in state=\(String(describing: previous), privacy: .public)
