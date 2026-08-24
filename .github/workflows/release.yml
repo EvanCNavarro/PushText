@@ -224,6 +224,38 @@ jobs:
             "repositories. The release still ships a SHA-256 checksum and a notarized," \
             "Developer ID signed app." | tee -a "${GITHUB_STEP_SUMMARY}"
 
+      # Fetch the feed the way a CLIENT will: no credentials. The signature check above proves the
+      # appcast is correctly signed; it says nothing about whether Sparkle can GET it. Those are
+      # different failures, and only this one was reaching users - v0.2.0 shipped a valid, signed,
+      # unreachable appcast, and the app reported "An error occurred in retrieving update
+      # information."
+      #
+      # Fails only when the repo is PUBLIC, where a 404 is a genuine defect. While it is private the
+      # 404 is expected and unfixable from here, so the step states it plainly in the job summary
+      # instead - an update channel that is known-broken must not look the same as one nobody checked.
+      - name: Check the appcast is reachable without credentials
+        run: |
+          set -uo pipefail
+          FEED="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/appcast.xml"
+          # NOT `|| echo 000`: curl already prints its own 000 on a connection failure, so the
+          # fallback concatenated onto it and produced "000000". Caught by pointing the check at an
+          # unresolvable host - the throwaway probe found the bug in the gate.
+          CODE="$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 30 "${FEED}" || true)"
+          CODE="${CODE:-000}"
+          echo "anonymous GET ${FEED} -> ${CODE}" | tee -a "${GITHUB_STEP_SUMMARY}"
+          if [ "${CODE}" = "200" ]; then
+            echo "Sparkle can reach the appcast." | tee -a "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          if [ "${{ github.event.repository.private }}" = "false" ]; then
+            echo "::error::appcast is unreachable (HTTP ${CODE}) on a PUBLIC repo - updates are broken"
+            exit 1
+          fi
+          echo "IN-APP UPDATES DO NOT WORK: the appcast returns ${CODE} to an anonymous client" \
+            "because this repository is private. Sparkle sends no credentials. Users must update" \
+            "manually until the repo is public or the feed is hosted publicly." \
+            | tee -a "${GITHUB_STEP_SUMMARY}"
+
       # VirusTotal via the public API + curl (no unverified third-party action; secret stays in context).
       # Non-blocking: skipped cleanly when VIRUSTOTAL_API_KEY isn't set, and never fails the release
       # (checksum + provenance attestation already make the download verifiable). Attach the key

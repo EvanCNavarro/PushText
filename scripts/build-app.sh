@@ -12,7 +12,11 @@ set -euo pipefail
 APP_NAME="${APP_NAME:-PushText}"
 BUNDLE_ID="${BUNDLE_ID:-dev.ecn.apps.pushtext}"
 CONFIGURATION="${CONFIGURATION:-release}"
-SHORT_VERSION="${SHORT_VERSION:-0.1.0}"
+# NOT a release number. Release CI passes the tag (SHORT_VERSION="${GITHUB_REF_NAME#v}"), so this
+# default is only ever seen by a LOCAL build - and it used to be "0.1.0", which meant every dev
+# build claimed to be the shipped release. Bobby had 0.1.0 (72) on screen while 0.1.0 (59) and
+# 0.2.0 (80) were the only two releases that exist; the only way to tell was the build number.
+SHORT_VERSION="${SHORT_VERSION:-0.0.0-dev}"
 DIST_DIR="${DIST_DIR:-dist}"
 ICON_SRC="${ICON_SRC:-Sources/PushText/Resources/AppIcon.png}"
 # LSMinimumSystemVersion, and it must TRACK Package.swift's platform floor (#16). A value below
@@ -20,7 +24,16 @@ ICON_SRC="${ICON_SRC:-Sources/PushText/Resources/AppIcon.png}"
 # SpeechAnalyzer does not exist, so the failure lands on the user as a broken app rather than on
 # the installer as a refusal.
 MIN_SYSTEM_VERSION="${MIN_SYSTEM_VERSION:-26.0}"
-# Sparkle appcast URL (Info.plist SUFeedURL) - 404s until the first release publishes appcast.xml.
+# Sparkle appcast URL (Info.plist SUFeedURL).
+#
+# MEASURED 2026-08-24: this URL returns 404 to an anonymous client, and will keep doing so while the
+# repository is PRIVATE - GitHub release assets on a private repo need authentication, and Sparkle
+# sends none. The appcast itself is fine: the same asset fetched WITH credentials returns the signed
+# XML. So in-app updates cannot work until the repo is public or the feed is hosted somewhere
+# publicly readable. Same constraint that already disabled provenance attestation (#96).
+#
+# The old comment here said it "404s until the first release publishes appcast.xml", which was true
+# and incomplete - two releases exist now and it still 404s.
 SU_FEED_URL="${SU_FEED_URL:-https://github.com/EvanCNavarro/PushText/releases/latest/download/appcast.xml}"
 # Sparkle EdDSA PUBLIC key - safe to commit, and REQUIRED before the first release: generate with
 # Sparkle's generate_keys, which stores the private half in the login Keychain. Set below,

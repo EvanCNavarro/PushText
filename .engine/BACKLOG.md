@@ -525,3 +525,16 @@ that. The narrative for each lives in the issue.
   first responder inside a MenuBarExtra popover.
   Evidence: docs/verification/task128-hotkey-recorder.md.)
 
+#130 - In-app updates cannot work: the appcast 404s anonymously because the repo is private - S0
+  blocked-by: a decision only Bobby can make. MEASURED 2026-08-24: the feed URL baked into the app
+  is stable and correct, and returns 404 to an anonymous client. Control - the SAME asset fetched
+  WITH credentials returns the signed XML - so the appcast, its signature, the zip and the checksum
+  are all fine; Sparkle simply sends no credentials and a private repo's release assets require
+  them. Not caught before because release.yml verified the appcast SIGNATURE the way a client would
+  but never the FETCH: v0.2.0 shipped a valid, signed, unreachable feed. A reachability check now
+  runs at release time - failing when the repo is public, stating the situation when private - so it
+  stops being invisible. The same constraint already disabled provenance attestation in #96 and
+  nobody generalised it. Options: make the repo public, host the feed and the archive somewhere
+  publicly readable, or accept manual updates and stop offering "Check for Updates".
+  TRIGGER: before the next release, or before anyone else installs this.
+
