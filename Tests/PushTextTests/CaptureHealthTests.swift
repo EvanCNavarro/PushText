@@ -322,7 +322,7 @@ struct CaptureHealthTests {
         let injector = SpyInjector()
         let model = AppModel(engine: engine, capture: capture, injector: injector,
                              cleanup: StubCleanup { $0 + " [cleaned]" },
-                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true)))
+                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true, hotkeyKeyCode: HotkeyBinding.rightOption.keyCode)))
 
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
@@ -347,7 +347,7 @@ struct CaptureHealthTests {
                                 DictionaryEntry(spoken: "push text", written: "PushText")]),
                              cleanup: StubCleanup { $0.replacingOccurrences(of: "PushText",
                                                                            with: "push text") },
-                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true)))
+                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true, hotkeyKeyCode: HotkeyBinding.rightOption.keyCode)))
 
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
@@ -372,7 +372,7 @@ struct CaptureHealthTests {
         let model = AppModel(engine: engine, capture: capture, injector: injector,
                              history: history,
                              cleanup: StubCleanup { $0 + " [cleaned]" },
-                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true)))
+                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true, hotkeyKeyCode: HotkeyBinding.rightOption.keyCode)))
 
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
@@ -404,7 +404,7 @@ struct CaptureHealthTests {
         let cleanup = StubCleanup { $0 + " [cleaned]" }
         let model = AppModel(engine: engine, capture: capture, injector: injector,
                              cleanup: cleanup,
-                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: false)))
+                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: false, hotkeyKeyCode: HotkeyBinding.rightOption.keyCode)))
 
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
@@ -427,7 +427,7 @@ struct CaptureHealthTests {
         let cleanup = StubCleanup { $0 + " [cleaned]" }
         let model = AppModel(engine: engine, capture: capture, injector: injector,
                              cleanup: cleanup,
-                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true)))
+                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true, hotkeyKeyCode: HotkeyBinding.rightOption.keyCode)))
 
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }

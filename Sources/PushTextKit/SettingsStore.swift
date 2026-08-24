@@ -23,6 +23,7 @@ public struct UserDefaultsSettingsStore: SettingsStore {
 
     private enum Key {
         static let cleanupEnabled = "cleanupEnabled"
+        static let hotkeyKeyCode = "hotkeyKeyCode"
     }
 
     private let suiteName: String?
@@ -48,11 +49,14 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         let fallback = AppSettings.defaults
         return AppSettings(
             cleanupEnabled: stored.object(forKey: Key.cleanupEnabled) as? Bool
-                ?? fallback.cleanupEnabled)
+                ?? fallback.cleanupEnabled,
+            hotkeyKeyCode: (stored.object(forKey: Key.hotkeyKeyCode) as? NSNumber)?.int64Value
+                ?? fallback.hotkeyKeyCode)
     }
 
     public func save(_ settings: AppSettings) {
         defaults.set(settings.cleanupEnabled, forKey: Key.cleanupEnabled)
+        defaults.set(NSNumber(value: settings.hotkeyKeyCode), forKey: Key.hotkeyKeyCode)
     }
 
     public func purge() {

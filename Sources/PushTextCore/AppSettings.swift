@@ -16,9 +16,24 @@ public struct AppSettings: Equatable, Sendable {
     /// is a setting and not a constant.
     public var cleanupEnabled: Bool
 
-    public init(cleanupEnabled: Bool) {
+    /// Which bare modifier starts a dictation (#104), stored as its virtual keycode.
+    ///
+    /// The KEYCODE rather than the whole binding: the device mask and display name are properties of
+    /// the key, already recorded once in `HotkeyBinding`, and persisting them would create a second
+    /// copy that can disagree with the first. An unknown code resolves back to the default.
+    public var hotkeyKeyCode: Int64
+
+    public init(cleanupEnabled: Bool, hotkeyKeyCode: Int64) {
         self.cleanupEnabled = cleanupEnabled
+        self.hotkeyKeyCode = hotkeyKeyCode
     }
 
-    public static let defaults = AppSettings(cleanupEnabled: false)
+    public static let defaults = AppSettings(cleanupEnabled: false,
+                                             hotkeyKeyCode: HotkeyBinding.rightOption.keyCode)
+
+    /// The binding this setting names, or the default when the stored code is not one we offer -
+    /// which is what a downgrade, a hand-edited plist, or a removed binding all look like.
+    public var hotkeyBinding: HotkeyBinding {
+        HotkeyBinding.selectable.first { $0.keyCode == hotkeyKeyCode } ?? .rightOption
+    }
 }
