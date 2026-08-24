@@ -117,20 +117,39 @@ struct PushTextApp: App {
         // Visual verification hook (#46). UI cannot be proven by a unit test - this shows the HUD
         // at a fixed level so it can be screenshotted and judged. Deliberately NOT animated: a
         // moving demo would flatter the design and hide what a real, mostly-quiet level looks like.
-        if ProcessInfo.processInfo.environment["PUSHTEXT_HUD_PROBE"] == "1" {
-            let level = Double(ProcessInfo.processInfo.environment["PUSHTEXT_HUD_PROBE_LEVEL"] ?? "") ?? 0.6
-            launchDelegate.onLaunch = {
-                Task { @MainActor in
-                    // Wait for the status item to exist: MenuBarExtra creates it after launch, and
-                    // anchoring before it exists is what sent the first probe to the fallback.
-                    try? await Task.sleep(for: .seconds(2))
-                    let hud = DictationHUDController()
-                    hud.show(phase: .recording, onCancel: {}, onConfirm: {})
-                    hud.update(phase: .recording, level: level)
-                    dictationLog.info("HUD_PROBE showing level=\(level)")
+        Self.installHUDProbeIfRequested(on: launchDelegate)
+    }
+
+    /// Visual verification hook (#46, #115). UI cannot be proven by a unit test - this shows the HUD
+    /// at a fixed level, and optionally in its REFUSED state, so both can be screenshotted.
+    ///
+    /// Extracted from `init` because that body hit swiftlint's 50-line limit; the probe is also a
+    /// self-contained concern that has nothing to do with composing the app.
+    private static func installHUDProbeIfRequested(on launchDelegate: LaunchDelegate) {
+    if ProcessInfo.processInfo.environment["PUSHTEXT_HUD_PROBE"] == "1" {
+        let level = Double(ProcessInfo.processInfo.environment["PUSHTEXT_HUD_PROBE_LEVEL"] ?? "") ?? 0.6
+        launchDelegate.onLaunch = {
+            Task { @MainActor in
+                // Wait for the status item to exist: MenuBarExtra creates it after launch, and
+                // anchoring before it exists is what sent the first probe to the fallback.
+                try? await Task.sleep(for: .seconds(2))
+                // A long hold so the PULSED state can be screenshotted (#115). The pulse
+                // itself runs the same `onChange` path as production - only the hold differs -
+                // so this verifies the real animation rather than a forced flag.
+                let holdMs = Int(ProcessInfo.processInfo
+                    .environment["PUSHTEXT_HUD_PROBE_PULSE_MS"] ?? "") ?? 150
+                let hud = DictationHUDController(pulseHoldMilliseconds: holdMs)
+                hud.show(phase: .recording, onCancel: {}, onConfirm: {})
+                hud.update(phase: .recording, level: level)
+                dictationLog.info("HUD_PROBE showing level=\(level)")
+                if ProcessInfo.processInfo.environment["PUSHTEXT_HUD_PROBE_REFUSE"] == "1" {
+                    try? await Task.sleep(for: .milliseconds(400))
+                    hud.acknowledgeRefusal()
+                    dictationLog.info("HUD_PROBE refused (hold \(holdMs) ms)")
                 }
             }
         }
+    }
     }
 
     /// Headless proofs of each OS-touching capability, before any UI exists. Never returns when one
