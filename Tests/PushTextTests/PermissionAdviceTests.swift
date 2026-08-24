@@ -56,10 +56,50 @@ struct PermissionAdviceTests {
         #expect(advice?.settingsURL?.absoluteString.contains("Privacy_Accessibility") == true)
     }
 
-    @Test("Microphone routes to its own pane")
+    /// Uses `.denied`, not `.grantBroken`. This test asserted the BROKEN state routed to the
+    /// microphone pane until 2026-08-23, which encoded the defect: a broken microphone grant is
+    /// `AVAuthorizationStatus.notDetermined`, so there is no entry in that pane to act on. `.denied`
+    /// is the state where a Settings trip is genuinely the answer, and it still must not land the
+    /// user in the Accessibility list.
+    @Test("Microphone routes to its own pane, never to Accessibility")
     func microphoneRoutesToItsOwnPane() {
-        let advice = PermissionAdvice.forStatus(.grantBroken, of: .microphone)
+        let advice = PermissionAdvice.forStatus(.denied, of: .microphone)
         #expect(advice?.settingsURL?.absoluteString.contains("Privacy_Microphone") == true)
+    }
+
+    /// The microphone's two unmet states are ONE OS state, so they must offer the same escape.
+    ///
+    /// `SystemPermissionProbe.microphoneStatus` derives BOTH `needsFirstGrant` and `grantBroken`
+    /// from `AVAuthorizationStatus.notDetermined` - the latch is the only thing separating them, and
+    /// the latch is ours, not TCC's. `requestAccess(for:)` prompts whenever the status is
+    /// `.notDetermined`, so the app can ask in both cases. Sending a broken microphone grant to
+    /// System Settings instead is worse than a detour: with no TCC entry recorded, there is nothing
+    /// in that list to toggle.
+    @Test("A broken microphone grant can still be prompted for, because it is the same OS state")
+    func brokenMicrophoneStillPrompts() {
+        let first = PermissionAdvice.forStatus(.needsFirstGrant, of: .microphone)
+        let broken = PermissionAdvice.forStatus(.grantBroken, of: .microphone)
+
+        #expect(first?.canPromptInApp == true)
+        #expect(broken?.canPromptInApp == true,
+                "same AVAuthorizationStatus.notDetermined, so the same prompt is available")
+    }
+
+    /// Accessibility and PostEvent are the opposite case, and the asymmetry is the point.
+    ///
+    /// They have no prompt worth raising - `AXIsProcessTrustedWithOptions` only opens Settings with
+    /// less context than the row itself - so their recovery is the Settings pane in every unmet
+    /// state. Asserted so a later "make it consistent" edit cannot quietly hand them a button that
+    /// does nothing.
+    @Test("The keyboard permissions never claim an in-app prompt")
+    func keyboardPermissionsNeverPrompt() {
+        for permission in [Permission.accessibility, .postEvent] {
+            for status in [PermissionStatus.needsFirstGrant, .grantBroken, .denied] {
+                let advice = PermissionAdvice.forStatus(status, of: permission)
+                #expect(advice?.canPromptInApp == false, "\(permission)/\(status)")
+                #expect(advice?.settingsURL != nil, "\(permission)/\(status) has no way out")
+            }
+        }
     }
 
     /// An explicit denial is neither a first grant nor a break, and saying "try again" to someone

@@ -60,10 +60,34 @@ Authorities: `PLAN.md` (decisions + phases), `docs/research/` (the evidence behi
   instead of the text, so the delay is load-bearing by measurement. Evidence:
   docs/verification/task5-injection.md. Gaps: #27.)
 
-#6 - Permission probes + three-state recovery UX - S0
-  blocked-by: #3, #5 (nothing to probe for until they exist). Microphone, Accessibility, PostEvent.
-  Never Input Monitoring. Port TermTile's trusted/needsFirstGrant/grantBroken model and its tccutil
-  repairer. Authority: docs/research/04 sec 4, docs/research/05.
+#6 - Permission probes + three-state recovery UX - DONE
+  (2026-08-23: the probe and the menu rows shipped earlier; this closes the recovery half. One
+  defect fixed and one specified component deliberately NOT built.
+  The defect: SystemPermissionProbe derives BOTH needsFirstGrant and grantBroken for the microphone
+  from AVAuthorizationStatus.notDetermined - the latch that separates them is ours, not TCC's - and
+  requestAccess prompts whenever the status is .notDetermined. So the app can ask in both cases, by
+  construction. The menu instead sent a broken microphone grant to System Settings, where, with no
+  TCC entry recorded, there is nothing to act on. It now offers "Allow Again..." and prompts, while
+  keeping the different diagnosis in the copy. Accessibility and PostEvent are the opposite case -
+  their entry IS in the list, ticked and ineffective - so they keep the Settings route, and the
+  asymmetry is asserted in both directions so a later "make it consistent" edit cannot hand them a
+  button that does nothing.
+  NOT built: TCCPermissionRepairer. For the microphone it is unnecessary - a broken grant is
+  .notDetermined, so there is nothing to reset. For Accessibility and PostEvent it would make
+  recovery WORSE: resetting removes the entry, neither has a prompt the app can raise, and the user
+  must then re-ADD PushText with `+` rather than toggle an entry that was already there. That holds
+  regardless of privilege, so the sudo question never decides anything.
+  Measured, and reported as inconclusive rather than as a disproof: tccutil reset succeeded WITHOUT
+  sudo for all three services against a throwaway bundle id, which contradicts docs/research/04 sec
+  4.2 - but that id held no grants, so "Successfully reset" may be a no-op that never touched the
+  root-owned system database. The claim stands unverified in both directions. Trap found on the way:
+  tccutil validates the bundle id against LaunchServices BEFORE any privilege check, so an
+  unregistered id returns exit=64 / OSStatus -10814 for every service, which looks exactly like a
+  permission failure and is not one.
+  Evidence: docs/verification/task6-permission-recovery.md.)
+  Original note, blocked-by: #3, #5 (nothing to probe for until they exist). Microphone,
+  Accessibility, PostEvent. Never Input Monitoring. Port TermTile's trusted/needsFirstGrant/
+  grantBroken model and its tccutil repairer. Authority: docs/research/04 sec 4, docs/research/05.
 
 #7 - HUD: non-activating NSPanel over full-screen apps - DONE
   (2026-08-23: superseded by #46 and delivered in PR #50/#54/#56. DictationHUDPanel is a
