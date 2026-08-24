@@ -98,6 +98,10 @@ public actor FoundationModelsCleanup: CleanupProvider {
         guard let model else { throw NoModel() }
         // Spend the warmed session, then drop it, so the next utterance starts from a clean
         // transcript rather than inheriting this one.
+        //
+        // HOLDING it instead was measured and is WORSE: 6/6 slow with a mean of 4496 ms against
+        // 3744 ms for spending it (#94). Model residency is not tied to a live session, so the
+        // context-growth cost of holding one buys nothing.
         let session = warmSession ?? LanguageModelSession(model: model, instructions: instructions)
         warmSession = nil
         // `respond`, not `streamResponse`: nothing consumes partial cleanup - the text is injected
