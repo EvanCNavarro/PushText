@@ -35,7 +35,8 @@ Verified on `9f93969`: seven `.engine` gates exit 0, `swift build` green, 46 tes
 `swiftlint --strict` 0 violations in 14 files, packaged smoke OK.
 
 **Open work is GitHub issues, and the numbers are real.** `#N` in `.engine/BACKLOG.md` IS the issue
-number (ids ≥ 4). `.engine/checks/backlog-ids-resolve.sh` fails closed if that stops being true.
+number (ids ≥ 4). `.engine/checks/backlog-matches-github.sh` fails closed if that stops being
+true, and also if an issue closes while its backlog line still says `S0`.
 Backlog items 1–3 predate the migration and collide with PR numbers 1–3 — never cite them bare.
 
 ---

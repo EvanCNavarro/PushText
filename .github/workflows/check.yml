@@ -8,8 +8,8 @@ on:
 
 permissions:
   contents: read
-  # backlog-ids-resolve.sh lists issues. Without this the default token has no issues scope and the
-  # gate SKIPS - measured: it reported "could not list issues" and passed, which is a gate that
+  # backlog-matches-github.sh lists issues. Without this the default token has no issues scope and
+  # the gate SKIPS - measured: it reported "could not list issues" and passed, which is a gate that
   # only ever agrees with you.
   issues: read
 
@@ -70,8 +70,8 @@ jobs:
       # Fail-open without gh auth, so a fork PR cannot be blocked by it.
       - name: Cited docs exist
         run: .engine/checks/cited-docs-exist.sh
-      - name: Backlog ids resolve to issues
-        run: .engine/checks/backlog-ids-resolve.sh
+      - name: Backlog agrees with GitHub
+        run: .engine/checks/backlog-matches-github.sh
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Build
