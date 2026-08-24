@@ -684,3 +684,19 @@ that. The narrative for each lives in the issue.
   LaunchServices BEFORE touching TCC, so an id whose .app has been deleted cannot be reset at all -
   the cleanup needed the bundles recreated first.)
 
+#148 - The prompt and System Settings open together; the platform expects one then the other - DONE
+  (2026-08-24: Bobby saw the macOS dialog and System Settings appear at the same moment. #146 had
+  made resolvePermission do reset -> register -> open, so both fired.
+  RESEARCHED rather than assumed, two facts that decide the design. First, do not open Settings
+  yourself: the prompt already carries an "Open System Settings" button and there is no programmatic
+  route past it - "you can only ask" (Apple's AXIsProcessTrustedWithOptions docs; t8r.tech). Second,
+  the prompt fires ONCE - after the user answers, Deny included, macOS never shows it again, so from
+  then on Settings is the only route (jano.dev; gertrude.app).
+  So the button is sequential: first press resets a stale row if there is one, records that we asked,
+  and prompts - nothing else. A later press opens Settings, because a prompt-only press would do
+  visibly nothing. The flag is PERSISTED, since the once-only behaviour survives relaunch, and it is
+  recorded BEFORE prompting so a crash between the two cannot lose it.
+  Three plants caught: prompting and opening together (the exact report), prompting forever, and
+  never remembering. Four of #146's own tests had to change, and their premise is what changed -
+  they asserted reset -> prompt -> open, which is the redundancy being removed.)
+

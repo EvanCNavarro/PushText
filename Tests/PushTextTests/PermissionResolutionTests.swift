@@ -33,7 +33,9 @@ struct PermissionResolutionTests {
     private func actions(_ spy: Spy) -> AppActions {
         AppActions(repairer: spy,
                    requestAccessibilityTrust: { spy.trustPrompts += 1; spy.order.append("prompt") },
-                   openURL: { spy.opened.append($0); spy.order.append("open") })
+                   openURL: { spy.opened.append($0); spy.order.append("open") },
+                   hasRequestedTrust: { _ in false },
+                   recordRequestedTrust: { _ in })
     }
 
     /// THE bug. Resetting without registering leaves the pane empty.
@@ -43,8 +45,10 @@ struct PermissionResolutionTests {
         let advice = try! #require(PermissionAdvice.forStatus(.grantBroken, of: .accessibility))
         actions(spy).resolvePermission(advice)
 
-        #expect(spy.order == ["reset", "prompt", "open"],
-                "got \(spy.order) - the pane must not open before the app is registered")
+        // UPDATED by #148: the pane no longer opens alongside the prompt. The dialog carries its
+        // own "Open System Settings" button, and Bobby got both at once. The premise changed, not
+        // the assertion's standard - registration still has to happen before any Settings trip.
+        #expect(spy.order == ["reset", "prompt"], "got \(spy.order)")
         #expect(spy.resets == [[.accessibility]])
     }
 
@@ -57,7 +61,8 @@ struct PermissionResolutionTests {
 
         #expect(spy.resets.isEmpty, "nothing to reset on a first grant")
         #expect(spy.trustPrompts == 1, "without this the Accessibility list has no PushText row")
-        #expect(spy.order == ["prompt", "open"])
+        // #148: prompt only. macOS shows the pane from the dialog's own button.
+        #expect(spy.order == ["prompt"])
     }
 
     /// PostEvent shares the Accessibility pane and the same registration path.

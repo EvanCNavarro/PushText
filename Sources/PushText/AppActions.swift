@@ -60,11 +60,17 @@ final class AppActions {
                 dictationLog.error("tccutil reset failed exit=\(report.exitCode, privacy: .public)")
             }
         }
-        // Only the keyboard permissions. A denial is a decision already made, and the microphone
-        // has its own prompt - asking for Accessibility trust there would answer a different
-        // question than the one the row is about.
-        if advice.registersByPrompting {
+        // ONE thing per press, in the order macOS expects (#148).
+        //
+        // The prompt carries its own "Open System Settings" button, so opening the pane as well is a
+        // second copy of an affordance the dialog already provides - Bobby got both at once. And the
+        // prompt fires ONCE: after the user answers, Deny included, macOS never shows it again. So a
+        // later press has to become the Settings press, or it does visibly nothing.
+        if advice.registersByPrompting, let permission = advice.permission,
+           !hasRequestedTrust(permission) {
+            recordRequestedTrust(permission)
             requestAccessibilityTrust()
+            return
         }
         guard let url = advice.settingsURL else { return }
         openURL(url)
@@ -86,14 +92,24 @@ final class AppActions {
     /// Injected for the same reason: a test must not open System Settings on the developer's Mac.
     private let openURL: (URL) -> Void
 
+    /// Whether macOS has already been asked for this permission. The prompt fires ONCE - after the
+    /// user answers, Deny included, it never appears again - so a second press must do something
+    /// else or it does visibly nothing.
+    private let hasRequestedTrust: (Permission) -> Bool
+    private let recordRequestedTrust: (Permission) -> Void
+
     init(repairer: any PermissionRepairing = TCCPermissionRepairer(),
          requestAccessibilityTrust: @escaping () -> Void = {
              AccessibilityTrust.isTrusted(prompting: true)
          },
-         openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {
+         openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
+         hasRequestedTrust: @escaping (Permission) -> Bool = { TrustRequestLatch.wasRequested($0) },
+         recordRequestedTrust: @escaping (Permission) -> Void = { TrustRequestLatch.record($0) }) {
         self.repairer = repairer
         self.requestAccessibilityTrust = requestAccessibilityTrust
         self.openURL = openURL
+        self.hasRequestedTrust = hasRequestedTrust
+        self.recordRequestedTrust = recordRequestedTrust
     }
 
     /// Where history lives, so the two actions below agree on one path.
@@ -234,5 +250,23 @@ final class UpdateWatcher: NSObject, SPUUpdaterDelegate {
                              error: (any Error)?) {
         guard error != nil else { return }
         Task { @MainActor in self.onChange?(.failed) }
+    }
+}
+
+/// Remembers that macOS has been asked for a permission, because it will only ask once (#148).
+///
+/// Persisted rather than held in memory: the prompt's once-only behaviour survives relaunch, so a
+/// flag that did not would send the user back to a dialog macOS will never show again.
+enum TrustRequestLatch {
+    private static func key(_ permission: Permission) -> String {
+        "dev.ecn.apps.pushtext.trustRequested.\(permission)"
+    }
+
+    static func wasRequested(_ permission: Permission) -> Bool {
+        UserDefaults.standard.bool(forKey: key(permission))
+    }
+
+    static func record(_ permission: Permission) {
+        UserDefaults.standard.set(true, forKey: key(permission))
     }
 }
