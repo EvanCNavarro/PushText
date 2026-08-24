@@ -35,6 +35,21 @@ final class HotkeyController {
         }
     }
 
+    /// Silence the tap while the settings recorder is capturing (#128), then re-arm it.
+    ///
+    /// `stop()` fully tears the tap down - it invalidates the mach port - and `start()` rebuilds
+    /// from the binding the monitor still holds, so this is a genuine restart rather than a flag
+    /// the callback consults. A flag would have been cheaper and wrong: the callback runs on the
+    /// tap thread, and the edge it would have to drop is the very keypress being recorded.
+    func suspend() {
+        monitor.stop()
+        dictationLog.info("hotkey tap suspended for recording")
+    }
+
+    func resume() {
+        start()
+    }
+
     /// Stop the old tap BEFORE creating the new one. Two live taps on different modifiers would both
     /// deliver edges into the same state machine, and the second key would look like it was starting
     /// utterances the first one never finished.

@@ -52,6 +52,29 @@ public struct HotkeyBinding: Equatable, Hashable, Sendable {
     /// keyboards, and its system action cannot be suppressed — `TextInputSwitcher.app` handles the
     /// Globe key through `_CGSSetSymbolicHotKey` and never enters the event-tap chain at all, so an
     /// event tap cannot swallow it. See docs/research/04 sec 1 and sec 2.
+    /// The binding a raw `flagsChanged` event just pressed DOWN, or nil (#128).
+    ///
+    /// Two conditions, and a recorder that drops either one feels broken in a different way:
+    ///
+    /// 1. **The key must be one we can bind.** `selectable` is the whole offer; anything else is
+    ///    refused rather than stored, or the settings UI promises a binding the event tap will never
+    ///    honour.
+    /// 2. **The key must be going DOWN.** `flagsChanged` fires on the way down and again on the way
+    ///    up, and the direction is only readable from the flags: the key's own device bit is set
+    ///    while it is held and clear once it is released. Capturing the release would record the key
+    ///    the user just let go of while reaching for the next one.
+    ///
+    /// The bit tested is THIS key's `deviceMask`, never "are the flags non-empty" - holding Right
+    /// Control while tapping Right Option must not record Right Option on the strength of Control's
+    /// bit.
+    ///
+    /// Takes integers rather than an `NSEvent` so the decision is testable without a keyboard, a
+    /// window, or AppKit in Core.
+    public static func pressed(keyCode: Int64, rawModifierFlags: UInt64) -> HotkeyBinding? {
+        guard let binding = selectable.first(where: { $0.keyCode == keyCode }) else { return nil }
+        return (rawModifierFlags & binding.deviceMask) != 0 ? binding : nil
+    }
+
     public static let selectable: [HotkeyBinding] = [
         .rightOption, .rightCommand, .rightControl, .rightShift, .leftOption
     ]

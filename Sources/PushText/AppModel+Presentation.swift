@@ -23,6 +23,18 @@ extension AppModel {
         }
     }
 
+    /// `statusText`, except nil when there is nothing to report (#128).
+    ///
+    /// The menu used to carry a State row permanently, and permanently it said "Ready" - you cannot
+    /// open the menu mid-dictation except in the latched mode, so the row was a constant wearing the
+    /// clothes of a readout. Deleting it was the wrong fix: `MenuContent` is the ONLY surface in the
+    /// app that shows a `DictationFailure`, so "Preparing model...", "Permission needed" and
+    /// "Didn't catch that" would have had nowhere left to appear. Hiding it while idle keeps all six
+    /// messages and removes the noise.
+    var activityText: String? {
+        machine.state == .idle ? nil : statusText
+    }
+
     static func describe(_ failure: DictationFailure) -> String {
         switch failure {
         case .permissionDenied: "Permission needed"
