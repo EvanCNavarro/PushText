@@ -50,6 +50,34 @@ struct AppModelTests {
         #expect(model.menuBarSymbol == "waveform")
     }
 
+    /// The menu row is hidden while idle (#128), because "Ready" is what it said every time anyone
+    /// opened the menu - you cannot be mid-dictation and clicking the menu bar, except in the
+    /// latched mode.
+    @Test("Idle reports no activity, so the menu shows no State row")
+    func idleHasNoActivity() {
+        let model = makeModel()
+        #expect(model.machine.state == .idle)
+        #expect(model.activityText == nil)
+    }
+
+    /// Hiding the row must not hide a FAILURE. `MenuContent` is the only surface in the app that
+    /// shows a `DictationFailure` - the HUD has no phase for one - so if any of these went nil the
+    /// message would have nowhere left to appear.
+    @Test("Every non-idle state still reports activity, failures included")
+    func everyNonIdleStateReportsActivity() {
+        let states: [DictationState] = [
+            .arming, .recording, .transcribing, .cleaning, .injecting,
+            .failed(.permissionDenied), .failed(.noSpeechDetected), .failed(.modelNotReady),
+            .failed(.transcriptionFailed), .failed(.injectionFailed), .failed(.cancelled)
+        ]
+        for state in states {
+            let model = AppModel(engine: MockTranscriptionEngine(),
+                                 machine: DictationMachine(state: state))
+            #expect(model.activityText == model.statusText, "\(state) lost its message")
+            #expect(model.activityText?.isEmpty == false, "\(state) reports nothing")
+        }
+    }
+
     @Test("Every dictation state produces a non-empty, distinct-enough status string")
     func statusTextCoversEveryState() {
         let states: [DictationState] = [

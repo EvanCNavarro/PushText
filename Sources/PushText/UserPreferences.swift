@@ -32,6 +32,21 @@ final class UserPreferences {
         }
     }
 
+    /// True while the settings recorder is waiting for a key (#128).
+    ///
+    /// It exists to SILENCE the tap. The tap is global and does not care that a settings field has
+    /// focus, so without this, pressing Right Option to rebind would also start a dictation - the
+    /// user would end up recording their own act of changing the setting.
+    var isRecordingHotkey: Bool = false {
+        didSet {
+            guard isRecordingHotkey != oldValue else { return }
+            onRecordingChange?(isRecordingHotkey)
+        }
+    }
+
+    /// Set by the composition root, which owns the tap. Suspends it while `isRecordingHotkey`.
+    var onRecordingChange: ((Bool) -> Void)?
+
     /// Set by the composition root, which owns the tap. A closure rather than a reference, so this
     /// type never needs to know what a `CGEventTapHotkeyMonitor` is.
     var onHotkeyChange: ((HotkeyBinding) -> Void)?

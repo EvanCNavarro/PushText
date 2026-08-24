@@ -493,3 +493,35 @@ that. The narrative for each lives in the issue.
   distinction - inflection of a word that IS present, versus substitution of a word that is not - is
   the whole issue, and closing it needs a stemmer. LOW priority: the fallback is the raw transcript,
   which is already punctuated and capitalised.
+
+## Requested 2026-08-24 after 0.2.0 shipped
+
+#128 - Hotkey as a click-to-record field, and "State: Ready" may be noise - DONE
+  (2026-08-24: both, from Bobby's screenshots of the shipped build.
+  The recorder does NOT reopen #104. That issue rejected TermTile's recorder because it captures
+  arbitrary key+modifier CHORDS, and chords would trade away the bare-modifier capability that keeps
+  dictation alive under Secure Input. This one accepts only HotkeyBinding.selectable and beeps at
+  anything else, so the domain constraint is untouched and only the gesture changed. It cannot reuse
+  TermTile's capture code either - a bare modifier produces no keyDown, only flagsChanged - so the
+  decision moved into Core as HotkeyBinding.pressed(keyCode:rawModifierFlags:), which is testable
+  against integers.
+  A defect was designed out rather than shipped: the event tap is global and does not care that a
+  settings field has focus, so pressing Right Option to rebind would ALSO have started a dictation.
+  The recorder announces capture in both directions and the composition root suspends the tap. A
+  real teardown, not a flag - a flag would be read on the tap thread, and the edge it would have to
+  drop is the very keypress being recorded.
+  "Ready" earned the criticism; deleting the row did not. MenuContent is the ONLY surface in the app
+  that renders a DictationFailure - HUDPhase has no failure case - so deleting it would have removed
+  the only home for six messages including "Preparing model..." and "Permission needed". Hidden
+  while idle instead, with a test driving all eleven non-idle states to prove none lost its message.
+  ImageRenderer CANNOT rasterise an NSViewRepresentable - measured, the field came out as the same
+  orange placeholder it gives an indeterminate ProgressView - so the snapshot case was removed
+  rather than left looking like a render, and PUSHTEXT_MENU_PROBE now hosts the real MenuContent in
+  a window for screencapture. Rendering earned its keep immediately: the first capture showed the
+  field sitting below its own label, because RecorderLine had copied .firstTextBaseline from its
+  siblings and an NSView has no text baseline. Nothing in review would have caught that.
+  NOT verified: no human has pressed a key at the recorder. The capture path is driven by
+  synthesized NSEvents, which exercise the view's logic but not delivery of a real flagsChanged to a
+  first responder inside a MenuBarExtra popover.
+  Evidence: docs/verification/task128-hotkey-recorder.md.)
+

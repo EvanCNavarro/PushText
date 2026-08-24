@@ -123,6 +123,12 @@ struct PushTextApp: App {
         model.preferences.onHotkeyChange = { [controller] binding in
             controller.rebind(to: binding)
         }
+        // Silence the tap while the recorder waits for a key (#128). The tap is global and does not
+        // care that a settings field has focus, so without this, pressing Right Option to rebind
+        // would ALSO start a dictation - the user recording their own act of changing the setting.
+        model.preferences.onRecordingChange = { [controller] isRecording in
+            if isRecording { controller.suspend() } else { controller.resume() }
+        }
 
         launchDelegate.onLaunch = { Self.requestMicrophone(for: model) }
 
@@ -130,6 +136,37 @@ struct PushTextApp: App {
         // at a fixed level so it can be screenshotted and judged. Deliberately NOT animated: a
         // moving demo would flatter the design and hide what a real, mostly-quiet level looks like.
         Self.installHUDProbeIfRequested(on: launchDelegate)
+        Self.installMenuProbeIfRequested(on: launchDelegate, model: model, actions: actions)
+    }
+
+    /// Visual verification hook for the MENU (#128).
+    ///
+    /// The menu cannot be judged from a snapshot test: `ImageRenderer` will not rasterise an
+    /// `NSViewRepresentable`, and the hotkey recorder is one - it renders as the same orange
+    /// placeholder `ImageRenderer` gives an indeterminate `ProgressView`. Measured, not assumed.
+    ///
+    /// So the real view is hosted in an ordinary window instead, where the AppKit view draws
+    /// itself properly and `screencapture -l<windowID>` can take it. This is the SAME
+    /// `MenuContent` the menu bar shows, with the same model - not a mock-up of it.
+    private static func installMenuProbeIfRequested(on launchDelegate: LaunchDelegate,
+                                                    model: AppModel,
+                                                    actions: AppActions) {
+        guard ProcessInfo.processInfo.environment["PUSHTEXT_MENU_PROBE"] == "1" else { return }
+        launchDelegate.onLaunch = {
+            Task { @MainActor in
+                let window = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 320, height: 640),
+                                      styleMask: [.titled, .closable],
+                                      backing: .buffered,
+                                      defer: false)
+                window.title = "PushText menu (probe)"
+                window.contentView = NSHostingView(rootView: MenuContent(model: model,
+                                                                         actions: actions))
+                window.orderFrontRegardless()
+                dictationLog.info("MENU_PROBE window=\(window.windowNumber)")
+                print("MENU_PROBE window=\(window.windowNumber)")
+                fflush(stdout)
+            }
+        }
     }
 
     /// Visual verification hook (#46, #115). UI cannot be proven by a unit test - this shows the HUD

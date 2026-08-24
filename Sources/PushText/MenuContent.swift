@@ -63,16 +63,23 @@ struct MenuContent: View {
                 }
             }
 
-            SectionCard("STATUS") {
-                LabeledLine(label: "State", value: model.statusText)
-                PickerLine(label: "Hotkey",
-                           selection: Binding(get: { model.preferences.hotkeyBinding },
-                                              set: { model.preferences.hotkeyBinding = $0 }))
+            // Shown only when it has something to say (#128). Idle is the state you are in
+            // whenever you open this menu, so a permanent row read "Ready" and taught nothing -
+            // but this is the app's only surface for a DictationFailure, so the row stays for the
+            // six messages that ARE worth interrupting for.
+            if let activity = model.activityText {
+                SectionCard("STATUS") {
+                    LabeledLine(label: "State", value: activity)
+                }
             }
 
             SectionCard("DICTATE") {
                 LabeledLine(label: "Hold", value: "Speak, release to insert")
                 LabeledLine(label: "Double-press", value: "Hands-free, press again to end")
+                RecorderLine(label: "Hotkey",
+                             current: model.preferences.hotkeyBinding,
+                             onRecordingChange: { model.preferences.isRecordingHotkey = $0 },
+                             onCapture: { model.preferences.hotkeyBinding = $0 })
             }
 
             SectionCard("CLEANUP") {
@@ -135,28 +142,34 @@ struct PermissionRow: View {
 /// `keyDown`/`keyUp` while `flagsChanged` keeps flowing - so a bare modifier still dictates inside a
 /// password field where a chord dies silently. Offering arbitrary combos would quietly trade that
 /// away, and `selectable` already enumerates exactly the keys the event tap can observe.
-private struct PickerLine: View {
+/// The dictation key as a click-to-record field, matching TermTile's shortcut control.
+///
+/// Replaced a `Picker` (#128). A dropdown lists five names and makes you read them; a recorder lets
+/// you answer "which key?" with the key itself, which is also the only way to find out whether the
+/// one you want is even bindable.
+private struct RecorderLine: View {
     let label: String
-    @Binding var selection: HotkeyBinding
+    let current: HotkeyBinding
+    let onRecordingChange: (Bool) -> Void
+    let onCapture: (HotkeyBinding) -> Void
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Tokens.space) {
+        // `.center`, not `.firstTextBaseline` like the sibling rows: an NSView has no text
+        // baseline for SwiftUI to align to, and asking for one dropped the field visibly below its
+        // own label. Caught by rendering it, not by reading it.
+        HStack(alignment: .center, spacing: Tokens.space) {
             Text(label)
                 .font(Tokens.body)
                 .foregroundStyle(Tokens.muted)
             Spacer(minLength: Tokens.space)
-            Picker("", selection: $selection) {
-                ForEach(HotkeyBinding.selectable, id: \.keyCode) { binding in
-                    Text(binding.name).tag(binding)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .controlSize(.small)
-            .fixedSize()
+            HotkeyRecorder(current: current,
+                           onRecordingChange: onRecordingChange,
+                           onCapture: onCapture)
+                .frame(width: 132, height: 22)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityLabel(Text(label))
+        .accessibilityValue(Text(current.name))
     }
 }
 
