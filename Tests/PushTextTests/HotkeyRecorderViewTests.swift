@@ -1,6 +1,5 @@
 import Testing
 import AppKit
-import CoreGraphics
 import Carbon.HIToolbox
 @testable import PushText
 import PushTextCore
@@ -10,24 +9,7 @@ import PushTextCore
 /// `HotkeyBinding.pressed` is tested in Core against integers; this covers the part that integers
 /// cannot: that the view only listens while recording, that it tells the composition root to
 /// silence the tap, and that it refuses what it cannot bind instead of storing it.
-///
-/// REQUIRES A WINDOW SERVER, and skips itself without one. Constructing an `NSView` initialises
-/// AppKit, which on a machine with no GUI session blocks waiting for a WindowServer connection that
-/// never arrives - and because Swift Testing runs one process, that wedges the WHOLE suite, not just
-/// this file. Measured: the first CI run after this repository went public started all 36 suites and
-/// then completed ZERO of 192 tests in 14 minutes, including pure-Foundation ones that touch no
-/// AppKit at all. The identical suite had passed in 70 s on the private-repo runner minutes earlier.
-///
-/// `CGSessionCopyCurrentDictionary()` returns nil without a GUI session, which is the same condition
-/// AppKit needs - so this gates on the actual requirement rather than on `CI`, and would also skip
-/// correctly over SSH or from a launchd daemon.
-/// Outside the suite on purpose: a trait that reads a static on the very type it is attached to is
-/// a "circular reference resolving attached macro" and does not compile.
-enum GUISession {
-    static var isAvailable: Bool { CGSessionCopyCurrentDictionary() != nil }
-}
-
-@Suite("Hotkey recorder view", .enabled(if: GUISession.isAvailable))
+@Suite("Hotkey recorder view")
 @MainActor
 struct HotkeyRecorderViewTests {
 
