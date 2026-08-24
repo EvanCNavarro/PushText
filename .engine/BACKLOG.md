@@ -648,3 +648,15 @@ that. The narrative for each lives in the issue.
   costume - I did look, at the wrong list. It surfaced only because I listed workflow runs WITH
   DURATIONS while chasing something else, and a column of 12-second failures stood out.)
 
+#144 - The Test step intermittently wedges: every suite starts, none completes - S0
+  blocked-by: none, but it needs an OCCURRENCE to study and the last two were cancelled. Twice on
+  2026-08-24, identical signature: 192 started / 0 completed cancelled at 912s, and 188 started / 0
+  completed cancelled at ~1100s, against a healthy 70-140s for all 313 tests. Not a slow test - zero
+  completions includes pure-Foundation suites that finish in milliseconds locally, so the process
+  wedges before any test body ends. Not the AppKit tests: that was my first diagnosis and the next CI
+  log disproved it (the suite passed in 0.247s on a run where the gate I added never fired), and the
+  gate was reverted rather than kept. Roughly 2 in 20 runs; a re-run of the same id clears it, which
+  is what makes it easy to paper over. Cause UNKNOWN, and both observations are cancellations rather
+  than natural endings, so even "it would hang forever" is unestablished.
+  TRIGGER: the next occurrence - let it run to the job timeout instead of cancelling.
+
