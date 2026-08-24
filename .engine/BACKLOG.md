@@ -555,3 +555,29 @@ that. The narrative for each lives in the issue.
   well-formed, verified by fetching it as an unauthenticated client - but the install itself,
   including the EdDSA check inside the running app, has not been observed.)
 
+#134 - v0.2.0 crashes on launch: Bundle.module falls back to a build-machine path - DONE
+  (2026-08-24: the released app died the moment the menu opened - EXC_BREAKPOINT in
+  NSBundle.module's initializer, through Brand.mark -> AppIdentityCard -> MenuContent.body. SwiftPM
+  generates Bundle.module as a static let that fatalErrors when it cannot find its bundle, and it
+  looks in exactly two places: Bundle.main.bundleURL and an ABSOLUTE BUILD PATH baked in at compile
+  time. The shipped binary carried /Users/runner/work/... So EVERY packaged build since the first
+  release was broken for anyone who did not compile it themselves, v0.1.0 included; it went
+  unnoticed because the only installs were on the machine that built them.
+  Isolated by measurement: 0.4.2 without the resource copy exits 133 (the shipped crash), 0.4.3
+  without it exits 124 surviving on the fallback icon, and 0.4.3 with it survives, signs strictly and
+  shows the real mark. So MacFaceKit 0.4.3 is what stops the crash - it replaces Bundle.module with a
+  total lookup, which also resurrects Brand's own fallback, dead code until then because the process
+  trapped before the guard could run.
+  Placement was measured three ways: at the .app root Bundle.module finds it but codesign --strict
+  rejects the app; as a .bundle in Contents/Resources it signs but SwiftPM never looks there and the
+  flat bundles are "unrecognized" anyway; only the files themselves in Contents/Resources satisfy
+  both. One trap cost an hour - SwiftPM leaves those files read-only, cp preserves it, xattr -cr then
+  failed with EACCES and set -e killed the build before it signed, which looked exactly like a
+  signing bug and never was.
+  WHY THE GUARDS MISSED IT, and the useful lesson: the release workflow's smoke step runs on the
+  runner, where the baked path EXISTS. A smoke test that runs on the build machine cannot detect a
+  build-machine dependency, by construction. build-app.sh now fails CLOSED if any SwiftPM resource is
+  absent from the app, planted and confirmed.
+  Verified on the PUBLISHED v0.2.1: downloaded, run on a Mac that never built it, exit 124, menu
+  rendered, 0 new crash reports, and no /Users/runner string in the binary at all.)
+

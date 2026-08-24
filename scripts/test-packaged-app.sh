@@ -102,7 +102,27 @@ fi
 # Regression guard (TRAP-4): runtime code may only touch Bundle.module inside a DEBUG-only fallback.
 # Comments are ignored; release code must resolve from Bundle.main. The awk is #if-nesting aware, so
 # a Bundle.module inside `#if DEBUG` -> `#if os(macOS)` is still correctly seen as DEBUG-guarded.
-if ! find Sources -name '*.swift' -type f -print0 | xargs -0 awk '
+#
+# SCOPE WIDENED 2026-08-24 to include first-party DEPENDENCY sources, and that widening is the whole
+# point. This guard existed, was correct, and scanned `Sources` only - our own code. The Bundle.module
+# that shipped a launch crash in v0.2.0 was in MacFaceKit, a dependency, so the guard never looked at
+# it (#134). A trap the project had already named, missed by one directory.
+#
+# Limited to 400faces checkouts: third-party packages are not ours to fix, and failing on Sparkle's
+# internals would make this permanently red and therefore ignored.
+# The checkout's own git remote is NOT usable here: SwiftPM points it at a LOCAL MIRROR
+# (.build/repositories/MacFaceKit-a238d2cc), so matching on it silently covered nothing - the first
+# version of this widening printed "covering: Sources" and looked like it had worked. Package.resolved
+# carries the real URL, so read the repository names out of that instead.
+GUARD_PATHS="Sources"
+for REPO in $(grep -oE '"location"[^"]*"[^"]*400faces/[^"]+"' Package.resolved 2>/dev/null \
+		| sed -E 's|.*400faces/||; s|\.git"$||; s|"$||'); do
+	if [ -d ".build/checkouts/$REPO/Sources" ]; then
+		GUARD_PATHS="$GUARD_PATHS .build/checkouts/$REPO/Sources"
+	fi
+done
+echo "test-packaged-app: Bundle.module guard covering: $GUARD_PATHS" >&2
+if ! find $GUARD_PATHS -name '*.swift' -type f -print0 | xargs -0 awk '
 	FNR == 1 {
 		depth = 0
 		debugDepth = 0
