@@ -99,10 +99,9 @@ public enum CleanupDriftGuard {
         // to a dictated question - "Paris" is not in "what is the capital of France".
         var available = multiset(of: rawTokens)
         for token in cleanTokens where !functionWords.contains(token) {
-            guard let remaining = available[token], remaining > 0 else {
+            guard consume(token, from: &available) else {
                 return .rejected(.ungroundedContent(token: token))
             }
-            available[token] = remaining - 1
         }
 
         // 4. Similarity last: most expensive, least specific, and only for inputs long enough for
@@ -186,6 +185,67 @@ public enum CleanupDriftGuard {
         for (value, word) in ordinals.enumerated() { map[word] = String(value) }
         return map
     }()
+
+    /// Spends one raw token to ground one cleaned token, exactly or by inflection (#73).
+    ///
+    /// The exact match is tried first and is unchanged. Only when it fails does an inflectional
+    /// variant count, which keeps the relaxation strictly additive: nothing that was grounded before
+    /// stops being grounded, and the widening is confined to the miss path.
+    ///
+    /// Measured need. In shadow mode over 20 real transcripts x 3 model runs, after the numeral fix
+    /// 4 of 60 runs still rejected, and one was not drift: `"fails"` -> `"fail"`, subject-verb
+    /// agreement against a plural subject (docs/verification/task68-cleanup-shadow-mode.md). That is
+    /// a correction of a word that IS present, and comparing surface tokens cannot see the
+    /// difference between it and a guess.
+    ///
+    /// The token is still CONSUMED, so one raw word cannot ground two cleaned words. Without that,
+    /// "the request" would ground "requests requests".
+    private static func consume(_ token: String, from available: inout [String: Int]) -> Bool {
+        if let remaining = available[token], remaining > 0 {
+            available[token] = remaining - 1
+            return true
+        }
+        for (candidate, remaining) in available
+        where remaining > 0 && isInflectionPair(token, candidate) {
+            available[candidate] = remaining - 1
+            return true
+        }
+        return false
+    }
+
+    /// True when one token is the other plus a single inflectional ending (#73).
+    ///
+    /// Stated as a RELATION rather than a canonical stem, and the difference is not stylistic. A
+    /// stem-key version of this shipped for about an hour and was wrong: `"building"` reduced to
+    /// `"build"` while `"build"` itself reduced to `"buil"` via the `-d` rule, so the two forms of
+    /// one word landed on different keys and did not match. Caught by driving the real model, which
+    /// produced exactly that pair. A relation cannot have that defect - it compares the two tokens
+    /// actually present and never invents an intermediate form.
+    ///
+    /// It also means nonsense stems cost nothing: `"agreed"` minus `-ed` is `"agre"`, which is not a
+    /// word and therefore never appears in a transcript to be matched against.
+    ///
+    /// Deliberately NOT a general stemmer. A Porter-style stemmer is a large surface whose aggressive
+    /// steps collapse words that mean different things, and this runs on the path that decides
+    /// whether to trust a language model's rewrite - a false MATCH here lets invention through, which
+    /// is the failure the whole guard exists to prevent.
+    ///
+    /// Two properties do the safety work:
+    ///
+    /// - **The base must be at least 4 characters.** Measured over `/usr/share/dict/words`: allowing
+    ///   shorter bases merges 833 further pairs, and they are not all inflections - `an`/`and`,
+    ///   `ai`/`aid`, `ad`/`as` and `ami`/`amid` are distinct words. The floor also refuses genuine
+    ///   pairs like `act`/`acting`, and that is the accepted trade: a refusal costs the user the raw
+    ///   transcript, a false merge costs them text they never said.
+    /// - **Only true inflections count**, never derivational endings. `-ly`, `-er` and `-ness` change
+    ///   the word's job in the sentence; `-s`, `-es`, `-ed`, `-d` and `-ing` do not. Sampled 40 of
+    ///   the 7,356 dictionary pairs this relation admits: 39 are ordinary inflections.
+    static func isInflectionPair(_ lhs: String, _ rhs: String) -> Bool {
+        guard lhs != rhs else { return true }
+        let (base, longer) = lhs.count < rhs.count ? (lhs, rhs) : (rhs, lhs)
+        guard base.count >= 4 else { return false }
+        return ["s", "es", "ed", "d", "ing"].contains { longer == base + $0 }
+    }
 
     private static func count(of set: Set<String>, in tokens: [String]) -> Int {
         tokens.reduce(0) { $0 + (set.contains($1) ? 1 : 0) }
