@@ -660,3 +660,27 @@ that. The narrative for each lives in the issue.
   than natural endings, so even "it would hang forever" is unestablished.
   TRIGGER: the next occurrence - let it run to the job timeout instead of cancelling.
 
+#146 - Reset leaves an empty Accessibility list: the app never registers itself - DONE
+  (2026-08-24: Bobby opened the pane after pressing Reset and PushText was not in it - twenty other
+  apps, nothing to switch on. The Accessibility list contains apps that have REQUESTED the
+  permission, and PushText never asked. PermissionAdvice said so and drew the wrong conclusion:
+  "no programmatic prompt worth using ... shows a dialog that just sends the user to Settings
+  anyway". The prompt is not merely a dialog, it is the REGISTRATION step - and #136's Reset made it
+  worse by removing the only row that existed.
+  Measured on a throwaway bundle id with no human involved: no row before, prompt, then
+  kTCCServiceAccessibility|dev.ecn.apps.pushtext-trustexp|0 - registered, not allowed. Read from the
+  TCC database rather than from the Settings UI. The FIRST attempt proved nothing: run from the
+  terminal it said trustedBefore=true, because TCC attributes to the responsible process and the
+  binary inherited iTerm's grant (#44); launching the packaged app with open(1) gives
+  trustedBefore=false and a real prompt.
+  resolvePermission is now reset -> register -> open, and the order is asserted: opening the pane
+  before registering lands the user somewhere with nothing to do. A first grant registers too (there
+  is nothing to reset, but the list is empty without it); a denial does neither, because the user
+  answered; the microphone keeps its own prompt. Three plants caught, including the exact defect and
+  the wrong order.
+  COST, recorded because it was mine: cleaning up two junk TCC rows my own probes created also
+  removed the real dev.ecn.apps.pushtext Accessibility grant. The other 36 Accessibility rows and
+  the Microphone grant were untouched. Also re-learned that tccutil resolves a bundle id through
+  LaunchServices BEFORE touching TCC, so an id whose .app has been deleted cannot be reset at all -
+  the cleanup needed the bundles recreated first.)
+

@@ -47,16 +47,27 @@ final class AppActions {
             Task { _ = await AVAudioEngineCapture.requestMicrophoneAccess() }
             return
         }
-        // Clear the stale row BEFORE opening Settings, so the pane the user lands on no longer
-        // lists a copy of PushText that cannot be switched back on (#136). Reported, not assumed:
-        // a refused reset must not leave the user believing they have a clean slate.
+        // RESET, then REGISTER, then OPEN - and the middle step is the one that was missing (#146).
+        //
+        // Clearing the stale row leaves the Accessibility list with no PushText in it, because that
+        // list contains apps which have REQUESTED the permission. Opening the pane at that point
+        // shows the user twenty other apps and nothing to switch on. Bobby hit exactly that.
+        //
+        // Prompting is the registration: it puts a fresh row back, bound to the CURRENT code
+        // identity, which is the entire reason the stale one was cleared.
         if advice.repairs, let permission = advice.permission {
             for report in repairer.reset([permission]) where !report.succeeded {
                 dictationLog.error("tccutil reset failed exit=\(report.exitCode, privacy: .public)")
             }
         }
+        // Only the keyboard permissions. A denial is a decision already made, and the microphone
+        // has its own prompt - asking for Accessibility trust there would answer a different
+        // question than the one the row is about.
+        if advice.registersByPrompting {
+            requestAccessibilityTrust()
+        }
         guard let url = advice.settingsURL else { return }
-        NSWorkspace.shared.open(url)
+        openURL(url)
     }
 
     /// Clears this app's stale TCC rows. Injectable so tests never shell out to `tccutil`, which
@@ -69,8 +80,20 @@ final class AppActions {
     /// teaches the user to ignore dots. See `MacFaceKit.UpdateAvailability`.
     var updateAvailability: UpdateAvailability = .unknown
 
-    init(repairer: any PermissionRepairing = TCCPermissionRepairer()) {
+    /// Asks macOS for Accessibility trust, which is ALSO what registers this app so the pane has a
+    /// row to switch on (#146). Injected so tests never raise a real system dialog.
+    private let requestAccessibilityTrust: () -> Void
+    /// Injected for the same reason: a test must not open System Settings on the developer's Mac.
+    private let openURL: (URL) -> Void
+
+    init(repairer: any PermissionRepairing = TCCPermissionRepairer(),
+         requestAccessibilityTrust: @escaping () -> Void = {
+             AccessibilityTrust.isTrusted(prompting: true)
+         },
+         openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {
         self.repairer = repairer
+        self.requestAccessibilityTrust = requestAccessibilityTrust
+        self.openURL = openURL
     }
 
     /// Where history lives, so the two actions below agree on one path.

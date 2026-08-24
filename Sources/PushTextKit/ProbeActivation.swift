@@ -46,6 +46,7 @@ public enum ProbeActivation {
         ("PUSHTEXT_CLEANUP_PROBE", [
             "PUSHTEXT_CLEANUP_PROBE_TEXT"
         ]),
+        ("PUSHTEXT_TRUST_PROBE", []),
         ("PUSHTEXT_MENU_PROBE", ["PUSHTEXT_MENU_PROBE_PERMISSION", "PUSHTEXT_MENU_PROBE_UPDATE"]),
         ("PUSHTEXT_HUD_PROBE", [
             "PUSHTEXT_HUD_PROBE_LEVEL"

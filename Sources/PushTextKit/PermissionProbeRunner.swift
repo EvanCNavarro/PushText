@@ -10,6 +10,31 @@ import PushTextCore
 /// Activated by `PUSHTEXT_PERMISSION_PROBE=1`. Exits non-zero when anything is not granted, so it
 /// is usable as a gate - but note the honest limit: run from a terminal-parented process it reports
 /// the grant that was INHERITED from the terminal, not the app's own (#44).
+/// Asks macOS for Accessibility trust and reports what happened (#146).
+///
+/// Separate from the read-only probe on purpose: this one has a SIDE EFFECT. It raises the system
+/// dialog and registers this app in the Accessibility list, which is the behaviour under test - the
+/// claim that prompting is what puts a row there cannot be checked by reading anything.
+public enum AccessibilityTrustProbe {
+    public static var isRequested: Bool {
+        ProcessInfo.processInfo.environment["PUSHTEXT_TRUST_PROBE"] == "1"
+    }
+
+    public static func runAndExit() -> Never {
+        let before = AccessibilityTrust.isTrusted(prompting: false)
+        print("TRUST_PROBE trustedBefore=\(before)")
+        fflush(stdout)
+
+        let after = AccessibilityTrust.isTrusted(prompting: true)
+        print("TRUST_PROBE prompted=true trustedAfter=\(after)")
+        // false right after prompting is NORMAL - the user has not answered yet. What the run
+        // proves is whether the app now APPEARS in System Settings, which only a human can confirm.
+        print("TRUST_PROBE now look in System Settings > Privacy & Security > Accessibility")
+        fflush(stdout)
+        exit(0)
+    }
+}
+
 public enum PermissionProbeRunner {
     public static var isRequested: Bool {
         ProcessInfo.processInfo.environment["PUSHTEXT_PERMISSION_PROBE"] == "1"
