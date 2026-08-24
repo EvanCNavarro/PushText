@@ -65,7 +65,9 @@ struct MenuContent: View {
 
             SectionCard("STATUS") {
                 LabeledLine(label: "State", value: model.statusText)
-                LabeledLine(label: "Hotkey", value: "Right Option")
+                PickerLine(label: "Hotkey",
+                           selection: Binding(get: { model.preferences.hotkeyBinding },
+                                              set: { model.preferences.hotkeyBinding = $0 }))
             }
 
             SectionCard("DICTATE") {
@@ -75,8 +77,8 @@ struct MenuContent: View {
 
             SectionCard("CLEANUP") {
                 ToggleLine(label: "Tidy transcripts",
-                           isOn: Binding(get: { model.cleanupEnabled },
-                                         set: { model.cleanupEnabled = $0 }))
+                           isOn: Binding(get: { model.preferences.cleanupEnabled },
+                                         set: { model.preferences.cleanupEnabled = $0 }))
                 // The cost is stated because the choice is only informed if the user knows what
                 // they are buying. These are measured numbers (#94), not a hedge: half of all
                 // dictations pay a ~3.2 s model load, and the rest are near-instant.
@@ -125,6 +127,39 @@ struct PermissionRow: View {
 }
 
 /// A label/value pair on one row, matching the settings lines in TermTile's panel.
+/// The hotkey chooser (#104).
+///
+/// A picker over `HotkeyBinding.selectable`, NOT a TermTile-style combo recorder. PushText binds a
+/// bare held modifier, and PLAN.md 2.2 records why that is not interchangeable with a chord:
+/// `RegisterEventHotKey` cannot express a bare modifier at all, and Secure Input filters
+/// `keyDown`/`keyUp` while `flagsChanged` keeps flowing - so a bare modifier still dictates inside a
+/// password field where a chord dies silently. Offering arbitrary combos would quietly trade that
+/// away, and `selectable` already enumerates exactly the keys the event tap can observe.
+private struct PickerLine: View {
+    let label: String
+    @Binding var selection: HotkeyBinding
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.space) {
+            Text(label)
+                .font(Tokens.body)
+                .foregroundStyle(Tokens.muted)
+            Spacer(minLength: Tokens.space)
+            Picker("", selection: $selection) {
+                ForEach(HotkeyBinding.selectable, id: \.keyCode) { binding in
+                    Text(binding.name).tag(binding)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            .fixedSize()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel(Text(label))
+    }
+}
+
 private struct ToggleLine: View {
     let label: String
     @Binding var isOn: Bool

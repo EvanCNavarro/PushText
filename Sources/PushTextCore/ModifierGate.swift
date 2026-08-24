@@ -16,7 +16,7 @@ import Foundation
 ///
 /// Values read from `IOKit/hidsystem/IOLLEvent.h` and `HIToolbox/Events.h` in the macOS 15.2 SDK,
 /// not from memory.
-public struct HotkeyBinding: Equatable, Sendable {
+public struct HotkeyBinding: Equatable, Hashable, Sendable {
     /// Virtual keycode of the physical key (`kVK_*`). Present for diagnostics and for the
     /// key-down/key-up path; the flag mask is what actually decides held-ness.
     public let keyCode: Int64

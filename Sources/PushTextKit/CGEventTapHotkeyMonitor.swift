@@ -37,6 +37,9 @@ public final class CGEventTapHotkeyMonitor: HotkeyMonitor, @unchecked Sendable {
     private var handler: (@Sendable (HotkeyEdge) -> Void)?
     /// Counts how many times the OS disabled our tap and we re-armed it. Surfaced because a tap that
     /// silently dies is indistinguishable from a user who stopped pressing the key.
+    /// The bound key's display name, so the app can log WHICH key a tap was armed for without
+    /// reaching into the binding itself.
+    public var bindingName: String { binding.name }
     public private(set) var reEnableCount = 0
     /// Which disable reason last re-armed the tap, for diagnostics.
     public private(set) var lastDisableReason: CGEventType?

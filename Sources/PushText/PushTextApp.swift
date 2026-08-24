@@ -35,7 +35,7 @@ struct PushTextApp: App {
     @NSApplicationDelegateAdaptor(LaunchDelegate.self) private var launchDelegate
     @State private var model: AppModel
     /// Held for the process lifetime: releasing the monitor tears down the event tap.
-    private let hotkey: CGEventTapHotkeyMonitor
+    private let hotkey: HotkeyController
     /// Owns the Sparkle updater, so it outlives the menu being opened and closed.
     private let actions = AppActions()
 
@@ -92,22 +92,24 @@ struct PushTextApp: App {
         // The tap is the only thing that can fail at launch, and it fails for one reason worth
         // telling the user about: Accessibility is not granted. Surfaced in the menu rather than
         // thrown, because a menu-bar app that crashes on launch gives them nothing to act on.
-        let monitor = CGEventTapHotkeyMonitor()
-        self.hotkey = monitor
-        do {
-            try monitor.start { edge in
+        let controller = HotkeyController(
+            binding: model.preferences.hotkeyBinding,
+            onEdge: { edge in
                 dictationLog.info("hotkey edge=\(String(describing: edge), privacy: .public)")
                 Task { @MainActor in model.handle(edge) }
-            }
-            let provenance = LaunchProvenance.current()
-            dictationLog.info("""
-                hotkey tap armed; \(provenance.description, privacy: .public)
-                """)
-        } catch {
-            dictationLog.error("hotkey tap FAILED: \(String(describing: error), privacy: .public)")
-            model.reportStartupFailure(
-                "Hold-to-dictate needs Accessibility. Grant it in System Settings > Privacy & "
-                + "Security > Accessibility, then relaunch PushText.")
+            },
+            onFailure: { _ in
+                model.reportStartupFailure(
+                    "Hold-to-dictate needs Accessibility. Grant it in System Settings > Privacy & "
+                    + "Security > Accessibility, then relaunch PushText.")
+            })
+        self.hotkey = controller
+        controller.start()
+        dictationLog.info("\(LaunchProvenance.current().description, privacy: .public)")
+        // Re-point the tap when the user picks a different key. Without this the menu would show
+        // the new key while the tap kept listening to the old one (#104).
+        model.preferences.onHotkeyChange = { [controller] binding in
+            controller.rebind(to: binding)
         }
 
         launchDelegate.onLaunch = { Self.requestMicrophone(for: model) }
