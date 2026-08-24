@@ -24,6 +24,15 @@ struct PermissionAdvice: Equatable {
     var repairs: Bool = false
     /// Which grant this row is about, so a repair knows what to reset.
     var permission: Permission?
+    /// True when the app must ASK macOS for trust before the Settings pane is any use (#146).
+    ///
+    /// The Accessibility list shows apps that have REQUESTED the permission. PushText never asked,
+    /// so there was no row to switch on - and a reset had removed the only one that existed. This
+    /// is the registration step, and it is why a first grant needs it as much as a broken one.
+    ///
+    /// Never for a DENIAL: the user answered that question, and re-asking is arguing with them.
+    /// Never for the microphone: it has its own prompt.
+    var registersByPrompting: Bool = false
 
     static func forStatus(_ status: PermissionStatus, of permission: Permission) -> PermissionAdvice? {
         let title = Self.title(of: permission)
@@ -44,7 +53,8 @@ struct PermissionAdvice: Equatable {
                 actionLabel: canPrompt ? "Allow..." : "Open Settings...",
                 settingsURL: canPrompt ? nil : pane,
                 canPromptInApp: canPrompt,
-                permission: permission)
+                permission: permission,
+                registersByPrompting: !canPrompt)
 
         case .grantBroken:
             return Self.repairAdvice(title: title, pane: pane, of: permission)
@@ -87,7 +97,8 @@ struct PermissionAdvice: Equatable {
                 settingsURL: pane,
                 canPromptInApp: false,
                 repairs: true,
-                permission: permission)
+                permission: permission,
+                registersByPrompting: true)
         }
         return PermissionAdvice(
             title: title,
