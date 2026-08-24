@@ -83,6 +83,43 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BINARY" "$APP/Contents/MacOS/$APP_NAME"
 
+# SPM RESOURCE FILES MUST BE EMBEDDED, and the CONTENTS go in, not the .bundle directory.
+#
+# Every SwiftPM target with resources gets a generated `Bundle.module` that looks in exactly TWO
+# places, read from .build/.../DerivedSources/resource_bundle_accessor.swift:
+#
+#     let mainPath  = Bundle.main.bundleURL.appendingPathComponent("Foo_Foo.bundle").path
+#     let buildPath = "<absolute build directory>/Foo_Foo.bundle"
+#     guard let bundle = Bundle(path: mainPath) ?? Bundle(path: buildPath) else { fatalError(...) }
+#
+# The second is an absolute path on the MACHINE THAT BUILT THE BINARY. It exists for the developer
+# and for nobody else, so the app works perfectly in local testing and SIGTRAPs on the first user's
+# machine. v0.2.0 shipped exactly that - the released binary carried
+# /Users/runner/work/PushText/PushText/.build/... and crashed on first menu open.
+#
+# THREE placements were measured, and only the third works:
+#
+#   .app/ root                  Bundle.module finds it, but `codesign --verify --strict` rejects the
+#                               app: "code has no resources but signature indicates they must be
+#                               present".
+#   Contents/Resources/*.bundle Signs, but SwiftPM's accessor never looks there - AND these bundles
+#                               are FLAT (a bare github.pdf, no Contents/Info.plist), so codesign
+#                               calls them "bundle format unrecognized, invalid, or unsuitable".
+#   Contents/Resources/<files>  Signs cleanly, and MacFaceKit 0.4.3 finds them because a statically
+#                               linked framework's Bundle(for:) IS the main bundle.
+#
+# Copied BEFORE signing so the seal covers them.
+while IFS= read -r RESOURCE_BUNDLE; do
+	[ -n "$RESOURCE_BUNDLE" ] || continue
+	find "$RESOURCE_BUNDLE" -type f -exec cp {} "$APP/Contents/Resources/" \; >&2
+	# SwiftPM leaves these read-only (r--r--r--), and `cp` preserves that. The `xattr -cr` below
+	# then fails with EACCES and `set -e` kills the build BEFORE it writes entitlements or signs -
+	# leaving a half-built app that looks plausible and fails verification for the wrong reason.
+	# Cost an hour of chasing a signing error that was never a signing error.
+	chmod -R u+w "$APP/Contents/Resources" >&2
+	echo "embedded contents of $(basename "$RESOURCE_BUNDLE")" >&2
+done < <(find "$BIN_DIR" -maxdepth 1 -name "*.bundle" -type d 2>/dev/null)
+
 # Info.plist (heredoc -> plutil -lint gate).
 #
 # NSMicrophoneUsageDescription is required - the app records audio. Accessibility
@@ -236,6 +273,34 @@ sign_app_code "$APP/Contents/MacOS/$APP_NAME"
 sign_app_code "$APP"
 # --deep --strict is VERIFY-only and is correct here; it is the sign path that must never see --deep.
 codesign --verify --deep --strict "$APP" >&2
+
+# FAIL CLOSED: every SwiftPM resource file must be inside the app, not left behind in .build.
+#
+# This is the gate for the defect that shipped as v0.2.0. Without it the app falls back to the
+# absolute build path compiled into `Bundle.module`, which exists on the build machine and nowhere
+# else - so the packaged app is perfect in local testing and traps on the first user's Mac. The only
+# reason it was caught at all is that Bobby installed the update and it crashed on launch.
+#
+# Checked by CONTENT, not by counting: a copy that silently skipped one file would still produce a
+# plausible-looking Resources directory.
+MISSING=""
+while IFS= read -r RESOURCE_BUNDLE; do
+	[ -n "$RESOURCE_BUNDLE" ] || continue
+	while IFS= read -r RESOURCE_FILE; do
+		[ -n "$RESOURCE_FILE" ] || continue
+		if [ ! -f "$APP/Contents/Resources/$(basename "$RESOURCE_FILE")" ]; then
+			MISSING="$MISSING $(basename "$RESOURCE_BUNDLE")/$(basename "$RESOURCE_FILE")"
+		fi
+	done < <(find "$RESOURCE_BUNDLE" -type f 2>/dev/null)
+done < <(find "$BIN_DIR" -maxdepth 1 -name "*.bundle" -type d 2>/dev/null)
+
+if [ -n "$MISSING" ]; then
+	echo "build-app.sh: FAIL - SwiftPM resources missing from the app:$MISSING" >&2
+	echo "  The app would fall back to the build path baked into Bundle.module, which exists on" >&2
+	echo "  THIS machine and on no user's. That is how v0.2.0 shipped a launch crash." >&2
+	exit 1
+fi
+echo "build-app.sh: all SwiftPM resources embedded" >&2
 
 # Last stdout line = the .app path, so callers can `tail -1`.
 echo "$APP"
