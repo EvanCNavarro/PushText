@@ -56,6 +56,7 @@ struct DictationHUDView: View {
     /// Increments on each refused press (#99). The VALUE is meaningless; the CHANGE is the signal,
     /// which is why it is a counter and not a Bool - two refusals in a row must pulse twice.
     var refusals: Int = 0
+    var pulseHoldMilliseconds: Int = 150
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
@@ -136,7 +137,7 @@ struct DictationHUDView: View {
         .onChange(of: refusals) {
             withAnimation(.spring(response: 0.14, dampingFraction: 0.5)) { pulsing = true }
             Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(150))
+                try? await Task.sleep(for: .milliseconds(pulseHoldMilliseconds))
                 withAnimation(.spring(response: 0.22, dampingFraction: 0.7)) { pulsing = false }
             }
         }
@@ -204,6 +205,11 @@ final class DictationHUDController {
     private var panel: DictationHUDPanel?
     private let model = HUDModel()
 
+    /// `pulseHoldMilliseconds` is a probe seam, not a setting - see `HUDModel`.
+    init(pulseHoldMilliseconds: Int = 150) {
+        model.pulseHoldMilliseconds = pulseHoldMilliseconds
+    }
+
     /// Observable box so the panel's SwiftUI content updates without rebuilding the window.
     @Observable
     final class HUDModel {
@@ -213,6 +219,10 @@ final class DictationHUDController {
         /// Bumped on each refused press. A COUNTER rather than a Bool: two refusals in a row must
         /// produce two pulses, and a Bool that is already true animates nothing the second time.
         var refusals = 0
+        /// How long the refusal pulse stays extended. 150 ms in the app; the HUD probe raises it so
+        /// the pulsed state can be SCREENSHOTTED (#115). Same `onChange` path either way - only the
+        /// hold differs, so the probe verifies the real animation rather than a forced flag.
+        var pulseHoldMilliseconds = 150
         var onCancel: () -> Void = {}
         var onConfirm: () -> Void = {}
     }
@@ -379,6 +389,7 @@ private struct HUDHost: View {
             level: model.level,
             isPresented: model.isPresented,
             refusals: model.refusals,
+            pulseHoldMilliseconds: model.pulseHoldMilliseconds,
             onCancel: model.onCancel,
             onConfirm: model.onConfirm)
     }
