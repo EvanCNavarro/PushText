@@ -525,7 +525,7 @@ that. The narrative for each lives in the issue.
   first responder inside a MenuBarExtra popover.
   Evidence: docs/verification/task128-hotkey-recorder.md.)
 
-#130 - In-app updates cannot work: the appcast 404s anonymously because the repo is private - S0
+#130 - In-app updates cannot work: the appcast 404s anonymously because the repo is private - DONE
   blocked-by: a decision only Bobby can make. MEASURED 2026-08-24: the feed URL baked into the app
   is stable and correct, and returns 404 to an anonymous client. Control - the SAME asset fetched
   WITH credentials returns the signed XML - so the appcast, its signature, the zip and the checksum
@@ -536,5 +536,22 @@ that. The narrative for each lives in the issue.
   stops being invisible. The same constraint already disabled provenance attestation in #96 and
   nobody generalised it. Options: make the repo public, host the feed and the archive somewhere
   publicly readable, or accept manual updates and stop offering "Check for Updates".
-  TRIGGER: before the next release, or before anyone else installs this.
+  (2026-08-24: fixed by option 1 - the repository is now PUBLIC. Bobby: "if others like termtile are
+  public then yes proceed logically", and the condition was verified rather than assumed:
+  EvanCNavarro/TermTile and 400faces/MacFaceKit are both public. Pre-flight before an irreversible
+  flip: 484 blobs across all 82 commits scanned for private keys and tokens, 0 hits, and the SCANNER
+  was battle-tested - a planted RSA header plus a ghp_ token was detected and then removed - because
+  a green nobody tried to make red is a rumor. No credential-shaped filename was ever committed.
+  The whole chain is now anonymously fetchable, not just the feed: appcast 404 -> 200, the archive it
+  points at 404 -> 200, the checksum 404 -> 200. A reachable feed pointing at an unreachable zip
+  would have failed one step later. The feed carries sparkle:version 80 against the installed 72,
+  minimumSystemVersion 26.0 and arm64, all satisfied here, so the update will be offered. An earlier
+  grep of mine reported no version fields - it searched for XML attributes where Sparkle writes child
+  elements; the feed was always right.
+  Two intended side effects: provenance attestation returns on the next release, its #96 guard having
+  been written so it would, and the #131 reachability check now fails CLOSED rather than merely
+  reporting.
+  STILL UNPROVEN: nobody has clicked "Check for Updates". Everything Sparkle needs is reachable and
+  well-formed, verified by fetching it as an unauthenticated client - but the install itself,
+  including the EdDSA check inside the running app, has not been observed.)
 
