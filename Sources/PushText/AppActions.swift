@@ -187,10 +187,14 @@ final class AppActions {
         let alert = NSAlert()
         alert.messageText = "Uninstall PushText?"
         alert.informativeText = """
-            PushText will be moved to the Trash and will quit.
+            PushText will quit, and these move to the Trash:
 
-            macOS keeps its Microphone and Accessibility permissions until you remove them yourself \
-            in System Settings > Privacy & Security - no app can revoke its own grants.
+            \u{2022} the app itself
+            \u{2022} your dictation history and custom dictionary
+            \u{2022} its settings and caches
+
+            Its Microphone and Accessibility entries are cleared too, so nothing is left listed in \
+            System Settings.
             """
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Move to Trash")
@@ -209,6 +213,21 @@ final class AppActions {
     private func uninstall() {
         let bundleURL = Bundle.main.bundleURL
         dictationLog.info("uninstalling from \(bundleURL.path, privacy: .public)")
+
+        // ORDER MATTERS, and it cost an hour to learn on 2026-08-24: `tccutil` resolves a bundle id
+        // through LaunchServices BEFORE touching TCC, so once the .app is in the Trash the reset
+        // returns "No such bundle identifier" and the grants outlive the app. Clear them FIRST.
+        if let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first {
+            let uninstaller = Uninstaller(library: library, repairer: repairer)
+            for report in uninstaller.resetPermissions() where !report.succeeded {
+                dictationLog.error("uninstall: reset failed exit=\(report.exitCode, privacy: .public)")
+            }
+            let data = uninstaller.removeData()
+            dictationLog.info("""
+                uninstall removed \(data.removed.count, privacy: .public) data paths, \
+                \(data.failed.count, privacy: .public) failed
+                """)
+        }
 
         NSWorkspace.shared.recycle([bundleURL]) { _, error in
             Task { @MainActor in

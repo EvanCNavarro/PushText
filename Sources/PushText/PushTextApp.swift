@@ -230,6 +230,9 @@ struct PushTextApp: App {
     /// Headless proofs of each OS-touching capability, before any UI exists. Never returns when one
     /// is requested.
     private static func runProbeIfRequested() {
+        if UninstallProbe.isRequested {
+            UninstallProbe.runAndExit()
+        }
         if AccessibilityTrustProbe.isRequested {
             AccessibilityTrustProbe.runAndExit()
         }

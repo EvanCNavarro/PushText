@@ -700,3 +700,30 @@ that. The narrative for each lives in the issue.
   never remembering. Four of #146's own tests had to change, and their premise is what changed -
   they asserted reset -> prompt -> open, which is the redundancy being removed.)
 
+#150 - Uninstall leaves the transcripts, the settings and the grants behind - DONE
+  (2026-08-24: Bobby asked whether quit and uninstall "work correctly, with removing references".
+  Quit is fine. Uninstall trashed the app bundle and stopped. Measured on this machine, what
+  survived: ~/Library/Application Support/PushText with 80 DICTATION TRANSCRIPTS and the custom
+  dictionary, the preferences plist, Caches, Sparkle's HTTPStorages, and TCC rows for Accessibility
+  and Microphone both at auth_value 2. For an app whose pitch is that nothing leaves this machine,
+  leaving the transcripts after the user asked for it gone is a privacy defect rather than
+  untidiness.
+  The alert was also wrong - it said "no app can revoke its own grants", which stopped being true in
+  #136 when the bundle-scoped tccutil repairer landed.
+  OwnedPaths and Uninstaller ported in shape from TermTile, and the port found a gap TermTile's
+  original does not have: PushText keeps its transcripts under the app NAME, not the bundle id, so a
+  list derived from the bundle id alone would have missed them and looked complete. Trash rather than
+  delete, so a regretted uninstall is recoverable. Absent paths skipped rather than failed. Exact
+  literals, never a prefix, so a neighbouring .selftest plist can never be caught. Permissions
+  cleared BEFORE the bundle is trashed, because tccutil resolves the id through LaunchServices first
+  and a trashed .app makes the reset fail - learned the hard way earlier the same day.
+  Four plants caught, including dropping the transcripts from the owned list. Driven on the REAL app
+  path through PUSHTEXT_UNINSTALL_PROBE against an injected library root: removed=4 failed=0, files
+  gone, all four recoverable in the Trash.
+  A defect in MY OWN TESTS surfaced during cleanup: they used the production trash closure and had
+  put 70 temp directories in Bobby's real Trash across the day. The closure is injected now, proven
+  by the Trash count being identical before and after a run. A test that litters the machine it runs
+  on is a test that gets disabled.
+  NOT APPLICABLE: PushText registers no login item - no SMAppService anywhere - so unlike TermTile
+  there is nothing to deregister. It does not offer launch at login at all, which is a separate gap.)
+
