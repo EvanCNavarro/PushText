@@ -58,22 +58,23 @@ struct PushTextApp: App {
         // The user's rewrite rules (#82). #13 measured that the engine cannot be biased, so this
         // post-pass is the only mechanism there is for proper nouns like "PushText".
         let dictionary = JSONLDictionaryStore.defaultURL().map { JSONLDictionaryStore(url: $0) }
-        // STILL no cleanup provider here (#94), and the reason is now attributed rather than guessed.
+        // Cleanup is now a USER CHOICE rather than a build-time decision (#103). The provider is
+        // always constructed; `AppModel.cleanupEnabled` decides per utterance, so flipping the menu
+        // toggle takes effect on the next dictation without a relaunch.
         //
-        // The key-down prewarm ALWAYS completes - `warm=true` on 12 of 12 quiet dictations - so the
-        // earlier backgrounding explanation was wrong. The cost is inside the model call, and it is
-        // binary: 322 ms when the assets are resident, 3494 ms when they are not, with the slow mode
-        // spread only 138 ms wide. That is a discrete load step of ~3.2 s that `prewarm()` does not
-        // prevent, and it hits 50% of dictations.
-        //
-        // Passing `FoundationModelsCleanup()` below is still the one line that switches it on. See
-        // docs/verification/task94-cleanup-latency.md.
+        // Default OFF, and that default is #94's measurement: the key-down prewarm always completes
+        // (warm=true on 12 of 12), but the model call is binary - 322 ms when its assets are
+        // resident, 3494 ms when they are not, 50/50. That is a trade some users will take and
+        // most will not, which is exactly what a setting is for.
+        let settingsStore = UserDefaultsSettingsStore()
         let model = AppModel(engine: engine,
                              capture: AVAudioEngineCapture(),
                              injector: PasteboardTextInjector(),
                              indicator: DictationHUDController(),
                              history: history,
-                             dictionary: dictionary)
+                             dictionary: dictionary,
+                             cleanup: FoundationModelsCleanup(),
+                             settingsStore: settingsStore)
         self.model = model
         // The real probe, with the persisted latch, so `grantBroken` survives a relaunch - which is
         // when the break is usually noticed, on the launch AFTER the one that worked (#6).

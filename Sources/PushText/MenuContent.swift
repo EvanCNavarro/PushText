@@ -73,6 +73,19 @@ struct MenuContent: View {
                 LabeledLine(label: "Double-press", value: "Hands-free, press again to end")
             }
 
+            SectionCard("CLEANUP") {
+                ToggleLine(label: "Tidy transcripts",
+                           isOn: Binding(get: { model.cleanupEnabled },
+                                         set: { model.cleanupEnabled = $0 }))
+                // The cost is stated because the choice is only informed if the user knows what
+                // they are buying. These are measured numbers (#94), not a hedge: half of all
+                // dictations pay a ~3.2 s model load, and the rest are near-instant.
+                Text("On-device polish. Adds about 3 seconds to roughly half of dictations.")
+                    .font(Tokens.caption)
+                    .foregroundStyle(Tokens.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let transcript = model.lastTranscript, !transcript.isEmpty {
                 LastTranscriptCard(transcript: transcript, warning: model.lastCaptureWarning)
             }
@@ -112,6 +125,26 @@ struct PermissionRow: View {
 }
 
 /// A label/value pair on one row, matching the settings lines in TermTile's panel.
+private struct ToggleLine: View {
+    let label: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.space) {
+            Text(label)
+                .font(Tokens.body)
+                .foregroundStyle(Tokens.muted)
+            Spacer(minLength: Tokens.space)
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .controlSize(.mini)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel(Text(label))
+    }
+}
+
 private struct LabeledLine: View {
     let label: String
     let value: String

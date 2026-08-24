@@ -321,7 +321,8 @@ struct CaptureHealthTests {
         let capture = LossyCapture(health: CaptureHealth())
         let injector = SpyInjector()
         let model = AppModel(engine: engine, capture: capture, injector: injector,
-                             cleanup: StubCleanup { $0 + " [cleaned]" })
+                             cleanup: StubCleanup { $0 + " [cleaned]" },
+                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true)))
 
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
@@ -345,7 +346,8 @@ struct CaptureHealthTests {
                              dictionary: StubDictionary(entries: [
                                 DictionaryEntry(spoken: "push text", written: "PushText")]),
                              cleanup: StubCleanup { $0.replacingOccurrences(of: "PushText",
-                                                                           with: "push text") })
+                                                                           with: "push text") },
+                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true)))
 
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
@@ -369,7 +371,8 @@ struct CaptureHealthTests {
         let injector = SpyInjector()
         let model = AppModel(engine: engine, capture: capture, injector: injector,
                              history: history,
-                             cleanup: StubCleanup { $0 + " [cleaned]" })
+                             cleanup: StubCleanup { $0 + " [cleaned]" },
+                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true)))
 
         model.handle(.pressed, at: 0)
         _ = await settle { model.machine.state == .recording }
@@ -379,6 +382,61 @@ struct CaptureHealthTests {
         _ = await settle { !injector.injected.isEmpty && !history.load().isEmpty }
         #expect(history.load().map(\.text) == injector.injected,
                 "history must record what the user actually got")
+    }
+
+    /// An in-memory `SettingsStore`, so a test never touches real user defaults.
+    struct FakeSettings: SettingsStore {
+        let settings: AppSettings
+        func load() -> AppSettings { settings }
+        func save(_ settings: AppSettings) {}
+        func purge() {}
+    }
+
+    /// #103. The assertion is that `clean` is NEVER CALLED - not that the text came back unchanged.
+    /// Cleanup frequently returns its input unchanged anyway, so a text assertion would pass on a
+    /// gate that does nothing, which is the whole failure being guarded against.
+    @Test("Cleanup does not run when the setting is off")
+    func cleanupSkippedWhenDisabled() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["hello there"],
+                                                                  latency: .milliseconds(1)))
+        let capture = LossyCapture(health: CaptureHealth())
+        let injector = SpyInjector()
+        let cleanup = StubCleanup { $0 + " [cleaned]" }
+        let model = AppModel(engine: engine, capture: capture, injector: injector,
+                             cleanup: cleanup,
+                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: false)))
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        capture.deliver()
+        model.handle(.released, at: 1)
+
+        _ = await settle { !injector.injected.isEmpty }
+        #expect(cleanup.calls.cleanCount == 0, "the model was asked to clean while the setting was off")
+        #expect(injector.injected == ["hello there"])
+    }
+
+    /// The other half: with the setting ON the provider must actually be consulted, or the gate has
+    /// simply disabled the feature permanently.
+    @Test("Cleanup runs when the setting is on")
+    func cleanupRunsWhenEnabled() async {
+        let engine = MockTranscriptionEngine(configuration: .init(phrases: ["hello there"],
+                                                                  latency: .milliseconds(1)))
+        let capture = LossyCapture(health: CaptureHealth())
+        let injector = SpyInjector()
+        let cleanup = StubCleanup { $0 + " [cleaned]" }
+        let model = AppModel(engine: engine, capture: capture, injector: injector,
+                             cleanup: cleanup,
+                             settingsStore: FakeSettings(settings: AppSettings(cleanupEnabled: true)))
+
+        model.handle(.pressed, at: 0)
+        _ = await settle { model.machine.state == .recording }
+        capture.deliver()
+        model.handle(.released, at: 1)
+
+        _ = await settle { !injector.injected.isEmpty }
+        #expect(cleanup.calls.cleanCount == 1)
+        #expect(injector.injected == ["hello there [cleaned]"])
     }
 
 }

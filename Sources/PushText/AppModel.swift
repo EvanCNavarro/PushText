@@ -80,6 +80,16 @@ private let engine: any TranscriptionEngine
     /// Cleanup, the user's dictionary and the history record, in the one order that is correct -
     /// see TranscriptFinisher.
     private let finisher: TranscriptFinisher
+    private let settingsStore: (any SettingsStore)?
+
+    /// Whether on-device cleanup runs (#103). Persisted on change, so the menu toggle survives a
+    /// relaunch; default OFF because #94 measured a ~3.2 s asset load on half of all dictations.
+    var cleanupEnabled: Bool {
+        didSet {
+            guard cleanupEnabled != oldValue else { return }
+            settingsStore?.save(AppSettings(cleanupEnabled: cleanupEnabled))
+        }
+    }
     /// Held between `.transcribing` and `.cleaning` because the history record needs the DURATION,
     /// and the machine's event carries only text.
     private var pendingTranscript: Transcript?
@@ -112,6 +122,7 @@ private let engine: any TranscriptionEngine
          history: (any HistoryStore)? = nil,
          dictionary: (any DictionaryStore)? = nil,
          cleanup: (any CleanupProvider)? = nil,
+         settingsStore: (any SettingsStore)? = nil,
          machine: DictationMachine = DictationMachine()) {
         self.engine = engine
         self.capture = capture
@@ -119,6 +130,9 @@ private let engine: any TranscriptionEngine
         self.hud = HUDDriver(indicator: indicator)
         self.finisher = TranscriptFinisher(cleanup: cleanup, dictionary: dictionary,
                                            history: history)
+        self.settingsStore = settingsStore
+        self.cleanupEnabled = settingsStore?.load().cleanupEnabled
+            ?? AppSettings.defaults.cleanupEnabled
         self.feed = AudioFeed(engine: engine)
         self.machine = machine
     }
@@ -306,7 +320,7 @@ private let engine: any TranscriptionEngine
     private func finishText() async {
         let transcript = pendingTranscript ?? Transcript(text: "", duration: 0)
         pendingTranscript = nil
-        let text = await finisher.finish(transcript)
+        let text = await finisher.finish(transcript, cleanupEnabled: cleanupEnabled)
         pendingText = text
         lastTranscript = text
         apply(.cleanupFinished(text))
