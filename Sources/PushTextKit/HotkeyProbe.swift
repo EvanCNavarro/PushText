@@ -21,7 +21,15 @@ public enum HotkeyProbe {
     public static func runAndExit() -> Never {
         let env = ProcessInfo.processInfo.environment
         let seconds = Double(env["PUSHTEXT_HOTKEY_PROBE_SECONDS"] ?? "") ?? 8
-        let binding = HotkeyBinding.rightOption
+        // Selectable, because the claim that matters now is about a DIFFERENT key. Globe was
+        // refused for months on a comment saying a tap cannot see it (#176); the tap can, and this
+        // is how that gets proven on real hardware rather than argued from a research document.
+        //   PUSHTEXT_HOTKEY_PROBE=1 PUSHTEXT_HOTKEY_PROBE_KEY=globe <app-binary>
+        let requested = env["PUSHTEXT_HOTKEY_PROBE_KEY"]?.lowercased()
+        let binding = HotkeyBinding.selectable.first {
+            $0.name.lowercased().replacingOccurrences(of: " ", with: "") == requested
+                || ($0 == .globe && (requested == "globe" || requested == "fn"))
+        } ?? HotkeyBinding.rightOption
 
         print("HOTKEY_PROBE binding=\(binding.name) keyCode=\(binding.keyCode) "
             + "deviceMask=0x\(String(binding.deviceMask, radix: 16))")
