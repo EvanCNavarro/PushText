@@ -648,17 +648,53 @@ that. The narrative for each lives in the issue.
   costume - I did look, at the wrong list. It surfaced only because I listed workflow runs WITH
   DURATIONS while chasing something else, and a column of 12-second failures stood out.)
 
-#144 - The Test step intermittently wedges: every suite starts, none completes - S0
-  blocked-by: none, but it needs an OCCURRENCE to study and the last two were cancelled. Twice on
-  2026-08-24, identical signature: 192 started / 0 completed cancelled at 912s, and 188 started / 0
-  completed cancelled at ~1100s, against a healthy 70-140s for all 313 tests. Not a slow test - zero
-  completions includes pure-Foundation suites that finish in milliseconds locally, so the process
-  wedges before any test body ends. Not the AppKit tests: that was my first diagnosis and the next CI
-  log disproved it (the suite passed in 0.247s on a run where the gate I added never fired), and the
-  gate was reverted rather than kept. Roughly 2 in 20 runs; a re-run of the same id clears it, which
-  is what makes it easy to paper over. Cause UNKNOWN, and both observations are cancellations rather
-  than natural endings, so even "it would hang forever" is unestablished.
-  TRIGGER: the next occurrence - let it run to the job timeout instead of cancelling.
+#144 - The Test step intermittently wedges: every suite starts, none completes - DONE
+  (2026-08-25: CAUSE FOUND AND FIXED. `NSPasteboard(name:)` in PasteboardMarkersTests had no
+  deadline; on a headless runner it blocks in CFPasteboardCreate ->
+  _onqueue_CFPasteboardSetupInstance -> dispatch_mach_send_with_result_and_wait_for_reply waiting
+  for a `pbs` reply that never comes. One call, ten minutes, whole job dead, ~1 run in 10.
+  Bounded in #179 (BoundedWork.run): a hung pasteboard server now fails that suite in seconds,
+  naming which pasteboard did not answer. Planted a 600s hang - fails in 5s.
+  WHAT ACTUALLY CLOSED IT was instrumentation, not analysis. Three investigations all stopped at
+  'started N, completed 0' because a hang produces no output and every instance was cancelled by
+  hand first. #165's watchdog samples the process before killing it; it fired on its first real
+  wedge and handed over a function name and a line number.
+  THE INSTRUCTION ON THIS ISSUE WAS UNFOLLOWABLE FOR THREE DAYS: 'let one run to the job timeout'
+  when no timeout was set, so the default was six hours and a human always cancelled first. It
+  sounded reasonable, which is why nobody checked it. docs/verification is in the issue thread.)
+
+#164 - No check proves a menu item is wired to the action it names - S1
+  (2026-08-25: filed after the same 'we cannot prove the button is wired' note appeared in two
+  separate verification docs. AppActions.menuActions() returns [MenuAction] carrying a title, an
+  icon and a closure; everything the closures CALL is covered, and the association between a title
+  and its closure is covered by nothing. Pointing Delete History at confirmUninstall(), or Quit at
+  the uninstall action, would pass swift test, swiftlint, all 11 .engine/checks and the packaged
+  smoke. Two of those mistakes are destructive and one is silent.
+  WHY IT IS NOT ALREADY COVERED: the closures call straight into AppKit - NSAlert.runModal(),
+  NSWorkspace, NSApplication.terminate - so invoking one in a test either blocks forever or does
+  something real. That is the actual problem to solve.
+  TRIGGER: next, ahead of #162. It is the open item with destructive failure modes.)
+
+#176 - The hotkey recorder refuses the Globe key - DONE
+  (2026-08-25: Bobby pressed Globe and it beeped. Nothing was broken in the recorder - `selectable`
+  listed five keys and Globe was not one, and the UI never said which keys it took, so a refusal
+  read as a dead field. Globe was excluded by a comment claiming a tap 'never enters the event-tap
+  chain at all', which fused two separate findings from our OWN docs/research/04: a tap CAN SEE Fn
+  via maskSecondaryFn, and what it cannot do is SUPPRESS it. The report's recommendation was to
+  offer Fn as an opt-in; 'not the default' had become 'not available'.
+  Measured rather than argued, which is the rule that comment inverted: the probe armed on Globe
+  reports edge=pressed and edge=released for a real flagsChanged carrying maskSecondaryFn.
+  Both sides of every modifier are offered now; Globe is matched by FLAG because Apple Silicon may
+  report a keycode other than 63; Globe is NOT the default because non-Apple keyboards emit nothing.
+  A notice fires when AppleFnUsageType != 0 - it is 3 (Start Dictation) on this machine. The setting
+  is READ, never written: the private SPI that writes it leaves the Globe key permanently dead after
+  a kill -9, uninstall included. docs/verification/task176-globe-key.md.
+  COST: an instrumented probe run drove the recorder against the REAL defaults and persisted a
+  synthetic capture, changing Bobby's hotkey to Right Command. Restored to Right Option and
+  verified. The packaged smoke isolates HOME; that ad-hoc run did not.)
+
+#178 - NSPasteboard(name:) in tests can hang forever - DONE
+  (2026-08-25: the cause of #144, split out so that issue stays the diagnosis. Fixed in #179.)
 
 #146 - Reset leaves an empty Accessibility list: the app never registers itself - DONE
   (2026-08-24: Bobby opened the pane after pressing Reset and PushText was not in it - twenty other
