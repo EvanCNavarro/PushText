@@ -48,6 +48,7 @@ public enum ProbeActivation {
             "PUSHTEXT_CLEANUP_PROBE_TEXT"
         ]),
         ("PUSHTEXT_TRUST_PROBE", []),
+        ("PUSHTEXT_DEFAULTS_SUITE", []),
         ("PUSHTEXT_SOUND_PROBE", ["PUSHTEXT_SOUND_PROBE_DIR"]),
         ("PUSHTEXT_UNINSTALL_PROBE", ["PUSHTEXT_UNINSTALL_PROBE_LIBRARY"]),
         ("PUSHTEXT_MENU_PROBE", [

@@ -95,7 +95,11 @@ struct PushTextApp: App {
         // (warm=true on 12 of 12), but the model call is binary - 322 ms when its assets are
         // resident, 3494 ms when they are not, 50/50. That is a trade some users will take and
         // most will not, which is exactly what a setting is for.
-        let settingsStore = UserDefaultsSettingsStore()
+        // A separate domain when asked (#185). HOME does not isolate preferences - cfprefsd
+        // serves the real user's domain whatever HOME says - so a probe that changes a setting
+        // changes the USER's setting unless the suite is redirected explicitly. That happened
+        // twice in one day before this existed.
+        let settingsStore = UserDefaultsSettingsStore(suiteName: DefaultsSuite.name)
         let model = AppModel(engine: engine,
                              capture: AVAudioEngineCapture(),
                              injector: PasteboardTextInjector(),
