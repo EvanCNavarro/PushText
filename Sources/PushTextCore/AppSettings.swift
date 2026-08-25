@@ -31,15 +31,25 @@ public struct AppSettings: Equatable, Sendable {
     /// half of the request that mattered.
     public var soundEnabled: Bool
 
-    public init(cleanupEnabled: Bool, hotkeyKeyCode: Int64, soundEnabled: Bool) {
+    /// Whether the Mac's own audio is silenced while dictating (#188).
+    ///
+    /// Default OFF, and unlike `soundEnabled` that is not a taste call: silencing someone's audio
+    /// without being asked is a surprise, and a surprise involving their speakers is worse than one
+    /// involving a tone.
+    public var silenceWhileDictating: Bool
+
+    public init(cleanupEnabled: Bool, hotkeyKeyCode: Int64, soundEnabled: Bool,
+                silenceWhileDictating: Bool) {
         self.cleanupEnabled = cleanupEnabled
         self.hotkeyKeyCode = hotkeyKeyCode
         self.soundEnabled = soundEnabled
+        self.silenceWhileDictating = silenceWhileDictating
     }
 
     public static let defaults = AppSettings(cleanupEnabled: false,
                                              hotkeyKeyCode: HotkeyBinding.rightOption.keyCode,
-                                             soundEnabled: true)
+                                             soundEnabled: true,
+                                             silenceWhileDictating: false)
 
     /// The binding this setting names, or the default when the stored code is not one we offer -
     /// which is what a downgrade, a hand-edited plist, or a removed binding all look like.

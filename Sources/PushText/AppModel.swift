@@ -34,14 +34,14 @@ final class AppModel {
     /// while its task still awaits `feed.begin()`, and a double press immediately arms the next.
     /// Each task therefore has to say WHICH utterance it is finishing or abandoning; without that
     /// the abandoning one tore down its successor.
-    private var utterance: AudioFeed.Utterance?
+    var utterance: AudioFeed.Utterance?
 
 private let engine: any TranscriptionEngine
-    private let capture: (any AudioCapture)?
+    let capture: (any AudioCapture)?
     let injector: (any TextInjector)?
-    private let feed: AudioFeed
+    let feed: AudioFeed
     /// The HUD, owned by its own type - see HUDDriver.
-    private let hud: HUDDriver
+    let hud: HUDDriver
 
     /// The level the HUD waveform is currently drawing. Exposed for tests: planting a broken
     /// sample feed left every suite green, which meant nothing asserted that captured audio ever
@@ -129,6 +129,7 @@ private let engine: any TranscriptionEngine
          indicator: (any DictationIndicator)? = nil,
          history: (any HistoryStore)? = nil,
          sounds: (any DictationSoundPlaying)? = nil,
+         muter: DictationMuter? = nil,
          dictionary: (any DictionaryStore)? = nil,
          cleanup: (any CleanupProvider)? = nil,
          settingsStore: (any SettingsStore)? = nil,
@@ -138,6 +139,7 @@ private let engine: any TranscriptionEngine
         self.injector = injector
         self.hud = HUDDriver(indicator: indicator)
         self.sounds = sounds
+        self.muter = muter
         self.finisher = TranscriptFinisher(cleanup: cleanup, dictionary: dictionary,
                                            history: history)
         self.preferences = UserPreferences(store: settingsStore)
@@ -148,6 +150,9 @@ private let engine: any TranscriptionEngine
     /// Plays the start/stop cues (#172). Optional, like every other system capability, so the
     /// state-machine tests construct a model that makes no noise.
     let sounds: (any DictationSoundPlaying)?
+
+    /// Silences the Mac while dictating (#188). Optional for the same reason.
+    let muter: DictationMuter?
 
     func reportStartupFailure(_ message: String) {
         startupFailure = message
@@ -235,9 +240,14 @@ private let engine: any TranscriptionEngine
 
         case .recording:
             playCue(.start)          // see AppModel+Cues for why here and not `.arming`
+            silenceOutputIfWanted()
 
         case .transcribing:
             playCue(.stop)
+            // The user has stopped speaking, so give the sound back NOW rather than after the
+            // transcript lands - cleanup can take seconds and a silent Mac through all of it feels
+            // like a bug (#188).
+            restoreOutput()
             Task { await self.closeUtterance() }
 
         case .cleaning:
@@ -250,6 +260,7 @@ private let engine: any TranscriptionEngine
             Task { await self.injectText(text) }
 
         case .failed:
+            restoreOutput()
             closeMicrophone()
             Task { await self.teardown() }
 
@@ -261,19 +272,13 @@ private let engine: any TranscriptionEngine
             // nothing else, which is indistinguishable from the utterance having failed silently -
             // and "the microphone closed" was a claim no log line could support (#107).
             dictationLog.info("cancelled: capture closed, nothing injected")
+            restoreOutput()
             closeMicrophone()
             Task { await self.teardown() }
 
         default:
             break
         }
-    }
-
-    private func updateIndicator(for state: DictationState) {
-        hud.update(for: state,
-                   isCapturing: { [weak self] in self?.machine.isCapturing ?? false },
-                   onCancel: { [weak self] in self?.apply(.cancelRequested) },
-                   onConfirm: { [weak self] in self?.apply(.endRequested) })
     }
 
     private func openUtterance(epoch: Int) async {
@@ -365,24 +370,6 @@ private let engine: any TranscriptionEngine
         pendingText = text
         lastTranscript = text
         apply(.cleanupFinished(text))
-    }
-
-    /// Runs on every failure path. The microphone staying open is the worst outcome this app has -
-    /// worse than losing the utterance - so it is closed unconditionally.
-    /// Synchronous on purpose. A microphone left open is the worst outcome this app has - worse
-    /// than losing the utterance - so it closes in the same turn as the decision to stop, not
-    /// whenever a Task happens to be scheduled. Idempotent, so the async teardown may call it again.
-    private func closeMicrophone() {
-        capture?.stop()
-    }
-
-    private func teardown() async {
-        closeMicrophone()
-        if let token = utterance {
-            utterance = nil
-            await feed.cancel(token)
-        }
-        pendingText = nil
     }
 
     /// Whether a capture-duration watchdog is currently armed.

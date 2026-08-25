@@ -914,6 +914,26 @@ that. The narrative for each lives in the issue.
   a grep for FAILED tests found none - a compile error read as "no test failed".
   docs/verification/task162-launch-at-login.md.)
 
+#188 - Silence the Mac's audio output while dictating - DONE
+  (2026-08-25: Bobby - "can you have thing deafen ... like to deafen the computer while recording".
+  On a laptop the speakers are inches from the microphone, so whatever is playing becomes part of
+  what the transcriber is asked to make sense of.
+  THE FEATURE IS THREE LINES AND THE HAZARD IS EVERYTHING ELSE: an app that mutes the Mac and is
+  killed leaves it silent with no visible cause, which is the same shape as the Globe SPI this repo
+  refuses to write (#176) except that WE own the restore. Three defences - restore on EVERY exit
+  including cancel, restore the PRIOR state rather than "unmuted", and write the intent to disk
+  BEFORE muting so a crash is repaired at the next launch.
+  Six plants, five fired. THE SIXTH FOUND A GAP IN THE TESTS rather than the code: reversing the
+  write-then-mute order only matters if the process dies in that window, and nothing kills a process
+  mid-call, so every assertion held. Fixed by asserting the SEQUENCE - the fake output reads the flag
+  at the moment the speaker is muted. Its key is duplicated in the test rather than imported, because
+  importing it would make the test agree with whatever the code does (the #164 tautology).
+  Default OFF, unlike the cues: silencing someone's audio unasked is a surprise.
+  NOT VERIFIED: CoreAudioOutput itself is never exercised - muting the real device in a test would
+  silence the developer's Mac and a crashed test would leave it that way. And nobody has measured
+  whether muting actually keeps music out of a transcript.
+  docs/verification/task188-silence-while-dictating.md.)
+
 #185 - HOME isolation does not isolate preferences - DONE
   (2026-08-25: found while rendering #162's toggle, which changed Bobby's real dictation hotkey - the
   SECOND time in one day, and the first under the isolation meant to prevent it. cfprefsd serves the
