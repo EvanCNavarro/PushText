@@ -785,5 +785,56 @@ that. The narrative for each lives in the issue.
   which stretched full-width and drew a trailing arrow reading as "this leaves the app"; and the view
   repeated the window's own title. Both found by looking at the screenshot.
   STILL OPEN: the history is read-only and still opens in a text editor. A viewer with search is the
-  same shape of work and is not in this change.)
+  same shape of work and is not in this change. TRACKED as #161 and CLOSED by it - the note sat here
+  as prose for a day, which is exactly how a gap stops being findable.)
+
+#158 - The release smoke never opens the menu, so the v0.2.0 crash class is untested - DONE
+  (2026-08-24: test-packaged-app.sh decides whether a build ships, and it drove the audio and hotkey
+  probes, checked launch survival and codesigning, and never evaluated MenuContent.body - which is
+  exactly where v0.2.0's crash lived. The app launched, survived the full 8-second window, the smoke
+  printed OK, and it died on the first click of the menu bar icon.
+  PUSHTEXT_MENU_PROBE existed but rendered forever, so no script could use it. Bounded with
+  PUSHTEXT_MENU_PROBE_SECONDS, and layoutSubtreeIfNeeded() forces the pass that actually evaluates
+  body - constructing the hosting view is not enough, and without the forced layout a trap inside
+  body goes unnoticed while the probe reports success.
+  Battle-tested both ways: a planted fatalError fails the smoke with exit 133, the clean build
+  reports rendered and exited cleanly. The FIRST plant proved nothing - its message contained the
+  literal Bundle.module, so the source guard fired first. A gate going red is not evidence until you
+  know which gate went red.
+  Every defect in the 0.2.x series was found by a person using the app, not by this script.)
+
+  DELETE HISTORY, driven in the same audit and with no issue of its own: clear() removes the FILE
+  rather than truncating it, so the next dictation appends to a path that does not exist, and only
+  the atomic-write fallback keeps recording alive. Covered now.
+  A HYPOTHESIS DIED HERE, recorded so it does not cost a second afternoon: AppActions built its own
+  JSONLHistoryStore to delete through, so two NSLocks guarded one file and a delete could be clicked
+  mid-dictation. That reads like a torn-file bug. 200 concurrent appends racing a clear, 5 rounds,
+  reported ZERO torn lines with or without a shared instance - removeItem unlinks the name while the
+  writer holds the inode, so a racing append vanishes rather than tears, and vanishing is what Delete
+  means. No fix was made. docs/verification/task158-delete-history.md.)
+
+#161 - History is read-only and opens in a text editor - it needs a viewer - DONE
+  (2026-08-24: #154 made the FILE open, which gave the user the FORMAT rather than their content.
+  A window with search, readable timestamps and per-transcript copy; read-only, because history is a
+  record of what was said and what was typed and an editable record is a worse one. The raw file is
+  still one click away inside it.
+  Six plants, one per model claim. FIVE FIRED. The sixth did not, and it is the useful one: the
+  search-the-encoding test looked for "1970" and "T00:", and a plant searching the ENTIRE record
+  sailed through, because neither string appears in a record's description - green against the exact
+  regression it was written to catch. Re-needled with "2023", "durationSeconds", "+0000" it fires.
+  The test was wrong; the code was already right.
+  RENDERING caught four things reading could not, again: a search field over a history with nothing
+  in it; "0 dictations" printed directly under "No dictations recorded yet"; two arrows on Open File,
+  an arrow glyph in front of the trailing arrow LinkButton already draws; and Open File offered after
+  a delete had removed the file it opens. Three are one rule - hasHistory, deliberately NOT "anything
+  is visible", because a search that found nothing must keep the field that undoes it.
+  docs/verification/task161-history-viewer.md.)
+
+#162 - PushText cannot launch at login - there is no SMAppService anywhere - S1
+  (2026-08-24: recorded since #150 as an aside inside the uninstall entry - "it does not offer launch
+  at login at all, which is a separate gap" - and never tracked. A push-to-talk utility that has to be
+  started by hand after every reboot is one the user stops reaching for.
+  DEPENDENCY: Uninstaller must deregister it in the same change. Today's uninstall is correct ONLY
+  because there is nothing to deregister; the moment this lands, the note at line 727 becomes wrong
+  and uninstall starts leaving a login item behind.)
 

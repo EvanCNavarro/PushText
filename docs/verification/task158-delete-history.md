@@ -68,4 +68,4 @@ stops recording, with a menu that still says it is listening.
 The alert itself is unverified by any automated check - `runModal()` blocks, and nothing drives it.
 Cancel is guarded by `alertFirstButtonReturn` and was exercised by hand only. The measurements above
 all call `clear()` directly, so they prove the STORE behaves; they do not prove the button is wired
-to it.
+to it. TRACKED as #164.

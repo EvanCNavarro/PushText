@@ -52,6 +52,7 @@ public enum ProbeActivation {
             "PUSHTEXT_MENU_PROBE_PERMISSION",
             "PUSHTEXT_MENU_PROBE_UPDATE",
             "PUSHTEXT_MENU_PROBE_DICTIONARY",
+            "PUSHTEXT_MENU_PROBE_HISTORY",
             "PUSHTEXT_MENU_PROBE_SECONDS"
         ]),
         ("PUSHTEXT_HUD_PROBE", [

@@ -121,13 +121,46 @@ final class AppActions {
         self.recordRequestedTrust = recordRequestedTrust
     }
 
-    /// Where history lives, so the two actions below agree on one path.
+    /// The viewer window, reused across opens (#161).
+    private let historyViewer = HistoryViewerWindow()
+
+    /// Where history lives, so the actions below agree on one path.
     private var historyURL: URL? { JSONLHistoryStore.defaultURL() }
 
     /// Opens the history file itself rather than a viewer.
     ///
     /// The file IS the feature: plain JSONL the user can read, grep and delete. Building a browser
     /// would put a worse reader in front of a file that every tool on the machine already opens.
+    /// Opens the searchable viewer (#161).
+    ///
+    /// #154 made the FILE open, which is not the same as being readable: one JSON object per line,
+    /// timestamps as ISO strings, and no way to find anything. The dictionary got a real editor in
+    /// #156 and history is the surface with more content in it.
+    ///
+    /// The raw file is still one click away, inside the viewer - it is the user's data in a format
+    /// every tool on the machine can open, and that was half the point of choosing JSONL.
+    func showHistory() {
+        guard let url = historyURL else { return }
+        historyViewer.show(store: JSONLHistoryStore(url: url)) { [weak self] in
+            self?.revealHistory()
+        }
+    }
+
+    /// Opens the viewer on a KNOWN set of records so each state can be looked at (#161).
+    ///
+    /// Screenshotting the real store shows whatever this machine happens to hold, which on a fresh
+    /// install is nothing at all - so the populated state, the one with all the layout in it, would
+    /// never be seen.
+    func showHistoryProbe(mode: String) {
+        let fixture = HistoryProbeFixture(mode: mode)
+        let query = mode == "nomatch" ? "quarterly" : ""
+        historyViewer.show(store: fixture, query: query) { [weak self] in self?.revealHistory() }
+        // Printed rather than discovered: `kCGWindowName` is nil without Screen Recording, so an
+        // outside lookup by title finds nothing and reads identically to the window never opening.
+        print("HISTORY_PROBE window=\(historyViewer.windowNumber ?? 0) mode=\(mode)")
+        fflush(stdout)
+    }
+
     func revealHistory() {
         guard let url = historyURL else { return }
         // Opened rather than revealed (#154). Revealing worked, and then the user double-clicked
@@ -176,8 +209,8 @@ final class AppActions {
             MenuAction(title: "Edit Dictionary", systemImage: "character.book.closed") { [weak self] in
                 self?.editDictionary()
             },
-            MenuAction(title: "Open History File", systemImage: "clock.arrow.circlepath") { [weak self] in
-                self?.revealHistory()
+            MenuAction(title: "View History", systemImage: "clock.arrow.circlepath") { [weak self] in
+                self?.showHistory()
             },
             MenuAction(title: "Delete History", systemImage: "trash") { [weak self] in
                 self?.clearHistory()
