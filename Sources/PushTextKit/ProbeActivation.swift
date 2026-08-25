@@ -27,6 +27,7 @@ public enum ProbeActivation {
     static let probes: [(activation: String, companions: [String])] = [
         ("PUSHTEXT_HOTKEY_PROBE", [
             "PUSHTEXT_HOTKEY_PROBE_SECONDS",
+            "PUSHTEXT_HOTKEY_PROBE_KEY",
             "PUSHTEXT_HOTKEY_PROBE_SYNTHETIC",
             "PUSHTEXT_HOTKEY_PROBE_SECURE",
             "PUSHTEXT_HOTKEY_PROBE_STALL",

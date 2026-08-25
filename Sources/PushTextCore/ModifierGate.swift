@@ -48,10 +48,33 @@ public struct HotkeyBinding: Equatable, Hashable, Sendable {
     public static let leftOption = HotkeyBinding(
         keyCode: 0x3A, deviceMask: 0x0000_0020, name: "Left Option")
 
-    /// The bindings offered in settings. Fn is deliberately absent: it does not exist on non-Apple
-    /// keyboards, and its system action cannot be suppressed — `TextInputSwitcher.app` handles the
-    /// Globe key through `_CGSSetSymbolicHotKey` and never enters the event-tap chain at all, so an
-    /// event tap cannot swallow it. See docs/research/04 sec 1 and sec 2.
+    // NX_DEVICELCMDKEYMASK 0x8, kVK_Command 0x37.
+    public static let leftCommand = HotkeyBinding(
+        keyCode: 0x37, deviceMask: 0x0000_0008, name: "Left Command")
+    // NX_DEVICELCTLKEYMASK 0x1, kVK_Control 0x3B.
+    public static let leftControl = HotkeyBinding(
+        keyCode: 0x3B, deviceMask: 0x0000_0001, name: "Left Control")
+    // NX_DEVICELSHIFTKEYMASK 0x2, kVK_Shift 0x38.
+    public static let leftShift = HotkeyBinding(
+        keyCode: 0x38, deviceMask: 0x0000_0002, name: "Left Shift")
+
+    /// The Globe key. `kCGEventFlagMaskSecondaryFn` / `NSEvent.ModifierFlags.function`, which are
+    /// bit-identical at 0x800000, and `kVK_Function` 0x3F.
+    ///
+    /// **It was excluded on a comment that misread our own research (#176).** That comment said the
+    /// Globe key "never enters the event-tap chain at all, so an event tap cannot swallow it" - and
+    /// conflated two different facts. `docs/research/04` says a tap CAN SEE Fn via this flag, and
+    /// that what cannot be done is SUPPRESS it, because WindowServer runs the Globe action ahead of
+    /// every tap. Its actual recommendation was "Fn/Globe offered as an opt-in ... Do NOT default to
+    /// Fn", and "not the default" became "not available".
+    ///
+    /// Not the default, for the reason that report gives: Apple maps Globe to a vendor-specific HID
+    /// usage, so a non-Apple keyboard produces no `maskSecondaryFn` at all and would leave those
+    /// users with a dead app and no error to show them.
+    public static let globe = HotkeyBinding(
+        keyCode: 0x3F, deviceMask: 0x0080_0000, name: "Globe (fn)")
+
+    /// The bindings offered in settings.
     /// The binding a raw `flagsChanged` event just pressed DOWN, or nil (#128).
     ///
     /// Two conditions, and a recorder that drops either one feels broken in a different way:
@@ -71,12 +94,26 @@ public struct HotkeyBinding: Equatable, Hashable, Sendable {
     /// Takes integers rather than an `NSEvent` so the decision is testable without a keyboard, a
     /// window, or AppKit in Core.
     public static func pressed(keyCode: Int64, rawModifierFlags: UInt64) -> HotkeyBinding? {
-        guard let binding = selectable.first(where: { $0.keyCode == keyCode }) else { return nil }
-        return (rawModifierFlags & binding.deviceMask) != 0 ? binding : nil
+        if let binding = selectable.first(where: { $0.keyCode == keyCode }) {
+            return (rawModifierFlags & binding.deviceMask) != 0 ? binding : nil
+        }
+        // GLOBE, by flag rather than keycode. `sebsto/wispr` ships a comment recording that Apple
+        // Silicon Macs may report a keycode other than 63 in `flagsChanged` for the Globe key, so
+        // matching on the keycode alone loses it on exactly the machines this app targets
+        // (docs/research/04 sec 1.3).
+        //
+        // Safe here BECAUSE this only ever sees `flagsChanged`. The Fn bit is also set on F1-F20 and
+        // the arrow keys on a laptop keyboard - and those arrive as `keyDown`, never as a modifier
+        // change. Testing the flag on a `keyDown` stream would be the false-positive trap that
+        // research names.
+        if (rawModifierFlags & globe.deviceMask) != 0 { return globe }
+        return nil
     }
 
     public static let selectable: [HotkeyBinding] = [
-        .rightOption, .rightCommand, .rightControl, .rightShift, .leftOption
+        .rightOption, .rightCommand, .rightControl, .rightShift,
+        .leftOption, .leftCommand, .leftControl, .leftShift,
+        .globe
     ]
 }
 

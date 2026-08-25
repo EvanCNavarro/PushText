@@ -81,9 +81,14 @@ struct HotkeyRecorderViewTests {
         view.onRecordingChange = { signals.append($0) }
 
         click(view)
-        // Left Command: a real modifier, deliberately absent from `selectable`.
-        view.flagsChanged(with: modifierEvent(keyCode: 0x37,
-                                              flags: NSEvent.ModifierFlags(rawValue: 0x000_8)))
+        // Caps Lock: a real modifier key that is deliberately NOT bindable - it latches rather than
+        // being held, so it cannot express push-to-talk.
+        //
+        // This used to be Left Command, which #176 made bindable: the five-key list was arbitrary
+        // and it cost Bobby the Globe key. When the offer widens, the example of a refusal has to
+        // move with it, or the test starts asserting the opposite of the feature.
+        view.flagsChanged(with: modifierEvent(keyCode: 0x39,
+                                              flags: NSEvent.ModifierFlags(rawValue: 0x001_0000)))
         #expect(captured == nil)
         #expect(signals == [true], "recording ended on a key that was never accepted")
     }

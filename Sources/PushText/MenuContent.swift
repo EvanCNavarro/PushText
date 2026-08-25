@@ -76,6 +76,21 @@ struct MenuContent: View {
             SectionCard("DICTATE") {
                 LabeledLine(label: "Hold", value: "Speak, release to insert")
                 LabeledLine(label: "Double-press", value: "Hands-free, press again to end")
+                if model.preferences.hotkeyBinding == .globe,
+                   let clash = GlobeKeySetting.currentAction() {
+                    // Globe is the one binding with a system action attached, and that action runs
+                    // from WindowServer AHEAD of every event tap - so PushText can see the press
+                    // and cannot stop macOS acting on it (#176). Saying so beats a hotkey that
+                    // half-works and looks broken.
+                    NoticeCard(title: "The Globe key also does something else",
+                               message: "macOS is set to \(clash.describedForUser) when you press "
+                                   + "Globe, and it acts first. Set it to Do Nothing so dictation "
+                                   + "gets the key to itself.",
+                               linkLabel: "Open Keyboard Settings",
+                               url: URL(string: "x-apple.systempreferences:"
+                                   + "com.apple.Keyboard-Settings.extension")!)
+                }
+
                 RecorderLine(label: "Hotkey",
                              current: model.preferences.hotkeyBinding,
                              onRecordingChange: { model.preferences.isRecordingHotkey = $0 },
