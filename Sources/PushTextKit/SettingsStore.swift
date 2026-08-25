@@ -24,6 +24,7 @@ public struct UserDefaultsSettingsStore: SettingsStore {
     private enum Key {
         static let cleanupEnabled = "cleanupEnabled"
         static let hotkeyKeyCode = "hotkeyKeyCode"
+        static let soundEnabled = "soundEnabled"
     }
 
     private let suiteName: String?
@@ -51,12 +52,18 @@ public struct UserDefaultsSettingsStore: SettingsStore {
             cleanupEnabled: stored.object(forKey: Key.cleanupEnabled) as? Bool
                 ?? fallback.cleanupEnabled,
             hotkeyKeyCode: (stored.object(forKey: Key.hotkeyKeyCode) as? NSNumber)?.int64Value
-                ?? fallback.hotkeyKeyCode)
+                ?? fallback.hotkeyKeyCode,
+            // The setting the comment above was written for: this one defaults to TRUE, so
+            // `bool(forKey:)` would read an absent key and a stored `false` identically and the
+            // user's OFF would never survive a relaunch.
+            soundEnabled: stored.object(forKey: Key.soundEnabled) as? Bool
+                ?? fallback.soundEnabled)
     }
 
     public func save(_ settings: AppSettings) {
         defaults.set(settings.cleanupEnabled, forKey: Key.cleanupEnabled)
         defaults.set(NSNumber(value: settings.hotkeyKeyCode), forKey: Key.hotkeyKeyCode)
+        defaults.set(settings.soundEnabled, forKey: Key.soundEnabled)
     }
 
     public func purge() {

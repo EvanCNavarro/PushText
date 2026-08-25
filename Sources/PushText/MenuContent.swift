@@ -82,6 +82,19 @@ struct MenuContent: View {
                              onCapture: { model.preferences.hotkeyBinding = $0 })
             }
 
+            SectionCard("SOUND") {
+                ToggleLine(label: "Start and stop cues",
+                           isOn: Binding(get: { model.preferences.soundEnabled },
+                                         set: { model.preferences.soundEnabled = $0 }))
+                // What it does, in the user's terms. The cues are generated rather than sampled
+                // (#172) - the tool this was matched to ships its own audio, and copying it into a
+                // public repository would be redistributing someone else's assets.
+                Text("A short tone when dictation starts, a lower one when it ends.")
+                    .font(Tokens.caption)
+                    .foregroundStyle(Tokens.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             SectionCard("CLEANUP") {
                 ToggleLine(label: "Tidy transcripts",
                            isOn: Binding(get: { model.preferences.cleanupEnabled },

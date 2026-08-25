@@ -22,7 +22,7 @@ struct UserPreferencesTests {
     @Test("Loading takes the stored hotkey, not the default")
     func loadsStoredHotkey() {
         let store = SpyStore(AppSettings(cleanupEnabled: false,
-                                         hotkeyKeyCode: HotkeyBinding.rightControl.keyCode))
+                                         hotkeyKeyCode: HotkeyBinding.rightControl.keyCode, soundEnabled: true))
         #expect(UserPreferences(store: store).hotkeyBinding == .rightControl)
     }
 
@@ -54,7 +54,7 @@ struct UserPreferencesTests {
     @Test("Changing the hotkey preserves the cleanup setting")
     func hotkeyChangeKeepsCleanup() {
         let store = SpyStore(AppSettings(cleanupEnabled: true,
-                                         hotkeyKeyCode: HotkeyBinding.rightOption.keyCode))
+                                         hotkeyKeyCode: HotkeyBinding.rightOption.keyCode, soundEnabled: true))
         let prefs = UserPreferences(store: store)
         prefs.hotkeyBinding = .rightShift
 
