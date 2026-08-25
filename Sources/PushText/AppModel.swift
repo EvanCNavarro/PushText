@@ -49,7 +49,7 @@ private let engine: any TranscriptionEngine
     var currentAudioLevel: Double { hud.levels.current }
     /// Turns raw edges into events, so a double press can start a latched utterance (#46).
     private var pressPattern = PressPatternRecognizer()
-    private let watchdog = CaptureWatchdog()
+    let watchdog = CaptureWatchdog()
     /// Text waiting to be injected, held between `transcriptFinalized` and `injectionFinished`.
     var pendingText: String?
 
@@ -128,6 +128,7 @@ private let engine: any TranscriptionEngine
          injector: (any TextInjector)? = nil,
          indicator: (any DictationIndicator)? = nil,
          history: (any HistoryStore)? = nil,
+         sounds: (any DictationSoundPlaying)? = nil,
          dictionary: (any DictionaryStore)? = nil,
          cleanup: (any CleanupProvider)? = nil,
          settingsStore: (any SettingsStore)? = nil,
@@ -136,12 +137,17 @@ private let engine: any TranscriptionEngine
         self.capture = capture
         self.injector = injector
         self.hud = HUDDriver(indicator: indicator)
+        self.sounds = sounds
         self.finisher = TranscriptFinisher(cleanup: cleanup, dictionary: dictionary,
                                            history: history)
         self.preferences = UserPreferences(store: settingsStore)
         self.feed = AudioFeed(engine: engine)
         self.machine = machine
     }
+
+    /// Plays the start/stop cues (#172). Optional, like every other system capability, so the
+    /// state-machine tests construct a model that makes no noise.
+    let sounds: (any DictationSoundPlaying)?
 
     func reportStartupFailure(_ message: String) {
         startupFailure = message
@@ -227,7 +233,11 @@ private let engine: any TranscriptionEngine
                 await self.openUtterance(epoch: epoch)
             }
 
+        case .recording:
+            playCue(.start)          // see AppModel+Cues for why here and not `.arming`
+
         case .transcribing:
+            playCue(.stop)
             Task { await self.closeUtterance() }
 
         case .cleaning:
@@ -374,12 +384,6 @@ private let engine: any TranscriptionEngine
         }
         pendingText = nil
     }
-
-    private func startCaptureWatchdog() {
-        watchdog.arm { [weak self] in self?.apply(.watchdogExpired) }
-    }
-
-    private func stopCaptureWatchdog() { watchdog.disarm() }
 
     /// Whether a capture-duration watchdog is currently armed.
     var isCaptureWatchdogArmed: Bool { watchdog.isArmed }

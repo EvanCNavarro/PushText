@@ -83,6 +83,7 @@ struct PushTextApp: App {
         // leaves the machine, a file the user can read with `tail` and delete with `rm` is part of
         // the claim rather than an implementation detail.
         let history = JSONLHistoryStore.defaultURL().map { JSONLHistoryStore(url: $0) }
+        let sounds = SoundFeedback()
         // The user's rewrite rules (#82). #13 measured that the engine cannot be biased, so this
         // post-pass is the only mechanism there is for proper nouns like "PushText".
         let dictionary = JSONLDictionaryStore.defaultURL().map { JSONLDictionaryStore(url: $0) }
@@ -100,6 +101,7 @@ struct PushTextApp: App {
                              injector: PasteboardTextInjector(),
                              indicator: DictationHUDController(),
                              history: history,
+                             sounds: sounds,
                              dictionary: dictionary,
                              cleanup: FoundationModelsCleanup(),
                              settingsStore: settingsStore)
@@ -318,6 +320,9 @@ struct PushTextApp: App {
         }
         if CleanupProbe.isRequested {
             CleanupProbe.runAndExit()
+        }
+        if SoundProbe.isRequested {
+            SoundProbe.runAndExit()
         }
     }
 

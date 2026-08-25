@@ -19,6 +19,12 @@ final class UserPreferences {
         didSet { if cleanupEnabled != oldValue { persist() } }
     }
 
+    /// Whether the start and stop cues play (#172). Default ON, matching the tool this was compared
+    /// to; the toggle is the point.
+    var soundEnabled: Bool {
+        didSet { if soundEnabled != oldValue { persist() } }
+    }
+
     /// Which bare modifier starts a dictation.
     ///
     /// Setting it persists AND re-registers the event tap. A picker that only changed the label
@@ -58,12 +64,14 @@ final class UserPreferences {
         let loaded = store?.load() ?? AppSettings.defaults
         self.cleanupEnabled = loaded.cleanupEnabled
         self.hotkeyBinding = loaded.hotkeyBinding
+        self.soundEnabled = loaded.soundEnabled
     }
 
-    /// Writes BOTH fields every time. `save` is all-keys, so persisting one field from a partial
-    /// value would reset the other - the clobber TermTile's `AppSettings` comment warns about.
+    /// Writes EVERY field every time. `save` is all-keys, so persisting one field from a partial
+    /// value would reset the others - the clobber TermTile's `AppSettings` comment warns about.
     private func persist() {
         store?.save(AppSettings(cleanupEnabled: cleanupEnabled,
-                                hotkeyKeyCode: hotkeyBinding.keyCode))
+                                hotkeyKeyCode: hotkeyBinding.keyCode,
+                                soundEnabled: soundEnabled))
     }
 }

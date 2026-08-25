@@ -23,13 +23,23 @@ public struct AppSettings: Equatable, Sendable {
     /// copy that can disagree with the first. An unknown code resolves back to the default.
     public var hotkeyKeyCode: Int64
 
-    public init(cleanupEnabled: Bool, hotkeyKeyCode: Int64) {
+    /// Whether the start and stop cues play (#172).
+    ///
+    /// Default ON, matching the tool Bobby compared it to. The cues are the only feedback that the
+    /// hotkey registered when the HUD is behind a full-screen window, and a hold-to-talk key with no
+    /// acknowledgement is one you press twice. Anyone who wants silence has a toggle - which is the
+    /// half of the request that mattered.
+    public var soundEnabled: Bool
+
+    public init(cleanupEnabled: Bool, hotkeyKeyCode: Int64, soundEnabled: Bool) {
         self.cleanupEnabled = cleanupEnabled
         self.hotkeyKeyCode = hotkeyKeyCode
+        self.soundEnabled = soundEnabled
     }
 
     public static let defaults = AppSettings(cleanupEnabled: false,
-                                             hotkeyKeyCode: HotkeyBinding.rightOption.keyCode)
+                                             hotkeyKeyCode: HotkeyBinding.rightOption.keyCode,
+                                             soundEnabled: true)
 
     /// The binding this setting names, or the default when the stored code is not one we offer -
     /// which is what a downgrade, a hand-edited plist, or a removed binding all look like.
