@@ -103,7 +103,15 @@ struct MenuContent: View {
         .background(Tokens.panel)
         // Recomputed on OPEN, not cached at launch. The user changes these in System Settings while
         // this menu is closed, so a launch-time value is stale exactly when they come back to check.
-        .onAppear { model.refreshPermissionAdvice() }
+        //
+        // The update probe is here for the same reason (#170) and it is the same bug: it ran once
+        // from `onLaunch` and never again, so a menu opened days later drew its dot from a days-old
+        // answer. This is the moment the user is looking at two of the three places that mark
+        // lives. `UpdateCheckPolicy` rate-limits it - the menu gets opened constantly.
+        .onAppear {
+            model.refreshPermissionAdvice()
+            actions.refreshUpdateAvailability()
+        }
     }
 }
 
