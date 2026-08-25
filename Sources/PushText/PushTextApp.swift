@@ -83,7 +83,7 @@ struct PushTextApp: App {
         // leaves the machine, a file the user can read with `tail` and delete with `rm` is part of
         // the claim rather than an implementation detail.
         let history = JSONLHistoryStore.defaultURL().map { JSONLHistoryStore(url: $0) }
-        let sounds = SoundFeedback()
+        let (sounds, muter) = (SoundFeedback(), DictationMuter())
         // The user's rewrite rules (#82). #13 measured that the engine cannot be biased, so this
         // post-pass is the only mechanism there is for proper nouns like "PushText".
         let dictionary = JSONLDictionaryStore.defaultURL().map { JSONLDictionaryStore(url: $0) }
@@ -106,6 +106,7 @@ struct PushTextApp: App {
                              indicator: DictationHUDController(),
                              history: history,
                              sounds: sounds,
+                             muter: muter,
                              dictionary: dictionary,
                              cleanup: FoundationModelsCleanup(),
                              settingsStore: settingsStore)
@@ -159,6 +160,10 @@ struct PushTextApp: App {
         let launchActions = actions
         launchDelegate.onLaunch {
             Self.requestMicrophone(for: model)
+            // Give the sound back if we were killed mid-dictation (#188). An app that mutes the Mac
+            // and dies leaves it silent with no visible cause, and nobody connects that to a
+            // dictation utility.
+            muter.recoverIfInterrupted()
             // Ask what is out there WITHOUT showing anything, so the dot can appear on its own
             // (#138). Sparkle's automatic checks stay off - this is the quiet probe, not a dialog.
             // Starts the cadence AND does the first check (#170). It used to be a single check

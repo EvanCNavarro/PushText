@@ -24,7 +24,7 @@ struct SettingsStoreTests {
     func savedValueRoundTrips() {
         let store = makeStore("roundtrip")
         store.purge()
-        store.save(AppSettings(cleanupEnabled: true, hotkeyKeyCode: HotkeyBinding.rightOption.keyCode, soundEnabled: true))
+        store.save(AppSettings(cleanupEnabled: true, hotkeyKeyCode: HotkeyBinding.rightOption.keyCode, soundEnabled: true, silenceWhileDictating: false))
 
         #expect(store.load().cleanupEnabled == true,
                 "saved true did not come back; load is not reading storage")
@@ -33,7 +33,7 @@ struct SettingsStoreTests {
     @Test("Purge returns the domain to its defaults")
     func purgeResets() {
         let store = makeStore("purge")
-        store.save(AppSettings(cleanupEnabled: true, hotkeyKeyCode: HotkeyBinding.rightOption.keyCode, soundEnabled: true))
+        store.save(AppSettings(cleanupEnabled: true, hotkeyKeyCode: HotkeyBinding.rightOption.keyCode, soundEnabled: true, silenceWhileDictating: false))
         #expect(store.load().cleanupEnabled == true)
 
         store.purge()
@@ -53,7 +53,7 @@ extension SettingsStoreTests {
         #expect(store.load().hotkeyBinding == .rightOption, "default")
 
         store.save(AppSettings(cleanupEnabled: false,
-                               hotkeyKeyCode: HotkeyBinding.rightCommand.keyCode, soundEnabled: true))
+                               hotkeyKeyCode: HotkeyBinding.rightCommand.keyCode, soundEnabled: true, silenceWhileDictating: false))
         #expect(store.load().hotkeyBinding == .rightCommand,
                 "saved hotkey did not come back; load is not reading the key")
     }
@@ -64,7 +64,7 @@ extension SettingsStoreTests {
         let store = makeStore("both")
         store.purge()
         store.save(AppSettings(cleanupEnabled: true,
-                               hotkeyKeyCode: HotkeyBinding.rightShift.keyCode, soundEnabled: true))
+                               hotkeyKeyCode: HotkeyBinding.rightShift.keyCode, soundEnabled: true, silenceWhileDictating: false))
         let loaded = store.load()
         #expect(loaded.cleanupEnabled == true)
         #expect(loaded.hotkeyBinding == .rightShift)
@@ -74,7 +74,7 @@ extension SettingsStoreTests {
     /// whose mask is unknown - which would be a hotkey that can never fire.
     @Test("An unknown keycode falls back to the default binding")
     func unknownCodeFallsBack() {
-        let settings = AppSettings(cleanupEnabled: false, hotkeyKeyCode: 0x7FFF, soundEnabled: true)
+        let settings = AppSettings(cleanupEnabled: false, hotkeyKeyCode: 0x7FFF, soundEnabled: true, silenceWhileDictating: false)
         #expect(settings.hotkeyBinding == .rightOption)
     }
 }

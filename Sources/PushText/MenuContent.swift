@@ -129,6 +129,16 @@ struct MenuContent: View {
                     .font(Tokens.caption)
                     .foregroundStyle(Tokens.muted)
                     .fixedSize(horizontal: false, vertical: true)
+
+                ToggleLine(label: "Silence other audio",
+                           isOn: Binding(get: { model.preferences.silenceWhileDictating },
+                                         set: { model.preferences.silenceWhileDictating = $0 }))
+                // Says WHY, because on a laptop the speakers are inches from the microphone and
+                // whatever is playing becomes part of what the transcriber is asked to make sense of.
+                Text("Mutes the Mac while you dictate, so music does not reach the microphone.")
+                    .font(Tokens.caption)
+                    .foregroundStyle(Tokens.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             SectionCard("CLEANUP") {

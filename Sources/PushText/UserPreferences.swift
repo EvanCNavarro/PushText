@@ -25,6 +25,11 @@ final class UserPreferences {
         didSet { if soundEnabled != oldValue { persist() } }
     }
 
+    /// Whether the Mac's audio is silenced while dictating (#188). Default OFF.
+    var silenceWhileDictating: Bool {
+        didSet { if silenceWhileDictating != oldValue { persist() } }
+    }
+
     /// Which bare modifier starts a dictation.
     ///
     /// Setting it persists AND re-registers the event tap. A picker that only changed the label
@@ -65,6 +70,7 @@ final class UserPreferences {
         self.cleanupEnabled = loaded.cleanupEnabled
         self.hotkeyBinding = loaded.hotkeyBinding
         self.soundEnabled = loaded.soundEnabled
+        self.silenceWhileDictating = loaded.silenceWhileDictating
     }
 
     /// Writes EVERY field every time. `save` is all-keys, so persisting one field from a partial
@@ -72,6 +78,7 @@ final class UserPreferences {
     private func persist() {
         store?.save(AppSettings(cleanupEnabled: cleanupEnabled,
                                 hotkeyKeyCode: hotkeyBinding.keyCode,
-                                soundEnabled: soundEnabled))
+                                soundEnabled: soundEnabled,
+                                silenceWhileDictating: silenceWhileDictating))
     }
 }
