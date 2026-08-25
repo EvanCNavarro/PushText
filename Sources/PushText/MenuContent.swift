@@ -77,24 +77,20 @@ struct MenuContent: View {
                 LabeledLine(label: "Hold", value: "Speak, release to insert")
                 LabeledLine(label: "Double-press", value: "Hands-free, press again to end")
                 if model.preferences.hotkeyBinding == .globe,
+                   !model.preferences.globeNoticeDismissed,
                    let clash = GlobeKeySetting.currentAction() {
-                    // Globe is the one binding with a system action attached, and that action runs
-                    // from WindowServer AHEAD of every event tap - so PushText can see the press
-                    // and cannot stop macOS acting on it (#176). Saying so beats a hotkey that
-                    // half-works and looks broken.
-                    // Does NOT claim which gesture or that macOS wins the race. Bobby's screenshot
-                    // showed the setting as "Start Dictation (Press the Globe key Twice)" - a
-                    // DOUBLE press - while this said "when you press Globe", which is wrong for
-                    // that value and unverified for the others. Whether macOS acts first on real
-                    // hardware is also unmeasured (#182). The claim is now only what is on screen
-                    // in System Settings, which is the part that is true.
-                    NoticeCard(title: "Globe has a system action",
-                               message: "macOS also uses the Globe key for "
-                                   + "\(clash.describedForUser). Set it to Do Nothing so dictation "
-                                   + "has the key to itself.",
-                               linkLabel: "Open Keyboard Settings",
-                               url: URL(string: "x-apple.systempreferences:"
-                                   + "com.apple.Keyboard-Settings.extension")!)
+                    // INFORMATIONAL, not a warning, and dismissible (#190).
+                    //
+                    // It was a NoticeCard with a warning triangle and no way to silence it. Bobby:
+                    // "it looks like something is wrong by having this". Nothing IS wrong - his
+                    // dictation works - and an orange triangle on a working app is how a person
+                    // learns to ignore the warnings that do matter.
+                    //
+                    // It is also advice about a CHOICE. Somebody may want Globe to do both things,
+                    // and an app that keeps telling them about a decision they have made is nagging.
+                    GlobeKeyNote(action: clash.describedForUser) {
+                        model.preferences.globeNoticeDismissed = true
+                    }
                 }
 
                 RecorderLine(label: "Hotkey",
@@ -350,4 +346,51 @@ private struct LastTranscriptCard: View {
             copied = false
         }
     }
+}
+
+/// The Globe-key note (#190).
+///
+/// Deliberately quiet. `Tokens.muted` and no warning glyph, because this describes a system setting
+/// the user may have chosen on purpose - it is not a fault, and styling it like one taught the user
+/// that PushText shows alarms about nothing.
+private struct GlobeKeyNote: View {
+    let action: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.micro) {
+            Text("macOS also uses the Globe key for \(action).")
+                .font(Tokens.caption)
+                .foregroundStyle(Tokens.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: Tokens.space) {
+                LinkButton("Keyboard Settings", systemImage: "gearshape",
+                           action: { NSWorkspace.shared.open(Self.keyboardSettings) })
+                    .fixedSize()
+                // NOT a LinkButton. That is the EXTERNAL-LINK affordance and it draws a trailing
+                // arrow meaning "this leaves the app" - dismissing a note leaves nothing. The same
+                // arrow has now been caught by rendering three times (#156, #161, and here), which
+                // is what a house style costs when the only control that looks right is the wrong
+                // one.
+                Button(action: onDismiss) {
+                    HStack(spacing: Tokens.micro) {
+                        Image(systemName: "xmark").font(Tokens.caption)
+                        Text("Dismiss").font(Tokens.caption)
+                    }
+                    .foregroundStyle(Tokens.muted)
+                    .padding(.horizontal, Tokens.inset)
+                    .frame(height: Tokens.controlButton)
+                    .background(RoundedRectangle(cornerRadius: Tokens.radius, style: .continuous)
+                        .fill(Tokens.field))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Dismiss this note"))
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private static let keyboardSettings = URL(
+        string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!
 }

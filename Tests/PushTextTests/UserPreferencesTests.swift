@@ -22,7 +22,7 @@ struct UserPreferencesTests {
     @Test("Loading takes the stored hotkey, not the default")
     func loadsStoredHotkey() {
         let store = SpyStore(AppSettings(cleanupEnabled: false,
-                                         hotkeyKeyCode: HotkeyBinding.rightControl.keyCode, soundEnabled: true, silenceWhileDictating: false))
+                                         hotkeyKeyCode: HotkeyBinding.rightControl.keyCode, soundEnabled: true, silenceWhileDictating: false, globeNoticeDismissed: false))
         #expect(UserPreferences(store: store).hotkeyBinding == .rightControl)
     }
 
@@ -54,11 +54,27 @@ struct UserPreferencesTests {
     @Test("Changing the hotkey preserves the cleanup setting")
     func hotkeyChangeKeepsCleanup() {
         let store = SpyStore(AppSettings(cleanupEnabled: true,
-                                         hotkeyKeyCode: HotkeyBinding.rightOption.keyCode, soundEnabled: true, silenceWhileDictating: false))
+                                         hotkeyKeyCode: HotkeyBinding.rightOption.keyCode, soundEnabled: true, silenceWhileDictating: false, globeNoticeDismissed: false))
         let prefs = UserPreferences(store: store)
         prefs.hotkeyBinding = .rightShift
 
         #expect(store.load().hotkeyBinding == .rightShift)
         #expect(store.load().cleanupEnabled == true, "the hotkey write clobbered cleanup")
+    }
+
+    /// The dismissal has to SURVIVE a relaunch (#190). A note that comes back every launch is the
+    /// nagging this change removed, and this is the second setting here whose default is `false` but
+    /// whose OFF-to-ON transition must persist - the store reads with `object(forKey:) as? Bool` for
+    /// exactly that reason.
+    @Test("Dismissing the Globe note sticks")
+    func globeDismissalPersists() {
+        let store = SpyStore(AppSettings.defaults)
+        let first = UserPreferences(store: store)
+        #expect(first.globeNoticeDismissed == false)
+
+        first.globeNoticeDismissed = true
+
+        let reopened = UserPreferences(store: store)
+        #expect(reopened.globeNoticeDismissed, "the note would come back at every launch")
     }
 }

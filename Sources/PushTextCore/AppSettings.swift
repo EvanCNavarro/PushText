@@ -38,18 +38,27 @@ public struct AppSettings: Equatable, Sendable {
     /// involving a tone.
     public var silenceWhileDictating: Bool
 
+    /// Whether the user has dismissed the Globe-key note (#190).
+    ///
+    /// It exists because the note is ADVICE, not a fault. Somebody may want Globe to do both things,
+    /// and an app that keeps telling them about a choice they have made is an app whose warnings get
+    /// ignored - including the ones that matter.
+    public var globeNoticeDismissed: Bool
+
     public init(cleanupEnabled: Bool, hotkeyKeyCode: Int64, soundEnabled: Bool,
-                silenceWhileDictating: Bool) {
+                silenceWhileDictating: Bool, globeNoticeDismissed: Bool) {
         self.cleanupEnabled = cleanupEnabled
         self.hotkeyKeyCode = hotkeyKeyCode
         self.soundEnabled = soundEnabled
         self.silenceWhileDictating = silenceWhileDictating
+        self.globeNoticeDismissed = globeNoticeDismissed
     }
 
     public static let defaults = AppSettings(cleanupEnabled: false,
                                              hotkeyKeyCode: HotkeyBinding.rightOption.keyCode,
                                              soundEnabled: true,
-                                             silenceWhileDictating: false)
+                                             silenceWhileDictating: false,
+                                             globeNoticeDismissed: false)
 
     /// The binding this setting names, or the default when the stored code is not one we offer -
     /// which is what a downgrade, a hand-edited plist, or a removed binding all look like.

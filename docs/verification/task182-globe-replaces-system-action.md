@@ -93,6 +93,32 @@ nothing more. If the double press is the only colliding gesture, the collision l
 own double-press-to-latch rather than on an ordinary hold, which is a narrower and different problem
 from the one the original notice described.
 
+## 6b. It was styled as a fault, and nothing was faulty
+
+Bobby, on 0.6.0 with the Globe key working and "Testing, one, two, three." in Last Transcript:
+
+> i need to set do nothing still or is this an old artifact? like it looks like something is wrong by
+> having this
+
+He was right, and the answer is a design one rather than a factual one. Three things were wrong with
+the card:
+
+1. **A warning triangle on a working app.** His dictation had just succeeded. An orange alarm for a
+   working feature is how a person learns to ignore the alarms that matter.
+2. **Undismissable.** It described a CHOICE - somebody may want Globe to do both things - and an app
+   that keeps mentioning a decision the user has made is nagging.
+3. **Possibly about nothing.** macOS wants a DOUBLE press; hold-to-talk is a single one. If those
+   never collide, the note was noise for the primary gesture.
+
+Now a quiet line in `Tokens.muted` with no glyph, a Keyboard Settings link, and a Dismiss that
+persists.
+
+**Rendering caught the same defect for the third time.** Dismiss was built with `LinkButton`, which
+draws a trailing arrow because it is the EXTERNAL-LINK affordance - and dismissing a note leaves
+nothing. Identical to #156's Add Entry and #161's Open File. Three occurrences is not three mistakes,
+it is a house style where the control that looks right is the wrong one; recorded here so the fourth
+is caught by reading rather than by screenshot.
+
 ## 7. What this does NOT show
 
 **Whether swallowing at the tap defeats the WindowServer-run Globe action on a HARDWARE press.**
