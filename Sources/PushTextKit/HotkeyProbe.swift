@@ -17,6 +17,19 @@ public enum HotkeyProbe {
         ProcessInfo.processInfo.environment["PUSHTEXT_HOTKEY_PROBE"] == "1"
     }
 
+    /// The binding named by `PUSHTEXT_HOTKEY_PROBE_KEY`, or Right Option.
+    ///
+    /// Selectable because the claim that mattered was about a DIFFERENT key: Globe was refused for
+    /// months on a comment saying a tap cannot see it (#176), and this is how that was proven on
+    /// real hardware rather than argued from a research document.
+    private static func requestedBinding(_ requested: String?) -> HotkeyBinding {
+        let wanted = requested?.lowercased()
+        return HotkeyBinding.selectable.first {
+            $0.name.lowercased().replacingOccurrences(of: " ", with: "") == wanted
+                || ($0 == .globe && (wanted == "globe" || wanted == "fn"))
+        } ?? HotkeyBinding.rightOption
+    }
+
     /// Runs the probe and exits the process. Never returns.
     public static func runAndExit() -> Never {
         let env = ProcessInfo.processInfo.environment
@@ -25,11 +38,7 @@ public enum HotkeyProbe {
         // refused for months on a comment saying a tap cannot see it (#176); the tap can, and this
         // is how that gets proven on real hardware rather than argued from a research document.
         //   PUSHTEXT_HOTKEY_PROBE=1 PUSHTEXT_HOTKEY_PROBE_KEY=globe <app-binary>
-        let requested = env["PUSHTEXT_HOTKEY_PROBE_KEY"]?.lowercased()
-        let binding = HotkeyBinding.selectable.first {
-            $0.name.lowercased().replacingOccurrences(of: " ", with: "") == requested
-                || ($0 == .globe && (requested == "globe" || requested == "fn"))
-        } ?? HotkeyBinding.rightOption
+        let binding = requestedBinding(env["PUSHTEXT_HOTKEY_PROBE_KEY"])
 
         print("HOTKEY_PROBE binding=\(binding.name) keyCode=\(binding.keyCode) "
             + "deviceMask=0x\(String(binding.deviceMask, radix: 16))")
@@ -81,7 +90,8 @@ public enum HotkeyProbe {
         }
 
         monitor.stop()
-        print("HOTKEY_PROBE finished pressed=\(counter.pressed) released=\(counter.released) "
+        print("HOTKEY_PROBE finished consumed=\(monitor.consumedCount) "
+            + "pressed=\(counter.pressed) released=\(counter.released) "
             + "reEnables=\(monitor.reEnableCount)")
         fflush(stdout)
         exit(0)
