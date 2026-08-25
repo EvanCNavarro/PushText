@@ -350,43 +350,37 @@ private struct LastTranscriptCard: View {
 
 /// The Globe-key note (#190).
 ///
-/// Deliberately quiet. `Tokens.muted` and no warning glyph, because this describes a system setting
-/// the user may have chosen on purpose - it is not a fault, and styling it like one taught the user
-/// that PushText shows alarms about nothing.
+/// Deliberately quiet: `Tokens.muted`, no warning glyph. This describes a system setting the user may
+/// have chosen on purpose - it is not a fault, and styling it like one taught the user that PushText
+/// raises alarms about nothing.
+///
+/// **Built from the design system rather than by hand (#194).** The first version used a bare
+/// `Button` for Dismiss, which had no hover and no cursor change, sitting beside a `LinkButton` that
+/// has both - so one control looked alive and the other looked dead. `DESIGN.md` names the right one:
+/// *"Ghost - GhostIconButton ... For inline/secondary controls: search-field x, chip-remove, inline
+/// delete."* Colour-only, because `fill: true` is reserved for a roomy field-scoped control and this
+/// glyph sits on a card.
+///
+/// The link uses `LinkButton`'s URL initializer rather than calling `NSWorkspace` by hand - the
+/// component already does that, and it is the documented path.
 private struct GlobeKeyNote: View {
     let action: String
     let onDismiss: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Tokens.micro) {
-            Text("macOS also uses the Globe key for \(action).")
-                .font(Tokens.caption)
-                .foregroundStyle(Tokens.muted)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: Tokens.space) {
-                LinkButton("Keyboard Settings", systemImage: "gearshape",
-                           action: { NSWorkspace.shared.open(Self.keyboardSettings) })
-                    .fixedSize()
-                // NOT a LinkButton. That is the EXTERNAL-LINK affordance and it draws a trailing
-                // arrow meaning "this leaves the app" - dismissing a note leaves nothing. The same
-                // arrow has now been caught by rendering three times (#156, #161, and here), which
-                // is what a house style costs when the only control that looks right is the wrong
-                // one.
-                Button(action: onDismiss) {
-                    HStack(spacing: Tokens.micro) {
-                        Image(systemName: "xmark").font(Tokens.caption)
-                        Text("Dismiss").font(Tokens.caption)
-                    }
+        HStack(alignment: .top, spacing: Tokens.space) {
+            VStack(alignment: .leading, spacing: Tokens.micro) {
+                Text("macOS also uses the Globe key for \(action).")
+                    .font(Tokens.caption)
                     .foregroundStyle(Tokens.muted)
-                    .padding(.horizontal, Tokens.inset)
-                    .frame(height: Tokens.controlButton)
-                    .background(RoundedRectangle(cornerRadius: Tokens.radius, style: .continuous)
-                        .fill(Tokens.field))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text("Dismiss this note"))
-                Spacer(minLength: 0)
+                    .fixedSize(horizontal: false, vertical: true)
+                LinkButton("Keyboard Settings", url: Self.keyboardSettings,
+                           systemImage: "gearshape")
+                    .fixedSize()
             }
+            Spacer(minLength: Tokens.micro)
+            GhostIconButton(systemName: "xmark", action: onDismiss)
+                .accessibilityLabel(Text("Dismiss this note"))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

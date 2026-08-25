@@ -119,6 +119,31 @@ nothing. Identical to #156's Add Entry and #161's Open File. Three occurrences i
 it is a house style where the control that looks right is the wrong one; recorded here so the fourth
 is caught by reading rather than by screenshot.
 
+## 6c. The controls were hand-rolled, and one of them was dead (#194)
+
+Bobby, on the quieter note: *"the components you used though are like weird, no hover and etc for the
+confirm dismiss -- double check the design"*.
+
+Dismiss was a bare `Button` with a rounded fill, written by hand because nothing looked exactly
+right. Measured against its neighbour:
+
+```
+LinkButton on hover:  underline + rowActive fill + lineStrong stroke + pointingHand cursor
+that Dismiss:         nothing
+```
+
+`DESIGN.md` names the correct control outright - *"Ghost - GhostIconButton [...] For inline/secondary
+controls: search-field x, chip-remove, inline delete"* - and the history viewer's clear-search button
+already used it, so the app was inconsistent with itself before anyone looked.
+
+The same ten lines also called `NSWorkspace.shared.open` by hand inside a `LinkButton(action:)`, when
+`LinkButton` has a URL initializer whose comment says it does precisely that.
+
+**Four interaction defects in this app have now been found by LOOKING rather than by reading**
+(#156, #161, #192, #194), and the first three were the identical trailing-arrow mistake. The pattern
+is not carelessness: it is reaching for the component that reads right in source over the one the
+design system names, and it is only visible once rendered.
+
 ## 7. What this does NOT show
 
 **Whether swallowing at the tap defeats the WindowServer-run Globe action on a HARDWARE press.**
