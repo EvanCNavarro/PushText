@@ -30,6 +30,11 @@ final class UserPreferences {
         didSet { if silenceWhileDictating != oldValue { persist() } }
     }
 
+    /// Whether the Globe-key note has been dismissed (#190).
+    var globeNoticeDismissed: Bool {
+        didSet { if globeNoticeDismissed != oldValue { persist() } }
+    }
+
     /// Which bare modifier starts a dictation.
     ///
     /// Setting it persists AND re-registers the event tap. A picker that only changed the label
@@ -71,6 +76,7 @@ final class UserPreferences {
         self.hotkeyBinding = loaded.hotkeyBinding
         self.soundEnabled = loaded.soundEnabled
         self.silenceWhileDictating = loaded.silenceWhileDictating
+        self.globeNoticeDismissed = loaded.globeNoticeDismissed
     }
 
     /// Writes EVERY field every time. `save` is all-keys, so persisting one field from a partial
@@ -79,6 +85,7 @@ final class UserPreferences {
         store?.save(AppSettings(cleanupEnabled: cleanupEnabled,
                                 hotkeyKeyCode: hotkeyBinding.keyCode,
                                 soundEnabled: soundEnabled,
-                                silenceWhileDictating: silenceWhileDictating))
+                                silenceWhileDictating: silenceWhileDictating,
+                                globeNoticeDismissed: globeNoticeDismissed))
     }
 }

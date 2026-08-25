@@ -26,6 +26,7 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         static let hotkeyKeyCode = "hotkeyKeyCode"
         static let soundEnabled = "soundEnabled"
         static let silenceWhileDictating = "silenceWhileDictating"
+        static let globeNoticeDismissed = "globeNoticeDismissed"
     }
 
     private let suiteName: String?
@@ -60,7 +61,9 @@ public struct UserDefaultsSettingsStore: SettingsStore {
             soundEnabled: stored.object(forKey: Key.soundEnabled) as? Bool
                 ?? fallback.soundEnabled,
             silenceWhileDictating: stored.object(forKey: Key.silenceWhileDictating) as? Bool
-                ?? fallback.silenceWhileDictating)
+                ?? fallback.silenceWhileDictating,
+            globeNoticeDismissed: stored.object(forKey: Key.globeNoticeDismissed) as? Bool
+                ?? fallback.globeNoticeDismissed)
     }
 
     public func save(_ settings: AppSettings) {
@@ -68,6 +71,7 @@ public struct UserDefaultsSettingsStore: SettingsStore {
         defaults.set(NSNumber(value: settings.hotkeyKeyCode), forKey: Key.hotkeyKeyCode)
         defaults.set(settings.soundEnabled, forKey: Key.soundEnabled)
         defaults.set(settings.silenceWhileDictating, forKey: Key.silenceWhileDictating)
+        defaults.set(settings.globeNoticeDismissed, forKey: Key.globeNoticeDismissed)
     }
 
     public func purge() {
