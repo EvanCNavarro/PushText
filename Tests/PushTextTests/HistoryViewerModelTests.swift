@@ -136,6 +136,23 @@ struct HistoryViewerModelTests {
                 "the same transcript changed identity when the list was filtered")
     }
 
+    /// The view paints `row.matches`; an empty array paints nothing. Both halves matter - a row
+    /// shown with no query must NOT come back pre-highlighted.
+    @Test("Rows carry what to highlight, and only while searching")
+    func rowsCarryTheirMatches() {
+        let subject = model([record("Ask about the invoice", at: 100)])
+
+        #expect(subject.visible.first?.matches.isEmpty == true,
+                "an unsearched row must not arrive highlighted")
+
+        subject.query = "invoce"
+        guard let row = subject.visible.first else {
+            Issue.record("the typo should still have matched"); return
+        }
+        #expect(row.matches.map { String(row.text[$0]) } == ["invoice"],
+                "the highlight has to land on the word matched, not the word typed")
+    }
+
     @Test("Durations read as seconds a person would say")
     func durationsAreReadable() {
         let subject = model([record("a", at: 100, duration: 2.4)])

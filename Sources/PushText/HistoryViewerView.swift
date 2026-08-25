@@ -118,8 +118,7 @@ private struct TranscriptRow: View {
                 GhostIconButton(systemName: copied ? "checkmark" : "doc.on.doc", action: copy)
                     .accessibilityLabel(copied ? "Copied" : "Copy transcript")
             }
-            Text(row.text)
-                .font(Tokens.body).foregroundStyle(Tokens.text)
+            Text(highlighted)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -128,6 +127,38 @@ private struct TranscriptRow: View {
         .background(RoundedRectangle(cornerRadius: Tokens.radius, style: .continuous)
             .fill(Tokens.row))
     }
+
+    /// The transcript with the search hits marked (#167).
+    ///
+    /// TWO cues, not one. The background is the update indicator's orange at low opacity, and the
+    /// matched words also go semibold - colour alone must not be the only thing carrying meaning
+    /// (WCAG 1.4.1), and on a menu-bar utility someone may well be looking at this through a
+    /// colour filter or on a badly calibrated external display.
+    ///
+    /// Measured rather than eyeballed: `Tokens.warning` at 0.25 over `Tokens.row` composites to
+    /// rgb(82, 63, 41), against which `Tokens.text` sits at **8.99:1** - past WCAG AAA for body
+    /// text, and the reason the text stays near-white instead of turning orange. Orange text on an
+    /// orange wash would have been the obvious move and the worse one.
+    private var highlighted: AttributedString {
+        var attributed = AttributedString(row.text)
+        attributed.font = Tokens.body
+        attributed.foregroundColor = Tokens.text
+        for range in row.matches {
+            guard let lower = AttributedString.Index(range.lowerBound, within: attributed),
+                  let upper = AttributedString.Index(range.upperBound, within: attributed) else {
+                continue
+            }
+            attributed[lower..<upper].backgroundColor = Self.matchBackground
+            attributed[lower..<upper].font = Self.matchFont
+        }
+        return attributed
+    }
+
+    /// The update indicator's colour, softened. Deliberately the same hue: both marks mean "the
+    /// thing you are looking for is here", and a second accent colour would be a second vocabulary
+    /// for the user to learn.
+    private static let matchBackground = Tokens.warning.opacity(0.25)
+    private static let matchFont = Font.system(size: 13, weight: .semibold)
 
     private func copy() {
         NSPasteboard.general.clearContents()

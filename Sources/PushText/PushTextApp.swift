@@ -220,7 +220,13 @@ struct PushTextApp: App {
                 // launch crash lived (#158). A probe that never evaluates body cannot catch it.
                 window.contentView?.layoutSubtreeIfNeeded()
                 dictationLog.info("MENU_PROBE window=\(window.windowNumber)")
-                print("MENU_PROBE window=\(window.windowNumber) rendered=true")
+                // The FRAME too, so a probe can drive a control inside this window - the overflow
+                // dropdown only exists once its `...` is clicked, and `OverflowMenu` keeps `open`
+                // as private @State that nothing outside can set.
+                let frame = window.frame
+                print("MENU_PROBE window=\(window.windowNumber) rendered=true "
+                    + "frame=\(Int(frame.origin.x)),\(Int(frame.origin.y)),"
+                    + "\(Int(frame.width)),\(Int(frame.height))")
                 fflush(stdout)
 
                 // Bounded mode for the release smoke: render, prove it, exit. Left running when
