@@ -45,16 +45,23 @@ final class HistoryViewerModel {
 
     var visible: [Row] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let matched = needle.isEmpty
-            ? records
-            // Only `text`. Searching the record's storage would let "2026" match every dictation
-            // from this year while matching nothing anyone actually said.
-            : records.filter { $0.text.range(of: needle, options: .caseInsensitive) != nil }
-        return matched.enumerated().map { index, record in
-            Row(id: index, record: record,
-                timestamp: Self.timestamp.string(from: record.recordedAt),
-                duration: Self.duration(record.durationSeconds))
-        }
+        // Numbered BEFORE filtering, so a transcript keeps its identity as the query changes.
+        //
+        // SwiftUI keys per-row `@State` off the row's id, and the copy button's checkmark is
+        // per-row state. Numbering the FILTERED list makes that state follow a position instead of
+        // a transcript: copy the top row, type in the search box, and the tick reappears on
+        // whatever is now on top.
+        return records.enumerated()
+            .filter { _, record in
+                // Only `text`. Searching the record's storage would let "2026" match every
+                // dictation from this year while matching nothing anyone actually said.
+                needle.isEmpty || record.text.range(of: needle, options: .caseInsensitive) != nil
+            }
+            .map { index, record in
+                Row(id: index, record: record,
+                    timestamp: Self.timestamp.string(from: record.recordedAt),
+                    duration: Self.duration(record.durationSeconds))
+            }
     }
 
     /// Whether anything was ever recorded - which is NOT the same as whether anything is visible.

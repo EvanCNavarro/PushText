@@ -119,6 +119,23 @@ struct HistoryViewerModelTests {
         #expect(subject.countLabel == nil)
     }
 
+    /// SwiftUI keys per-row `@State` off the row's id, and the copy button's checkmark IS per-row
+    /// state. With the id taken from the position in the FILTERED list, that state follows a
+    /// POSITION rather than a transcript: copy the top row, type into the search box, and the tick
+    /// reappears on whatever is now on top - a different dictation.
+    @Test("A transcript keeps its identity when the search changes")
+    func identityIsStableAcrossQueries() {
+        let subject = model([record("alpha", at: 100), record("beta", at: 200)])
+
+        let unfiltered = subject.visible.first { $0.text == "alpha" }?.id
+        subject.query = "alpha"
+        let filtered = subject.visible.first { $0.text == "alpha" }?.id
+
+        #expect(unfiltered != nil)
+        #expect(unfiltered == filtered,
+                "the same transcript changed identity when the list was filtered")
+    }
+
     @Test("Durations read as seconds a person would say")
     func durationsAreReadable() {
         let subject = model([record("a", at: 100, duration: 2.4)])
