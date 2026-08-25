@@ -32,6 +32,16 @@ public final class CGEventTapHotkeyMonitor: HotkeyMonitor, @unchecked Sendable {
     private let binding: HotkeyBinding
     private let tapOptions: CGEventTapOptions
     private var gate: ModifierGate
+
+    /// True while the suppressed key is DOWN, so its release can be consumed as well. Without it the
+    /// up-edge reaches macOS as a bare Globe transition - which is the shape its own action watches
+    /// for, so suppressing only the press would swallow half a gesture and still fire the thing we
+    /// are avoiding (#182).
+    private var wasHoldingSuppressedKey = false
+
+    /// How many events this tap has consumed. Observable so a probe can PROVE suppression happened
+    /// rather than asserting it - a swallowed event leaves no other trace by construction.
+    public private(set) var consumedCount = 0
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var handler: (@Sendable (HotkeyEdge) -> Void)?
@@ -179,11 +189,31 @@ public final class CGEventTapHotkeyMonitor: HotkeyMonitor, @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
 
-        if type == .flagsChanged, let edge = gate.update(flags: event.flags.rawValue) {
-            handler?(edge)
+        if type == .flagsChanged {
+            let flags = event.flags.rawValue
+            if let edge = gate.update(flags: flags) {
+                handler?(edge)
+            }
+            // SWALLOW the Globe key, and only the Globe key (#182).
+            //
+            // Passing it on is what made PushText fire ALONGSIDE the system's own Globe action -
+            // emoji viewer, input-source switch, or Apple's dictation - rather than instead of it.
+            // Bobby, comparing against the tool he already uses: "it should happen instead of".
+            //
+            // Scoped by `suppressesSystemAction`, and that scope is the safety: every other bindable
+            // modifier has a second job, so consuming Right Shift would stop the user typing
+            // capitals. The release is consumed too, because letting the up-edge through leaves
+            // macOS seeing the bare transition its action watches for.
+            if binding.shouldConsume(rawModifierFlags: flags)
+                || (binding.shouldConsumeRelease && wasHoldingSuppressedKey) {
+                wasHoldingSuppressedKey = binding.shouldConsume(rawModifierFlags: flags)
+                consumedCount += 1
+                return nil
+            }
+            wasHoldingSuppressedKey = false
         }
 
-        // Always pass the event through untouched. See the class comment.
+        // Everything else passes through untouched. See the class comment.
         return Unmanaged.passUnretained(event)
     }
 }

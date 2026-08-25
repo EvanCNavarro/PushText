@@ -74,6 +74,34 @@ public struct HotkeyBinding: Equatable, Hashable, Sendable {
     public static let globe = HotkeyBinding(
         keyCode: 0x3F, deviceMask: 0x0080_0000, name: "Globe (fn)")
 
+    /// Whether this key's own system action should be SWALLOWED while it is the dictation key
+    /// (#182).
+    ///
+    /// **Globe only, and the exclusion is the important half.** Every other bindable modifier has a
+    /// legitimate second job: consuming Right Shift would stop the user typing capitals, and
+    /// consuming Right Command would break every shortcut that uses it. Globe, once someone has
+    /// chosen it as their dictation key, has no other job left - its system action (emoji viewer,
+    /// input-source switch, or Apple's own dictation) is purely in the way.
+    ///
+    /// Bobby, comparing against the tool he already uses: *"it should happen instead of"*. Measured
+    /// rather than guessed - Wispr Flow binds keycode 63 as push-to-talk through an ordinary event
+    /// tap and touches no private SPI, so the only difference was that PushText passed the event on
+    /// and it does not.
+    public var suppressesSystemAction: Bool { self == .globe }
+
+    /// Whether the tap should consume the event carrying these flags.
+    ///
+    /// Both halves matter: it must be OUR key, and this key must be one worth suppressing. The tap
+    /// sees every modifier on the machine, so a bound Globe must not swallow a Right Option press.
+    public func shouldConsume(rawModifierFlags: UInt64) -> Bool {
+        suppressesSystemAction && (rawModifierFlags & deviceMask) != 0
+    }
+
+    /// The RELEASE is consumed too. Letting the up-edge through leaves macOS seeing a bare Globe
+    /// transition, which is the shape its own action watches for - suppressing only the press would
+    /// swallow half a gesture and still fire the thing we are trying to avoid.
+    public var shouldConsumeRelease: Bool { suppressesSystemAction }
+
     /// The bindings offered in settings.
     /// The binding a raw `flagsChanged` event just pressed DOWN, or nil (#128).
     ///

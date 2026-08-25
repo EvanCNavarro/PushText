@@ -663,7 +663,7 @@ that. The narrative for each lives in the issue.
   when no timeout was set, so the default was six hours and a human always cancelled first. It
   sounded reasonable, which is why nobody checked it. docs/verification is in the issue thread.)
 
-#164 - No check proves a menu item is wired to the action it names - S1
+#164 - No check proves a menu item is wired to the action it names - DONE
   (2026-08-25: filed after the same 'we cannot prove the button is wired' note appeared in two
   separate verification docs. AppActions.menuActions() returns [MenuAction] carrying a title, an
   icon and a closure; everything the closures CALL is covered, and the association between a title
@@ -673,7 +673,27 @@ that. The narrative for each lives in the issue.
   WHY IT IS NOT ALREADY COVERED: the closures call straight into AppKit - NSAlert.runModal(),
   NSWorkspace, NSApplication.terminate - so invoking one in a test either blocks forever or does
   something real. That is the actual problem to solve.
-  TRIGGER: next, ahead of #162. It is the open item with destructive failure modes.)
+  DELIVERED 2026-08-25 in #181: the pairing is DATA now - MenuItemKind carries title/icon/destructive,
+  MenuDispatch.perform is the ONE place a kind meets an effect, and a spy asserts dispatch without
+  AppKit. THE MIS-WIRING APPEARED WHILE FIXING IT: naming the requirement `uninstall()` failed to
+  compile because AppActions already had a PRIVATE `uninstall()` that trashes the app immediately,
+  next to `confirmUninstall()` which asks first - a requirement with that name binds to the
+  non-confirming path and the menu item skips its own confirmation. Renamed `beginUninstall()`.
+  Five plants; four fired. The fifth exposed a TAUTOLOGY of mine: the icon assertion compared the
+  built menu against the same source, so an icon change moved both sides and it could never fail.
+  Re-pinned to literals. docs/verification/task164-menu-wiring.md.)
+
+#182 - Globe fires ALONGSIDE macOS dictation instead of replacing it - S1
+  (2026-08-25: Bobby - "with whispr flow it overrides the default dictation ... it should happen
+  instead of". MEASURED rather than assumed, and my first hypothesis was wrong: Wispr does NOT write
+  AppleFnUsageType (nm -u across its binary and every .node/.dylib shows no FnUsageType symbol, and
+  the pref still reads 3 while it runs). Its own config binds keycode 63 as "ptt" through an ordinary
+  tap. The only difference was that our tap PASSED THE EVENT ON.
+  Our tap was already .defaultTap - the class comment had anticipated exactly this - so consuming it
+  is the change. GLOBE ONLY: consuming Right Shift would stop the user typing capitals.
+  Proven on the real tap: Globe bound -> consumed=2 with pressed=1 released=1; Right Option bound
+  with Globe pressed -> consumed=0.
+  STILL NEEDS A HARDWARE PRESS to confirm it defeats the WindowServer-run Globe action.)
 
 #176 - The hotkey recorder refuses the Globe key - DONE
   (2026-08-25: Bobby pressed Globe and it beeped. Nothing was broken in the recorder - `selectable`
