@@ -70,6 +70,10 @@ jobs:
       # Fail-open without gh auth, so a fork PR cannot be blocked by it.
       - name: Cited docs exist
         run: .engine/checks/cited-docs-exist.sh
+      # #170 shipped twice with an indicator that could never appear, and a RENDER check passed on
+      # it. This is the mechanically checkable half of that defect.
+      - name: View models are observable
+        run: .engine/checks/view-models-are-observable.sh
       - name: Probe gate runs first
         run: .engine/checks/probe-gate-runs-first.sh
       - name: Backlog agrees with GitHub
