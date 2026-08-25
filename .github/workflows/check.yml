@@ -78,8 +78,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: Build
         run: swift build
+      # #144: roughly one run in ten never finishes the suite - every suite announces itself and
+      # NONE completes, against a 70-140s healthy baseline. Both earlier observations were cancelled
+      # by hand at ~15 minutes, which is why it is still unknown whether the process hangs or dies,
+      # and why no stack was ever captured. With no timeout the job default is SIX HOURS, so a human
+      # always cancels first and a cancellation uploads no diagnostics.
+      #
+      # The script bounds it and SAMPLES BEFORE KILLING. Battle-tested both ways: a planted 90s
+      # blocking test exits 124 with a call graph naming the blocked frame, and a healthy run exits
+      # 0. `timeout-minutes` is a backstop in case the watchdog itself is what wedges.
       - name: Test
-        run: swift test
+        timeout-minutes: 20
+        env:
+          PUSHTEXT_TEST_TIMEOUT_SECONDS: 600
+        run: ./scripts/test-with-wedge-diagnostics.sh
       - name: Install SwiftLint
         run: brew install swiftlint
       - name: Lint
