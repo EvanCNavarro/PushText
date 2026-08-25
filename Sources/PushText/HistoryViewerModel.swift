@@ -24,6 +24,8 @@ final class HistoryViewerModel {
         let record: HistoryRecord
         let timestamp: String
         let duration: String
+        /// Where the query matched, for the view to highlight. Empty when nothing is being searched.
+        let matches: [Range<String.Index>]
         var text: String { record.text }
     }
 
@@ -51,17 +53,22 @@ final class HistoryViewerModel {
         // per-row state. Numbering the FILTERED list makes that state follow a position instead of
         // a transcript: copy the top row, type in the search box, and the tick reappears on
         // whatever is now on top.
-        return records.enumerated()
-            .filter { _, record in
-                // Only `text`. Searching the record's storage would let "2026" match every
-                // dictation from this year while matching nothing anyone actually said.
-                needle.isEmpty || record.text.range(of: needle, options: .caseInsensitive) != nil
+        return records.enumerated().compactMap { index, record -> Row? in
+            var matches: [Range<String.Index>] = []
+            if !needle.isEmpty {
+                // `TranscriptSearch` searches the TEXT only. Searching the record's storage would
+                // let "2026" match every dictation from this year while matching nothing anyone
+                // actually said.
+                guard let hit = TranscriptSearch.match(query: needle, in: record.text) else {
+                    return nil
+                }
+                matches = hit.ranges
             }
-            .map { index, record in
-                Row(id: index, record: record,
-                    timestamp: Self.timestamp.string(from: record.recordedAt),
-                    duration: Self.duration(record.durationSeconds))
-            }
+            return Row(id: index, record: record,
+                       timestamp: Self.timestamp.string(from: record.recordedAt),
+                       duration: Self.duration(record.durationSeconds),
+                       matches: matches)
+        }
     }
 
     /// Whether anything was ever recorded - which is NOT the same as whether anything is visible.

@@ -153,7 +153,18 @@ final class AppActions {
     /// never be seen.
     func showHistoryProbe(mode: String) {
         let fixture = HistoryProbeFixture(mode: mode)
-        let query = mode == "nomatch" ? "quarterly" : ""
+        // The highlight only exists while something matches, so the searched states have to be
+        // openable too - and the FUZZY one especially, since it is the state where the highlight
+        // has to prove it lands on the word actually matched rather than the word typed.
+        let query: String
+        switch mode {
+        case "nomatch": query = "quarterly"
+        // Both words in the SAME transcript. "invoice release" was the first attempt and matched
+        // nothing, correctly - they live in different dictations and the query is an AND.
+        case "match": query = "invoice project"
+        case "fuzzy": query = "invoce"
+        default: query = ""
+        }
         historyViewer.show(store: fixture, query: query) { [weak self] in self?.revealHistory() }
         // Printed rather than discovered: `kCGWindowName` is nil without Screen Recording, so an
         // outside lookup by title finds nothing and reads identically to the window never opening.
