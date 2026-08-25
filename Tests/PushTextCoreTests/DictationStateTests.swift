@@ -66,11 +66,30 @@ struct DictationStateTests {
     /// The mic-stuck-open case. If the hotkey release is never observed — the documented
     /// consequence of using the union `maskAlternate` instead of the device-dependent right-side
     /// bit — nothing else in the system ends the utterance.
-    @Test("The watchdog ends a capture that the hotkey never closed",
-          arguments: [DictationState.arming, .recording])
-    func watchdogClosesStuckCapture(from state: DictationState) {
-        var machine = DictationMachine(state: state)
+    /// The watchdog exists to stop a STUCK MICROPHONE, and a stuck microphone has still been
+    /// recording someone's voice. Ending the capture and KEEPING the words is the whole point of the
+    /// distinction (#197).
+    ///
+    /// This test used to assert `.failed(.cancelled)` - it codified the data loss. Bobby: *"i just
+    /// recorded for a long time and it seems like it just died out? and i lost all of that
+    /// information i was talking on."* Everything he had said was thrown away by a timer.
+    @Test("The watchdog ends a long capture by TRANSCRIBING it, not discarding it")
+    func watchdogFinishesLongCapture() {
+        var machine = DictationMachine(state: .recording)
         #expect(machine.isCapturing)
+        let changed = machine.apply(.watchdogExpired)
+        #expect(changed)
+        #expect(machine.state == .transcribing,
+                "the words were thrown away - this is the bug the user hit")
+        #expect(!machine.isCapturing)
+    }
+
+    /// `.arming` is different and must STAY a cancel: the microphone never opened, so there is
+    /// nothing to keep. Transcribing an utterance that captured nothing would inject an empty
+    /// string over whatever the user was doing.
+    @Test("The watchdog cancels while still arming, because nothing was captured")
+    func watchdogCancelsWhileArming() {
+        var machine = DictationMachine(state: .arming)
         let changed = machine.apply(.watchdogExpired)
         #expect(changed)
         #expect(machine.state == .failed(.cancelled))

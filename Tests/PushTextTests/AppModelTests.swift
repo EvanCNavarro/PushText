@@ -129,6 +129,18 @@ struct AppModelWatchdogTests {
         #expect(!model.isCaptureWatchdogArmed)
     }
 
+    /// The ceiling is a PRODUCT decision and it regressed once already (#197).
+    ///
+    /// At 120 s a hands-free dictation died mid-sentence and every word was thrown away. The number
+    /// is asserted here so that lowering it is a deliberate act with a failing test attached, rather
+    /// than a quiet edit to a constant.
+    @Test("A dictation may run for twenty minutes before the watchdog steps in")
+    func watchdogCeilingIsGenerous() {
+        let model = AppModel(engine: MockTranscriptionEngine())
+        #expect(model.maximumCaptureDuration >= 1200,
+                "a hands-free dictation would be cut off after \(model.maximumCaptureDuration)s")
+    }
+
     /// The case no flag-state recovery can reach: a stalled tap drops the key-up so completely that
     /// macOS's own flagsState stays latched. Only elapsed time can close it.
     @Test("A capture whose release never arrives is force-closed by elapsed time")
@@ -141,7 +153,15 @@ struct AppModelWatchdogTests {
         try await Task.sleep(for: .milliseconds(500))
 
         #expect(!model.machine.isCapturing, "the microphone was still open after the watchdog window")
-        #expect(model.machine.state == .failed(.cancelled))
+        // NOT `.failed(.cancelled)` (#197). The watchdog closes the microphone and hands what it
+        // heard to the transcriber; this model's engine returns nothing for an empty capture, so it
+        // lands on `.failed(.transcriptionFailed)` - the point is that it went through TRANSCRIBING
+        // rather than throwing the audio away.
+        //
+        // This assertion used to read `.failed(.cancelled)` and it codified real data loss: Bobby
+        // spoke for over two minutes and every word was discarded by a timer.
+        #expect(model.machine.state != .failed(.cancelled),
+                "the watchdog cancelled instead of transcribing - the user loses everything")
         #expect(!model.isCaptureWatchdogArmed)
     }
 

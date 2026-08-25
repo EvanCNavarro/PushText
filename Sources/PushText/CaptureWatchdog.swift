@@ -13,8 +13,25 @@ import Foundation
 @MainActor
 final class CaptureWatchdog {
 
-    /// Generous on purpose: it exists to stop a stuck microphone, not to cut off a long sentence.
-    var maximumDuration: TimeInterval = 120
+    /// Twenty minutes (#197).
+    ///
+    /// It was 120 seconds, under a comment that said "generous on purpose: it exists to stop a stuck
+    /// microphone, not to cut off a long sentence". Two minutes is not generous for the hands-free
+    /// mode this app advertises as "press again to end", and Bobby lost a long dictation to it -
+    /// every word discarded by a timer.
+    ///
+    /// Nothing structural wanted 120. Checked rather than assumed:
+    ///
+    /// - The audio ring is a ~2 s TRANSPORT window drained every 50 ms, not a store of the whole
+    ///   utterance, so length does not accumulate there.
+    /// - `TranscriptFinisher` returns the RAW transcript on every cleanup failure path, so a
+    ///   transcript too long for the on-device model loses its polish and never its words.
+    ///
+    /// So the only cost of a longer window is how long a genuinely stuck microphone stays open - and
+    /// since expiry now TRANSCRIBES rather than discards, that trade is far cheaper than it was when
+    /// this number was chosen. Twenty minutes matches what Wispr Flow allows, which is the
+    /// comparison the user actually makes.
+    var maximumDuration: TimeInterval = 1200
 
     private var timer: Timer?
 

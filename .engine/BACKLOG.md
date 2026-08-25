@@ -914,6 +914,26 @@ that. The narrative for each lives in the issue.
   a grep for FAILED tests found none - a compile error read as "no test failed".
   docs/verification/task162-launch-at-login.md.)
 
+#197 - A dictation past 120s is DISCARDED, not transcribed - DONE
+  (2026-08-25: Bobby - "i just recorded for a long time and it seems like it just died out? and i
+  lost all of that information i was talking on." Confirmed and it was BY DESIGN: the watchdog fired
+  at 120s, transitioned to .failed(.cancelled), and teardown called feed.cancel(token) - nothing
+  transcribed, nothing in history, every word gone.
+  A TEST ASSERTED THE DATA LOSS. watchdogClosesStuckCapture expected .failed(.cancelled), and a
+  second test in AppModelTests did the same, so the behaviour was pinned in place by the suite. Both
+  had to be rewritten before the bug could be fixed - which is the tell that it was chosen rather
+  than overlooked.
+  NOT RECOVERABLE, and checked rather than assumed: audio never touches disk, history.jsonl ends at
+  20:26:11 with the 95.3s entry that survived by being UNDER the ceiling, no temp artifacts, nothing
+  in the unified log.
+  Expiry now TRANSCRIBES from .recording and still cancels from .arming (nothing captured yet).
+  Ceiling raised to 1200s after checking what actually constrains length: the ring is a ~2s transport
+  window, and TranscriptFinisher returns raw text on every cleanup failure path. Nothing structural
+  wanted 120. The transcript card now says it was cut short, because "it just died out" described
+  silence rather than a crash.
+  Three plants, all caught. docs/verification/task197-watchdog-data-loss.md.
+  NOT SHOWN: no twenty-minute dictation has been run end to end; the longest observed is 95s.)
+
 #188 - Silence the Mac's audio output while dictating - DONE
   (2026-08-25: Bobby - "can you have thing deafen ... like to deafen the computer while recording".
   On a laptop the speakers are inches from the microphone, so whatever is playing becomes part of
