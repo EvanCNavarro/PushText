@@ -190,6 +190,11 @@ struct PushTextApp: App {
                 // missing cannot be screenshotted on a machine where the grant is present.
                 // Force an available update so the mark can be looked at - a dot that only
                 // appears when a real release is newer cannot be screenshotted on demand.
+                // The dictionary editor is a separate WINDOW, so it cannot be screenshotted from
+                // the menu probe's own window - it has to be asked to open (#156).
+                if ProcessInfo.processInfo.environment["PUSHTEXT_MENU_PROBE_DICTIONARY"] == "1" {
+                    actions.editDictionary()
+                }
                 if ProcessInfo.processInfo.environment["PUSHTEXT_MENU_PROBE_UPDATE"] == "1" {
                     actions.updateAvailability = .available(version: "9.9.9")
                 }

@@ -83,6 +83,10 @@ final class AppActions {
     /// Opens the app's plain-text files. Injected so tests never launch TextEdit.
     private let textOpener: PlainTextOpener
 
+    /// One reused editor window - a menu item that stacks a new one per click is the kind of thing
+    /// nobody notices until there are nine of them.
+    private let dictionaryEditor = DictionaryEditorWindow()
+
     /// Where this app is in its update cycle, which decides whether the menu shows a mark (#138).
     ///
     /// `checking` and `failed` deliberately do not mark: a dot that appears while merely checking
@@ -150,12 +154,13 @@ final class AppActions {
     ///
     /// The file IS the editor. A 320pt menu cannot hold a table, and every Mac already has a text
     /// editor that opens `.jsonl` - building a worse one inside the panel would be the wrong trade.
+    /// Opens the editor (#156). #154 made the FILE open in TextEdit, which is not the same as being
+    /// editable in any sense a user would call an interface - it handed them JSONL and hoped.
     func editDictionary() {
         guard let url = JSONLDictionaryStore.defaultURL() else { return }
-        JSONLDictionaryStore(url: url).createWithExampleIfMissing()
-        // NOT NSWorkspace.open(url): `.jsonl` has no handler on macOS - it gets a dynamic UTI - so
-        // that produced "There is no application set to open the document" and nothing else (#154).
-        textOpener.open(url)
+        let store = JSONLDictionaryStore(url: url)
+        store.createWithExampleIfMissing()
+        dictionaryEditor.show(store: store)
     }
 
     func menuActions() -> [MenuAction] {
