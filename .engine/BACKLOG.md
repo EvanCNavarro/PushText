@@ -914,6 +914,24 @@ that. The narrative for each lives in the issue.
   a grep for FAILED tests found none - a compile error read as "no test failed".
   docs/verification/task162-launch-at-login.md.)
 
+#199 - No long-form dictation has been run end to end - DONE
+  (2026-08-25: #197 raised the ceiling to 1200s on two code READS; the longest capture this app had
+  ever produced was 95.3s. Measured now, through PUSHTEXT_TRANSCRIBE_PROBE_FILE with a numbered
+  script so truncation would be visible rather than plausible.
+  CAPACITY: 2391s (~40 min) unpaced -> 33,640 chars, markers first to last, no gap, exit 0. Twice the
+  ceiling with nothing accumulating.
+  FIDELITY: 930.6s (15.5 min) with REALTIME=1 -> 13,472 chars, 48 of 48 sections, exit 0.
+  THE UNPACED RUN ALONE WOULD HAVE MISLED: finalize was 41,367ms unpaced versus 94.4ms paced. Pushing
+  a whole file at once leaves a backlog to chew at the end; paced delivery does the work as audio
+  arrives. The false conclusion available from the convenient harness was "a long dictation takes 41
+  seconds to finalise", which would have argued for a progress indicator or a lower ceiling. Real
+  answer: a 15-minute dictation returns its text in ~94ms on release.
+  STILL NOT SHOWN: the 1200s ceiling itself. TranscriptionProbe has zero mentions of CaptureWatchdog,
+  so this measures the ENGINE at length and not the timer; the transcribe-rather-discard behaviour is
+  proven at 0.2s in AppModelTests and the constant is asserted separately. Synthesised speech, so
+  word accuracy is visibly imperfect - irrelevant to a length measurement.
+  docs/verification/task199-long-form-measured.md.)
+
 #197 - A dictation past 120s is DISCARDED, not transcribed - DONE
   (2026-08-25: Bobby - "i just recorded for a long time and it seems like it just died out? and i
   lost all of that information i was talking on." Confirmed and it was BY DESIGN: the watchdog fired
