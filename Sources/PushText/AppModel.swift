@@ -105,6 +105,13 @@ private let engine: any TranscriptionEngine
     /// What the last utterance lost, phrased for a human, or nil when it lost nothing (#71).
     private(set) var lastCaptureWarning: String?
 
+    /// Whether the watchdog, rather than the user, ended the capture that just finished (#197).
+    ///
+    /// It exists so the transcript can SAY it was cut short. Bobby described the old behaviour as
+    /// the app having "just died out" - and with the words now kept, silence about WHY they stop
+    /// mid-sentence would still leave him guessing whether it crashed.
+    var endedByWatchdog = false
+
     /// When the user stopped speaking, for the release-to-text figure the app logs (#15).
     ///
     /// The first such number this project had was subtracted by hand from two os_log timestamps,
@@ -241,6 +248,7 @@ private let engine: any TranscriptionEngine
         case .recording:
             playCue(.start)          // see AppModel+Cues for why here and not `.arming`
             silenceOutputIfWanted()
+            endedByWatchdog = false
 
         case .transcribing:
             playCue(.stop)
@@ -338,6 +346,7 @@ private let engine: any TranscriptionEngine
         // Read BEFORE the transcript: the counters describe the capture that just stopped, and the
         // next utterance resets them.
         lastCaptureWarning = capture.map { Self.captureWarning(for: $0.health) } ?? nil
+        if endedByWatchdog { lastCaptureWarning = watchdogTruncationWarning }
         if let lastCaptureWarning {
             dictationLog.error("capture lost audio: \(lastCaptureWarning, privacy: .public)")
         }

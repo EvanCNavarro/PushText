@@ -217,8 +217,21 @@ public struct DictationMachine: Sendable {
         on event: DictationEvent
     ) -> DictationState? {
         switch (state, event) {
-        // The watchdog only means anything while the mic could be open.
-        case (.arming, .watchdogExpired), (.recording, .watchdogExpired):
+        // The watchdog only means anything while the mic could be open - and what it does then
+        // depends entirely on whether anything was CAPTURED (#197).
+        //
+        // From `.recording` it ends the utterance the way releasing the key would: transcribe what
+        // was heard. The watchdog exists to stop a STUCK MICROPHONE, and a stuck microphone has
+        // still been recording someone's voice; throwing that away is not safety, it is data loss.
+        // Bobby lost a long hands-free dictation to this - "it seems like it just died out? and i
+        // lost all of that information i was talking on" - and a truncated transcript would have
+        // cost him nothing by comparison.
+        case (.recording, .watchdogExpired):
+            return .transcribing
+
+        // From `.arming` the microphone never opened, so there is nothing to keep and transcribing
+        // would inject an empty string over whatever the user was doing.
+        case (.arming, .watchdogExpired):
             return .failed(.cancelled)
 
         // A new press RETRIES. Without this, `.failed` is a dead end and one bad utterance disables
