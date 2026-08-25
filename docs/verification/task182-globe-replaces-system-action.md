@@ -78,7 +78,22 @@ is nothing downstream to observe, so the count is the only way to tell suppressi
 Three plants on the policy: suppress-everything, suppress-nothing, and ignore-which-key-was-pressed
 all fail the suite.
 
-## 6. What this does NOT show
+## 6. Correction, 2026-08-25: the notice claimed more than was known
+
+The first wording was *"macOS is set to X when you press Globe, and it acts first."* Bobby's
+screenshot of System Settings showed the setting as **"Start Dictation (Press the Globe key
+Twice)"** - a DOUBLE press. So:
+
+- *"when you press Globe"* is wrong for that value, and unverified for the other two.
+- *"it acts first"* is the WindowServer claim from `docs/research/04`, which is exactly what has not
+  been measured on hardware here.
+
+Reworded to *"macOS also uses the Globe key for X"* - which is what System Settings itself says, and
+nothing more. If the double press is the only colliding gesture, the collision lands on PushText's
+own double-press-to-latch rather than on an ordinary hold, which is a narrower and different problem
+from the one the original notice described.
+
+## 7. What this does NOT show
 
 **Whether swallowing at the tap defeats the WindowServer-run Globe action on a HARDWARE press.**
 The probe posts a synthetic `CGEvent`; a real key travels the same tap, but `docs/research/04`
