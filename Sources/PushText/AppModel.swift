@@ -53,7 +53,11 @@ private let engine: any TranscriptionEngine
     /// Text waiting to be injected, held between `transcriptFinalized` and `injectionFinished`.
     var pendingText: String?
 
-    private let advisor = PermissionAdvisor()   // see PermissionAdvisor
+    // Internal, not private: `AppModel+Permissions` needs it and lives in another file.
+    let advisor = PermissionAdvisor()   // see PermissionAdvisor
+    /// Set by the composition root, which owns the tap and the capture device (#152). Stored, so it
+    /// must live on the type - an extension cannot hold a stored property.
+    var onRetryPermission: ((Permission) -> Bool)?
 
     var permissionAdvice: [(permission: Permission, advice: PermissionAdvice)] { advisor.advice }
 
@@ -61,8 +65,6 @@ private let engine: any TranscriptionEngine
         get { advisor.probe }
         set { advisor.probe = newValue }
     }
-
-    func refreshPermissionAdvice() { advisor.refresh() }
 
     /// Records that a subsystem actually failed for want of a grant (#136).
     ///
