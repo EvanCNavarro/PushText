@@ -15,6 +15,14 @@ It fails closed on `closed upstream, still pending here` — the direction that 
 next" — and only NOTEs the transient mirror, since an issue closes at the merge and a PR that marks
 its own line `DONE` would otherwise be red before the merge and after it.
 
+**SO: MARK YOUR ENTRY `DONE` IN THE PR THAT CLOSES THE ISSUE, NOT AFTERWARDS.** The asymmetry above
+exists to make that safe - `DONE` here while still open upstream is only a NOTE, and it resolves the
+moment the PR merges. Leaving the line `S1` for a PR that closes the issue produces the FAIL
+direction on whatever PR comes next, which is a red build for someone else's change.
+
+Recorded 2026-08-25 after doing it twice in one day (#164, then #182). Both times the gate caught it
+on the FOLLOWING pull request, which is exactly the delay this instruction removes.
+
 *Why this exists:* these ids were originally file-local, and stayed file-local after the repo gained
 a GitHub remote — at which point `#19` silently became a claim about a GitHub issue that did not
 exist. Three merged PR bodies shipped literal `Closes #19` auto-close syntax pointing at nothing.
@@ -683,7 +691,7 @@ that. The narrative for each lives in the issue.
   built menu against the same source, so an icon change moved both sides and it could never fail.
   Re-pinned to literals. docs/verification/task164-menu-wiring.md.)
 
-#182 - Globe fires ALONGSIDE macOS dictation instead of replacing it - S1
+#182 - Globe fires ALONGSIDE macOS dictation instead of replacing it - DONE
   (2026-08-25: Bobby - "with whispr flow it overrides the default dictation ... it should happen
   instead of". MEASURED rather than assumed, and my first hypothesis was wrong: Wispr does NOT write
   AppleFnUsageType (nm -u across its binary and every .node/.dylib shows no FnUsageType symbol, and
@@ -693,7 +701,12 @@ that. The narrative for each lives in the issue.
   is the change. GLOBE ONLY: consuming Right Shift would stop the user typing capitals.
   Proven on the real tap: Globe bound -> consumed=2 with pressed=1 released=1; Right Option bound
   with Globe pressed -> consumed=0.
-  STILL NEEDS A HARDWARE PRESS to confirm it defeats the WindowServer-run Globe action.)
+  DELIVERED in #183: the tap consumes Globe's press AND release, scoped by suppressesSystemAction so
+  every other modifier still passes through - consuming Right Shift would stop the user typing
+  capitals. consumedCount is exposed because a suppressed event leaves NO other trace by
+  construction, so the count is the only way to tell suppression from silence.
+  STILL NEEDS A HARDWARE PRESS to confirm it defeats the WindowServer-run Globe action; the probe
+  posts a synthetic event. The in-app "Press the Globe key to" notice stays as the fallback.)
 
 #176 - The hotkey recorder refuses the Globe key - DONE
   (2026-08-25: Bobby pressed Globe and it beeped. Nothing was broken in the recorder - `selectable`
