@@ -195,6 +195,12 @@ struct PushTextApp: App {
                 if ProcessInfo.processInfo.environment["PUSHTEXT_MENU_PROBE_DICTIONARY"] == "1" {
                     actions.editDictionary()
                 }
+                // The history viewer is its own window too (#161), and its three states - populated,
+                // searched-to-nothing, never-recorded - look completely different. All three have to
+                // be openable on demand or only the one this machine happens to be in gets looked at.
+                if let mode = ProcessInfo.processInfo.environment["PUSHTEXT_MENU_PROBE_HISTORY"] {
+                    actions.showHistoryProbe(mode: mode)
+                }
                 if ProcessInfo.processInfo.environment["PUSHTEXT_MENU_PROBE_UPDATE"] == "1" {
                     actions.updateAvailability = .available(version: "9.9.9")
                 }
