@@ -4,12 +4,25 @@ import OSLog
 import Sparkle
 import MacFaceKit
 import PushTextKit
+import PushTextCore
 
 /// The `···` overflow actions, matching TermTile's set so the two apps behave the same way (#47).
 ///
 /// Kept out of `MenuContent` because each one touches the OS - the updater, the Trash, the app's own
 /// lifetime - and a view file that also owns those is a view file nobody can read.
+///
+/// **`@Observable`, and that is not decoration (#170).** `updateAvailability` is written when
+/// Sparkle's passive check comes BACK, which is seconds after the menu has already rendered. Without
+/// observation SwiftUI is never told, so the menu-bar icon and the `...` keep drawing the value they
+/// had at render time - which is `.unknown`, which is no dot. The update indicator could therefore
+/// never appear in real use, on any of the three surfaces, no matter how correct the rest of it was.
+///
+/// The reason that survived #138's verification is worth keeping: the probe forced
+/// `updateAvailability = .available` BEFORE the view was built, so the screenshot showed a dot and
+/// the check could only ever pass. A test that sets the value before the render cannot see a
+/// missing update notification.
 @MainActor
+@Observable
 final class AppActions {
 
     /// Sparkle's standard controller. `startingUpdater: true` so the user-driven check works
@@ -20,20 +33,62 @@ final class AppActions {
     /// menu can mark itself. It never presents UI; the passive probe uses Sparkle's
     /// non-presenting `checkForUpdateInformation()`, which is the whole reason a mark can appear
     /// without a dialog interrupting the user.
+    @ObservationIgnored
     private let updateWatcher = UpdateWatcher()
 
+    @ObservationIgnored
     private lazy var updater = SPUStandardUpdaterController(startingUpdater: true,
                                                             updaterDelegate: updateWatcher,
                                                             userDriverDelegate: nil)
 
+    /// When the last passive check finished, so the policy can decide whether to run another.
+    @ObservationIgnored
+    private var lastUpdateCheck: Date?
+
+    /// The unattended re-check (#170). Held so it can be invalidated; a repeating timer nobody owns
+    /// is a leak with a heartbeat.
+    @ObservationIgnored
+    private var updateTimer: Timer?
+
     /// Asks Sparkle what is out there WITHOUT showing anything, so the dot can appear on its own.
     /// A dictation utility that opens a dialog unprompted is not what was promised; a quiet mark is.
-    func refreshUpdateAvailability() {
+    ///
+    /// Rate-limited by `UpdateCheckPolicy` (#170), because this is now called from three places -
+    /// launch, the timer, and every time the menu opens - and the menu gets opened constantly.
+    func refreshUpdateAvailability(now: Date = Date()) {
+        guard UpdateCheckPolicy.shouldCheck(lastCompleted: lastUpdateCheck,
+                                            now: now,
+                                            isChecking: updateAvailability == .checking) else {
+            return
+        }
         updateWatcher.onChange = { [weak self] availability in
-            self?.updateAvailability = availability
+            guard let self else { return }
+            self.updateAvailability = availability
+            // Stamped on the ANSWER, not on the request: timing from the request would let a check
+            // that never came back hold the quiet period open and silence the probe for good.
+            self.lastUpdateCheck = Date()
         }
         updateAvailability = .checking
         updater.updater.checkForUpdateInformation()
+    }
+
+    /// Starts the unattended re-check (#170).
+    ///
+    /// Without it the dot could only ever be right about releases that already existed when the app
+    /// STARTED - measured on Bobby's machine, where a running 0.3.0 never noticed 0.3.1 published
+    /// 26 minutes after it launched. The menu-bar icon is the one mark visible without the user
+    /// doing anything, so it needs a cadence rather than an invitation.
+    func startUpdateChecking() {
+        updateTimer?.invalidate()
+        let timer = Timer.scheduledTimer(withTimeInterval: UpdateCheckPolicy.background,
+                                         repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.refreshUpdateAvailability() }
+        }
+        // The menu-bar run loop spends its time in event tracking; a timer in the default mode
+        // alone would stall while a menu is open.
+        RunLoop.main.add(timer, forMode: .common)
+        updateTimer = timer
+        refreshUpdateAvailability()
     }
 
     /// Acts on a permission row: prompt if the app can, otherwise open the right Settings pane.
@@ -78,13 +133,16 @@ final class AppActions {
 
     /// Clears this app's stale TCC rows. Injectable so tests never shell out to `tccutil`, which
     /// would destroy the developer's own grants.
+    @ObservationIgnored
     private let repairer: any PermissionRepairing
 
     /// Opens the app's plain-text files. Injected so tests never launch TextEdit.
+    @ObservationIgnored
     private let textOpener: PlainTextOpener
 
     /// One reused editor window - a menu item that stacks a new one per click is the kind of thing
     /// nobody notices until there are nine of them.
+    @ObservationIgnored
     private let dictionaryEditor = DictionaryEditorWindow()
 
     /// Where this app is in its update cycle, which decides whether the menu shows a mark (#138).
@@ -95,14 +153,18 @@ final class AppActions {
 
     /// Asks macOS for Accessibility trust, which is ALSO what registers this app so the pane has a
     /// row to switch on (#146). Injected so tests never raise a real system dialog.
+    @ObservationIgnored
     private let requestAccessibilityTrust: () -> Void
     /// Injected for the same reason: a test must not open System Settings on the developer's Mac.
+    @ObservationIgnored
     private let openURL: (URL) -> Void
 
     /// Whether macOS has already been asked for this permission. The prompt fires ONCE - after the
     /// user answers, Deny included, it never appears again - so a second press must do something
     /// else or it does visibly nothing.
+    @ObservationIgnored
     private let hasRequestedTrust: (Permission) -> Bool
+    @ObservationIgnored
     private let recordRequestedTrust: (Permission) -> Void
 
     init(repairer: any PermissionRepairing = TCCPermissionRepairer(),
@@ -122,6 +184,7 @@ final class AppActions {
     }
 
     /// The viewer window, reused across opens (#161).
+    @ObservationIgnored
     private let historyViewer = HistoryViewerWindow()
 
     /// Where history lives, so the actions below agree on one path.
@@ -301,33 +364,6 @@ final class AppActions {
                 NSApplication.shared.terminate(nil)
             }
         }
-    }
-}
-
-/// Records what a Sparkle check found, so the menu can show a mark (#138).
-///
-/// Separate from `AppActions` because it must be an `NSObject` conforming to `SPUUpdaterDelegate`,
-/// and because it has one job: translate Sparkle's callbacks into `UpdateAvailability`.
-@MainActor
-final class UpdateWatcher: NSObject, SPUUpdaterDelegate {
-    var onChange: ((UpdateAvailability) -> Void)?
-
-    nonisolated func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
-        let version = item.displayVersionString
-        Task { @MainActor in self.onChange?(.available(version: version)) }
-    }
-
-    nonisolated func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
-        Task { @MainActor in self.onChange?(.unavailable) }
-    }
-
-    /// A failed check is NOT "up to date". Reporting it as unavailable would tell the user they are
-    /// current when the app has no idea - which is the same shape as a CI summary where zero checks
-    /// and all-green render identically.
-    nonisolated func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
-                             error: (any Error)?) {
-        guard error != nil else { return }
-        Task { @MainActor in self.onChange?(.failed) }
     }
 }
 

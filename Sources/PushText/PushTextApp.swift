@@ -22,10 +22,25 @@ let dictationLog = Logger(subsystem: "dev.ecn.apps.pushtext", category: "dictati
 /// entitlement under the hardened runtime (TRAP-27). Kept because it is still the correct lifecycle
 /// for a prompt, and recorded here so the next reader does not re-derive the wrong explanation.
 final class LaunchDelegate: NSObject, NSApplicationDelegate {
-    var onLaunch: (@Sendable () -> Void)?
+
+    /// A LIST, appended to - not one closure that each caller overwrites (#170).
+    ///
+    /// Three call sites assign launch work: the real one, the HUD probe and the menu probe. As a
+    /// single closure, last writer won, so running ANY probe silently replaced the app's real
+    /// launch behaviour - the microphone request and the update check simply did not happen.
+    ///
+    /// That is worse than a bug in the probe, because it is a bug in the INSTRUMENT: it made the
+    /// menu probe structurally incapable of observing anything that happens at launch, while still
+    /// rendering a menu that looked completely normal. Found while trying to photograph the update
+    /// dot coming from the real appcast and getting no dot and no log lines at all.
+    private var launchHandlers: [@Sendable () -> Void] = []
+
+    func onLaunch(_ handler: @escaping @Sendable () -> Void) {
+        launchHandlers.append(handler)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        onLaunch?()
+        for handler in launchHandlers { handler() }
     }
 }
 
@@ -136,11 +151,14 @@ struct PushTextApp: App {
         // Bound to a local first: capturing the stored property directly is a mutable capture of
         // `self` while init is still running, which Swift 6 refuses in an escaping closure.
         let launchActions = actions
-        launchDelegate.onLaunch = {
+        launchDelegate.onLaunch {
             Self.requestMicrophone(for: model)
             // Ask what is out there WITHOUT showing anything, so the dot can appear on its own
             // (#138). Sparkle's automatic checks stay off - this is the quiet probe, not a dialog.
-            launchActions.refreshUpdateAvailability()
+            // Starts the cadence AND does the first check (#170). It used to be a single check
+            // here, so the dot could only ever be right about releases that already existed when
+            // the app started.
+            launchActions.startUpdateChecking()
         }
 
         // Visual verification hook (#46). UI cannot be proven by a unit test - this shows the HUD
@@ -178,7 +196,7 @@ struct PushTextApp: App {
                                                     model: AppModel,
                                                     actions: AppActions) {
         guard ProcessInfo.processInfo.environment["PUSHTEXT_MENU_PROBE"] == "1" else { return }
-        launchDelegate.onLaunch = {
+        launchDelegate.onLaunch {
             Task { @MainActor in
                 let window = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 320, height: 640),
                                       styleMask: [.titled, .closable],
@@ -250,7 +268,7 @@ struct PushTextApp: App {
     private static func installHUDProbeIfRequested(on launchDelegate: LaunchDelegate) {
     if ProcessInfo.processInfo.environment["PUSHTEXT_HUD_PROBE"] == "1" {
         let level = Double(ProcessInfo.processInfo.environment["PUSHTEXT_HUD_PROBE_LEVEL"] ?? "") ?? 0.6
-        launchDelegate.onLaunch = {
+        launchDelegate.onLaunch {
             Task { @MainActor in
                 // Wait for the status item to exist: MenuBarExtra creates it after launch, and
                 // anchoring before it exists is what sent the first probe to the fallback.
