@@ -51,6 +51,30 @@ struct JSONLHistoryStoreTests {
         #expect(store.load().isEmpty)
     }
 
+    /// The menu's Delete History removes the FILE, not its contents, so the very next dictation
+    /// appends to a path that no longer exists. Nothing covered that sequence: every other test
+    /// here either appends to a fresh path or clears and stops.
+    ///
+    /// What only this test catches, measured rather than asserted. Make `clear()` leave the path
+    /// unwritable - a plausible shape for a future "delete more thoroughly" change - and the other
+    /// five tests all still pass, `clear() removes the history` included, because the path does
+    /// read as empty afterwards. It reads as empty forever, which is the part that matters: the
+    /// user deletes their history once and PushText silently stops recording, with a menu that
+    /// still says it is listening.
+    @Test("Recording survives a delete instead of silently stopping")
+    func appendRecoversAfterClear() {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = JSONLHistoryStore(url: url)
+        store.append(record("before the delete"))
+
+        store.clear()
+        store.append(record("after the delete"))
+
+        #expect(store.load().map(\.text) == ["after the delete"],
+                "history stopped recording once it had been deleted")
+    }
+
     @Test("The cap keeps the most recent entries")
     func capKeepsNewest() {
         let url = temporaryURL()
