@@ -82,10 +82,16 @@ struct MenuContent: View {
                     // from WindowServer AHEAD of every event tap - so PushText can see the press
                     // and cannot stop macOS acting on it (#176). Saying so beats a hotkey that
                     // half-works and looks broken.
+                    // Does NOT claim which gesture or that macOS wins the race. Bobby's screenshot
+                    // showed the setting as "Start Dictation (Press the Globe key Twice)" - a
+                    // DOUBLE press - while this said "when you press Globe", which is wrong for
+                    // that value and unverified for the others. Whether macOS acts first on real
+                    // hardware is also unmeasured (#182). The claim is now only what is on screen
+                    // in System Settings, which is the part that is true.
                     NoticeCard(title: "Globe has a system action",
-                               message: "macOS is set to \(clash.describedForUser) when you press "
-                                   + "Globe, and it acts first. Set it to Do Nothing so dictation "
-                                   + "gets the key to itself.",
+                               message: "macOS also uses the Globe key for "
+                                   + "\(clash.describedForUser). Set it to Do Nothing so dictation "
+                                   + "has the key to itself.",
                                linkLabel: "Open Keyboard Settings",
                                url: URL(string: "x-apple.systempreferences:"
                                    + "com.apple.Keyboard-Settings.extension")!)
