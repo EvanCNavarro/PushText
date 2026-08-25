@@ -270,42 +270,34 @@ final class AppActions {
         dictionaryEditor.show(store: store)
     }
 
+    /// Built from `MenuItemKind` rather than written inline (#164).
+    ///
+    /// The titles, icons, order and destructive marks are DATA now, and the pairing of a kind with
+    /// its effect lives in exactly one `switch`. Both halves are asserted in `MenuWiringTests`,
+    /// which the previous inline array made impossible: its closures call `NSAlert.runModal()` and
+    /// `NSApplication.terminate`, so a test that pressed one would block or quit the process.
     func menuActions() -> [MenuAction] {
-        [
-            // The dot rides on THIS action, and MacFaceKit lifts it onto the `...` button for
-            // free - `OverflowMenu` marks itself when any action is marked (#138). So one flag
-            // lights two of the three places TermTile shows an update.
-            MenuAction(title: "Check for Updates", systemImage: "arrow.triangle.2.circlepath",
-                       attention: updateAvailability.hasAvailableUpdate,
-                       attentionAccessibilityHint: "Update available") { [weak self] in
-                self?.checkForUpdates()
-            },
-            MenuAction(title: "Edit Dictionary", systemImage: "character.book.closed") { [weak self] in
-                self?.editDictionary()
-            },
-            MenuAction(title: "View History", systemImage: "clock.arrow.circlepath") { [weak self] in
-                self?.showHistory()
-            },
-            MenuAction(title: "Delete History", systemImage: "trash") { [weak self] in
-                self?.clearHistory()
-            },
-            MenuAction(title: "Quit PushText", systemImage: "power") {
-                NSApplication.shared.terminate(nil)
-            },
-            MenuAction(title: "Uninstall PushText...", systemImage: "trash", destructive: true) { [weak self] in
-                self?.confirmUninstall()
-            }
-        ]
+        MenuDispatch.actions(for: MenuItemKind.allCases,
+                             // The dot rides on Check for Updates, and MacFaceKit lifts it onto the
+                             // `...` button for free - `OverflowMenu` marks itself when any action
+                             // is marked (#138). One flag lights two of the three places.
+                             attention: { [updateAvailability] kind in
+                                 kind == .checkForUpdates && updateAvailability.hasAvailableUpdate
+                             },
+                             run: { [weak self] kind in
+                                 guard let self else { return }
+                                 MenuDispatch.perform(kind, on: self)
+                             })
     }
 
-    private func checkForUpdates() {
+    func checkForUpdates() {
         dictationLog.info("update check requested")
         updater.checkForUpdates(nil)
     }
 
     /// Asks first, because this is irreversible from the user's point of view and the menu item is
     /// one slip away from Quit.
-    private func confirmUninstall() {
+    func confirmUninstall() {
         let alert = NSAlert()
         alert.messageText = "Uninstall PushText?"
         alert.informativeText = """
