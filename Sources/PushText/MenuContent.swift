@@ -82,7 +82,7 @@ struct MenuContent: View {
                     // from WindowServer AHEAD of every event tap - so PushText can see the press
                     // and cannot stop macOS acting on it (#176). Saying so beats a hotkey that
                     // half-works and looks broken.
-                    NoticeCard(title: "The Globe key also does something else",
+                    NoticeCard(title: "Globe has a system action",
                                message: "macOS is set to \(clash.describedForUser) when you press "
                                    + "Globe, and it acts first. Set it to Do Nothing so dictation "
                                    + "gets the key to itself.",
@@ -95,6 +95,27 @@ struct MenuContent: View {
                              current: model.preferences.hotkeyBinding,
                              onRecordingChange: { model.preferences.isRecordingHotkey = $0 },
                              onCapture: { model.preferences.hotkeyBinding = $0 })
+            }
+
+            SectionCard("GENERAL") {
+                // Read from SMAppService every time, never from a stored copy (#162). The user can
+                // turn this off in System Settings > General > Login Items without telling us, and a
+                // cached Bool would keep drawing ON while the app never started - the same shape as
+                // the permission rows that claimed a grant the app did not have (#152).
+                let loginState = actions.loginItem.state
+                ToggleLine(label: "Launch at login",
+                           isOn: Binding(get: { loginState.isOn },
+                                         set: { actions.setLaunchAtLogin($0) }))
+                    .id(actions.loginItemRevision)
+                if loginState.needsUserApproval {
+                    // Registered and parked. The app will NOT start at the next login while it sits
+                    // here, and nothing else on screen would say so.
+                    Text("macOS is waiting for you to allow this in System Settings, "
+                        + "General, Login Items.")
+                        .font(Tokens.caption)
+                        .foregroundStyle(Tokens.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             SectionCard("SOUND") {

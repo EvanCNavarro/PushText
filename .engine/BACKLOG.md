@@ -899,11 +899,30 @@ that. The narrative for each lives in the issue.
   is visible", because a search that found nothing must keep the field that undoes it.
   docs/verification/task161-history-viewer.md.)
 
-#162 - PushText cannot launch at login - there is no SMAppService anywhere - S1
+#162 - PushText cannot launch at login - there is no SMAppService anywhere - DONE
   (2026-08-24: recorded since #150 as an aside inside the uninstall entry - "it does not offer launch
   at login at all, which is a separate gap" - and never tracked. A push-to-talk utility that has to be
   started by hand after every reboot is one the user stops reaching for.
   DEPENDENCY: Uninstaller must deregister it in the same change. Today's uninstall is correct ONLY
   because there is nothing to deregister; the moment this lands, the note at line 727 becomes wrong
-  and uninstall starts leaving a login item behind.)
+  and uninstall starts leaving a login item behind.
+  DELIVERED 2026-08-25: SMAppService.mainApp behind a GENERAL toggle, read THROUGH to the system
+  rather than cached, with three states rather than a Bool - requiresApproval is real and would
+  otherwise draw as ON while the app never starts. Uninstall deregisters first; three plants, all
+  fire. The dependency was correct.
+  ONE PLANT FIRST PROVED NOTHING: removing the do/catch left an orphaned catch, the build failed, and
+  a grep for FAILED tests found none - a compile error read as "no test failed".
+  docs/verification/task162-launch-at-login.md.)
+
+#185 - HOME isolation does not isolate preferences - DONE
+  (2026-08-25: found while rendering #162's toggle, which changed Bobby's real dictation hotkey - the
+  SECOND time in one day, and the first under the isolation meant to prevent it. cfprefsd serves the
+  logged-in user's domain regardless of HOME and CFFIXED_USER_HOME: the redirected home received NO
+  plist at all while the real domain changed. HOME isolates FILES and never isolated preferences, so
+  every probe in this repo had been writing the user's real settings, and test-packaged-app.sh used
+  the same ineffective approach.
+  PUSHTEXT_DEFAULTS_SUITE names a separate domain; UserDefaultsSettingsStore(suiteName:) already
+  existed unused. Proven: seed the suite with 63, run the probe, real domain stays 61 and the suite
+  reads 63. The smoke exports a per-run suite and deletes it on exit - measured before=61 after=61.
+  The trust latch used UserDefaults.standard directly and was writing real grantLatch keys.)
 

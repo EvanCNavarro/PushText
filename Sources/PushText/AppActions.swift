@@ -187,6 +187,13 @@ final class AppActions {
     @ObservationIgnored
     private let historyViewer = HistoryViewerWindow()
 
+    /// Launch at login (#162). Read through, never cached - see AppActions+LoginItem.
+    @ObservationIgnored
+    let loginItem: any LoginItemControlling = SMAppServiceLoginItem()
+
+    /// Bumped after a change so the menu re-reads `SMAppService`.
+    var loginItemRevision = 0
+
     /// Where history lives, so the actions below agree on one path.
     private var historyURL: URL? { JSONLHistoryStore.defaultURL() }
 
@@ -333,6 +340,12 @@ final class AppActions {
         // returns "No such bundle identifier" and the grants outlive the app. Clear them FIRST.
         if let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first {
             let uninstaller = Uninstaller(library: library, repairer: repairer)
+            // BEFORE the bundle goes: an uninstall that skips this leaves macOS trying to start
+            // an application that is no longer on disk, every login, with nothing to point at
+            // (#162).
+            if uninstaller.deregisterLoginItem() {
+                dictationLog.info("uninstall: login item deregistered")
+            }
             for report in uninstaller.resetPermissions() where !report.succeeded {
                 dictationLog.error("uninstall: reset failed exit=\(report.exitCode, privacy: .public)")
             }
@@ -369,10 +382,10 @@ enum TrustRequestLatch {
     }
 
     static func wasRequested(_ permission: Permission) -> Bool {
-        UserDefaults.standard.bool(forKey: key(permission))
+        DefaultsSuite.current.bool(forKey: key(permission))
     }
 
     static func record(_ permission: Permission) {
-        UserDefaults.standard.set(true, forKey: key(permission))
+        DefaultsSuite.current.set(true, forKey: key(permission))
     }
 }

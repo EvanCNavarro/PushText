@@ -28,6 +28,13 @@ WORK="$(mktemp -d)"
 LAUNCH_LOG="$WORK/launch.log"
 SMOKE_HOME="$WORK/home"
 mkdir -p "$SMOKE_HOME"
+# HOME isolates FILES and nothing else (#185). cfprefsd serves the logged-in user's preference
+# domain whatever HOME says, so an app run under a scratch home still reads and WRITES the real
+# settings - measured, after a render probe changed the user's dictation hotkey twice in one day.
+SMOKE_SUITE="dev.ecn.apps.pushtext.smoke.$$"
+export PUSHTEXT_DEFAULTS_SUITE="$SMOKE_SUITE"
+cleanup_smoke_suite() { defaults delete "$SMOKE_SUITE" >/dev/null 2>&1 || true; }
+trap cleanup_smoke_suite EXIT
 
 stop_launched_app() {
 	if [ -n "$PID" ]; then
@@ -182,6 +189,7 @@ fi
 # release instead of the user. Cheap: it exits on its own after two seconds.
 menu_log="$WORK/menu.log"
 if env HOME="$SMOKE_HOME" CFFIXED_USER_HOME="$SMOKE_HOME" \
+    PUSHTEXT_DEFAULTS_SUITE="$SMOKE_SUITE" \
     PUSHTEXT_MENU_PROBE=1 PUSHTEXT_MENU_PROBE_SECONDS=2 "$BIN" >"$menu_log" 2>&1; then
     grep -q "MENU_PROBE window=.* rendered=true" "$menu_log" \
         || fail "menu probe exited 0 without rendering - $(tail -3 "$menu_log")"

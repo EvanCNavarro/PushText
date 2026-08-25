@@ -22,10 +22,12 @@ public struct Uninstaller {
     private let repairer: any PermissionRepairing
     private let fileManager: FileManager
     private let trash: (URL) throws -> Void
+    private let loginItem: any LoginItemControlling
 
     public init(library: URL,
                 repairer: any PermissionRepairing,
                 fileManager: FileManager = .default,
+                loginItem: any LoginItemControlling = SMAppServiceLoginItem(),
                 trash: @escaping (URL) throws -> Void = { url in
                     var resulting: NSURL?
                     try FileManager.default.trashItem(at: url, resultingItemURL: &resulting)
@@ -34,6 +36,28 @@ public struct Uninstaller {
         self.repairer = repairer
         self.fileManager = fileManager
         self.trash = trash
+        self.loginItem = loginItem
+    }
+
+    /// Takes PushText out of the user's login items (#162).
+    ///
+    /// Uninstall was correct before this ONLY because there was nothing to deregister. The moment
+    /// launch-at-login shipped, an uninstall that skipped this would leave macOS trying to start an
+    /// application that is no longer there - every login, forever, with the app gone and nothing to
+    /// point at. The backlog flagged it as a DEPENDENCY of #162 for exactly that reason.
+    ///
+    /// Returns whether anything had to be done, so the caller can log it. Failure is reported rather
+    /// than thrown: an uninstall that aborts halfway because a login item would not deregister is
+    /// worse than one that finishes and says so.
+    @discardableResult
+    public func deregisterLoginItem() -> Bool {
+        guard loginItem.state != .disabled else { return false }
+        do {
+            try loginItem.disable()
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// Moves every owned path to the Trash, skipping the ones that were never created.
