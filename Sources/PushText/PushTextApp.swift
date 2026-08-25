@@ -209,9 +209,23 @@ struct PushTextApp: App {
                 window.contentView = NSHostingView(rootView: MenuContent(model: model,
                                                                          actions: actions))
                 window.orderFrontRegardless()
+                // FORCE LAYOUT. Creating the hosting view is not enough - `MenuContent.body` is
+                // only evaluated when something lays it out, and body is exactly where v0.2.0's
+                // launch crash lived (#158). A probe that never evaluates body cannot catch it.
+                window.contentView?.layoutSubtreeIfNeeded()
                 dictationLog.info("MENU_PROBE window=\(window.windowNumber)")
-                print("MENU_PROBE window=\(window.windowNumber)")
+                print("MENU_PROBE window=\(window.windowNumber) rendered=true")
                 fflush(stdout)
+
+                // Bounded mode for the release smoke: render, prove it, exit. Left running when
+                // unset, which is what a human screenshotting it wants.
+                if let seconds = Double(ProcessInfo.processInfo
+                    .environment["PUSHTEXT_MENU_PROBE_SECONDS"] ?? "") {
+                    try? await Task.sleep(for: .seconds(seconds))
+                    print("MENU_PROBE finished")
+                    fflush(stdout)
+                    exit(0)
+                }
             }
         }
     }

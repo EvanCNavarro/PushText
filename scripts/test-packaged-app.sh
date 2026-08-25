@@ -173,6 +173,23 @@ if ! find $GUARD_PATHS -name '*.swift' -type f -print0 | xargs -0 awk '
 	fail "Bundle.module used outside a DEBUG guard - packaged resource path would be baked in"
 fi
 
+# --- Menu proof (#158) -------------------------------------------------------------------------
+# The smoke drove the AUDIO and HOTKEY probes and nothing else, so it never evaluated
+# `MenuContent.body` - which is exactly where v0.2.0's launch crash lived. Every defect found by
+# hand that week was in a path this script did not touch.
+#
+# This renders the REAL menu with the REAL model and forces layout, so a trap in body fails the
+# release instead of the user. Cheap: it exits on its own after two seconds.
+menu_log="$WORK/menu.log"
+if env HOME="$SMOKE_HOME" CFFIXED_USER_HOME="$SMOKE_HOME" \
+    PUSHTEXT_MENU_PROBE=1 PUSHTEXT_MENU_PROBE_SECONDS=2 "$BIN" >"$menu_log" 2>&1; then
+    grep -q "MENU_PROBE window=.* rendered=true" "$menu_log" \
+        || fail "menu probe exited 0 without rendering - $(tail -3 "$menu_log")"
+    echo "menu: rendered and exited cleanly"
+else
+    fail "menu probe FAILED (exit $?) - the menu cannot be opened: $(tail -5 "$menu_log")"
+fi
+
 # --- Launch proof ----------------------------------------------------------------------------
 CRASH_DIR="$HOME/Library/Logs/DiagnosticReports"
 before="$(ls "$CRASH_DIR" 2>/dev/null | grep -c "^$APP_NAME" || true)"
