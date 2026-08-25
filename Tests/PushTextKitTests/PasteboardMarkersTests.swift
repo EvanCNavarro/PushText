@@ -17,21 +17,37 @@ import AppKit
 @Suite("Pasteboard conceal markers")
 struct PasteboardMarkersTests {
 
-    private func makePasteboard(_ label: String) -> NSPasteboard {
-        NSPasteboard(name: NSPasteboard.Name("dev.ecn.apps.pushtext.test.\(label)"))
+    /// A named pasteboard, acquired with a DEADLINE (#178).
+    ///
+    /// `NSPasteboard(name:)` can block forever. Measured on CI: it reaches `CFPasteboardCreate` ->
+    /// `_onqueue_CFPasteboardSetupInstance` -> `dispatch_mach_send_with_result_and_wait_for_reply`
+    /// and never gets a reply, because the pasteboard server is intermittently unresponsive on a
+    /// headless runner. That one call took the whole job down for ten minutes at a time, about one
+    /// run in ten (#144), and survived three investigations because a hang leaves nothing to read.
+    ///
+    /// Still NAMED rather than `.general` - a test that scribbles on the real clipboard destroys
+    /// whatever the developer had copied. The name was never the problem; the unbounded wait was.
+    ///
+    /// A timeout FAILS this suite loudly in seconds rather than hanging the run. Ten seconds is far
+    /// beyond any healthy acquisition, which is instant.
+    private func makePasteboard(_ label: String) throws -> NSPasteboard {
+        let name = NSPasteboard.Name("dev.ecn.apps.pushtext.test.\(label)")
+        return try BoundedWork.run("NSPasteboard(name: \(name.rawValue))", timeout: 10) {
+            NSPasteboard(name: name)
+        }
     }
 
     @Test("The staged item carries the text itself")
-    func stagesTheText() {
-        let pasteboard = makePasteboard("text")
+    func stagesTheText() throws {
+        let pasteboard = try makePasteboard("text")
         PasteboardTextInjector.stage("hello world", on: pasteboard)
 
         #expect(pasteboard.string(forType: .string) == "hello world")
     }
 
     @Test("The staged item is marked transient, concealed and auto-generated")
-    func stagesAllThreeMarkers() {
-        let pasteboard = makePasteboard("markers")
+    func stagesAllThreeMarkers() throws {
+        let pasteboard = try makePasteboard("markers")
         PasteboardTextInjector.stage("secret dictation", on: pasteboard)
 
         let types = pasteboard.pasteboardItems?.first?.types.map(\.rawValue) ?? []
@@ -46,8 +62,8 @@ struct PasteboardMarkersTests {
     /// about to archive - a marker on a sibling item would be invisible to it, and the check above
     /// would still pass if the two were split.
     @Test("The markers are on the same item as the text, not a sibling")
-    func markersRideWithTheText() {
-        let pasteboard = makePasteboard("sameitem")
+    func markersRideWithTheText() throws {
+        let pasteboard = try makePasteboard("sameitem")
         PasteboardTextInjector.stage("hello", on: pasteboard)
 
         let items = pasteboard.pasteboardItems ?? []
@@ -59,8 +75,8 @@ struct PasteboardMarkersTests {
     }
 
     @Test("Staging replaces previous contents rather than appending to them")
-    func stagingReplaces() {
-        let pasteboard = makePasteboard("replace")
+    func stagingReplaces() throws {
+        let pasteboard = try makePasteboard("replace")
         pasteboard.clearContents()
         pasteboard.setString("something the user copied", forType: .string)
 
@@ -74,8 +90,8 @@ struct PasteboardMarkersTests {
     /// the clipboard while we were pasting. Staging has to bump it, or that guard reads every
     /// injection as a foreign write and the user's clipboard is never restored.
     @Test("Staging bumps the change count, which the restore guard depends on")
-    func stagingBumpsChangeCount() {
-        let pasteboard = makePasteboard("changecount")
+    func stagingBumpsChangeCount() throws {
+        let pasteboard = try makePasteboard("changecount")
         let before = pasteboard.changeCount
 
         let after = PasteboardTextInjector.stage("dictated", on: pasteboard)
@@ -95,8 +111,8 @@ extension PasteboardMarkersTests {
     /// text their own clipboard manager is instructed to discard: a button that appears to work and
     /// silently does not.
     @Test("Copying for the user writes plain, UNMARKED text")
-    func copyIsNotConcealed() {
-        let pasteboard = makePasteboard("copy")
+    func copyIsNotConcealed() throws {
+        let pasteboard = try makePasteboard("copy")
         PasteboardTextInjector.copy("keep this one", on: pasteboard)
 
         #expect(pasteboard.string(forType: .string) == "keep this one")
@@ -111,9 +127,9 @@ extension PasteboardMarkersTests {
     /// The discriminator. Both write the same string, so asserting only on the text would pass with
     /// `copy` implemented as a call to `stage` - which is the mistake worth preventing.
     @Test("Copy and inject differ in exactly the markers")
-    func copyAndStageDifferOnlyInMarkers() {
-        let copied = makePasteboard("diff-copy")
-        let staged = makePasteboard("diff-stage")
+    func copyAndStageDifferOnlyInMarkers() throws {
+        let copied = try makePasteboard("diff-copy")
+        let staged = try makePasteboard("diff-stage")
         PasteboardTextInjector.copy("same text", on: copied)
         PasteboardTextInjector.stage("same text", on: staged)
 
