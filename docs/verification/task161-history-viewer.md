@@ -64,6 +64,10 @@ wired to `showHistory()` and that wiring is not covered by any automated check -
 `docs/verification/task158-delete-history.md` records for Delete History, and for the same reason:
 these actions are closures inside a `MenuAction` array.
 
+TRACKED as #164, because a gap stated in prose in two separate documents is a gap nobody is going
+to fix. A change pointing Delete History at the uninstall action would pass every check this repo
+has.
+
 Copy-to-pasteboard was exercised by hand, not by a test. `NSPasteboard.general` is process-global,
 and a test that writes to it clobbers whatever the user has on their clipboard - which this session
 already did once, to their Trash, with a test that used the production closure.
