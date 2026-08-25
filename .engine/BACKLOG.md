@@ -727,3 +727,26 @@ that. The narrative for each lives in the issue.
   NOT APPLICABLE: PushText registers no login item - no SMAppService anywhere - so unlike TermTile
   there is nothing to deregister. It does not offer launch at login at all, which is a separate gap.)
 
+#152 - Permission rows never clear: a runtime failure is recorded and never removed - DONE
+  (2026-08-24: Bobby granted Accessibility, saw the toggle ON, and the menu still showed three NEEDS
+  ATTENTION rows. Measured three ways and all three were stale: TCC said Accessibility=2 and
+  Microphone=2, and the app's OWN probe said microphone=granted accessibility=granted
+  postEvent=granted allGranted=true.
+  runtimeFailures was only ever inserted into - one line, AppModel.swift:75 - and nothing removed.
+  #136 made a runtime failure outrank the probe, which is right while the failure is CURRENT and
+  wrong once the user fixes it, so the launch-time tap failure and microphone refusal became
+  permanent for the process lifetime. PermissionAdvisorTests.failureClears() sets runtimeFailures =
+  [] directly and passes: it proved clearing WORKS if someone does it, and nobody did - a test
+  verifying a capability the app never invokes.
+  Clearing on "the probe says granted" alone would have been WORSE than the bug, because the tap
+  stays dead until something re-arms it and the menu would report health the app does not have. So
+  recovery RETRIES and clears only what comes back working - which also removes the relaunch the old
+  copy demanded.
+  Four plants, and the third exposed a vacuous test of mine: recoveryIsPerPermission had the second
+  permission's probe report needsFirstGrant, so its row appeared from the PROBE whatever recovery
+  did, and a planted removeAll() sailed through. Rewritten with both probes granted so the row
+  depends on the runtime failure alone; the same plant now fails.
+  The extraction to AppModel+Permissions.swift was botched first - it swept in an unrelated
+  ModelPreparer block and broke the build - and was reverted to HEAD and redone in one pass rather
+  than patched forward.)
+

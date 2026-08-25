@@ -128,6 +128,7 @@ struct PushTextApp: App {
         // Silence the tap while the recorder waits for a key (#128). The tap is global and does not
         // care that a settings field has focus, so without this, pressing Right Option to rebind
         // would ALSO start a dictation - the user recording their own act of changing the setting.
+        Self.installPermissionRetry(on: model, controller: controller)
         model.preferences.onRecordingChange = { [controller] isRecording in
             if isRecording { controller.suspend() } else { controller.resume() }
         }
@@ -147,6 +148,21 @@ struct PushTextApp: App {
         // moving demo would flatter the design and hide what a real, mostly-quiet level looks like.
         Self.installHUDProbeIfRequested(on: launchDelegate)
         Self.installMenuProbeIfRequested(on: launchDelegate, model: model, actions: actions)
+    }
+
+    /// Lets the menu re-arm whatever the user has just granted, instead of asking for a relaunch
+    /// (#152). Extracted because `init` crossed swiftlint's 50-line body limit, and because this is
+    /// its own concern: what "retry" MEANS per permission is OS knowledge, not composition.
+    ///
+    /// Clearing a row without this would claim health the app does not have - the tap stays dead
+    /// until something rebuilds it.
+    private static func installPermissionRetry(on model: AppModel, controller: HotkeyController) {
+        model.onRetryPermission = { permission in
+            switch permission {
+            case .accessibility, .postEvent: controller.start()
+            case .microphone: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+            }
+        }
     }
 
     /// Visual verification hook for the MENU (#128).

@@ -25,13 +25,18 @@ final class HotkeyController {
 
     /// One place that starts a tap, used by both the launch path and every rebind - so a failure is
     /// reported the same way whichever brought it about (FL-5).
-    func start() {
+    /// - Returns: whether the tap is now armed. Reported rather than only logged so a caller can
+    ///   retry after the user grants Accessibility and know whether it actually worked (#152).
+    @discardableResult
+    func start() -> Bool {
         do {
             try monitor.start(onEvent: onEdge)
             dictationLog.info("hotkey tap armed for \(self.monitor.bindingName, privacy: .public)")
+            return true
         } catch {
             dictationLog.error("hotkey tap FAILED: \(String(describing: error), privacy: .public)")
             onFailure(error)
+            return false
         }
     }
 
