@@ -80,6 +80,9 @@ final class AppActions {
     /// would destroy the developer's own grants.
     private let repairer: any PermissionRepairing
 
+    /// Opens the app's plain-text files. Injected so tests never launch TextEdit.
+    private let textOpener: PlainTextOpener
+
     /// Where this app is in its update cycle, which decides whether the menu shows a mark (#138).
     ///
     /// `checking` and `failed` deliberately do not mark: a dot that appears while merely checking
@@ -104,7 +107,9 @@ final class AppActions {
          },
          openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
          hasRequestedTrust: @escaping (Permission) -> Bool = { TrustRequestLatch.wasRequested($0) },
-         recordRequestedTrust: @escaping (Permission) -> Void = { TrustRequestLatch.record($0) }) {
+         recordRequestedTrust: @escaping (Permission) -> Void = { TrustRequestLatch.record($0) },
+         textOpener: PlainTextOpener = PlainTextOpener()) {
+        self.textOpener = textOpener
         self.repairer = repairer
         self.requestAccessibilityTrust = requestAccessibilityTrust
         self.openURL = openURL
@@ -121,7 +126,10 @@ final class AppActions {
     /// would put a worse reader in front of a file that every tool on the machine already opens.
     func revealHistory() {
         guard let url = historyURL else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
+        // Opened rather than revealed (#154). Revealing worked, and then the user double-clicked
+        // the file and hit the same no-handler wall - so the menu item did its job and the user
+        // still could not read their own transcripts.
+        textOpener.open(url)
     }
 
     /// Deletes every recorded dictation. Irreversible, so it confirms first.
@@ -145,7 +153,9 @@ final class AppActions {
     func editDictionary() {
         guard let url = JSONLDictionaryStore.defaultURL() else { return }
         JSONLDictionaryStore(url: url).createWithExampleIfMissing()
-        NSWorkspace.shared.open(url)
+        // NOT NSWorkspace.open(url): `.jsonl` has no handler on macOS - it gets a dynamic UTI - so
+        // that produced "There is no application set to open the document" and nothing else (#154).
+        textOpener.open(url)
     }
 
     func menuActions() -> [MenuAction] {
@@ -161,7 +171,7 @@ final class AppActions {
             MenuAction(title: "Edit Dictionary", systemImage: "character.book.closed") { [weak self] in
                 self?.editDictionary()
             },
-            MenuAction(title: "Show History File", systemImage: "clock.arrow.circlepath") { [weak self] in
+            MenuAction(title: "Open History File", systemImage: "clock.arrow.circlepath") { [weak self] in
                 self?.revealHistory()
             },
             MenuAction(title: "Delete History", systemImage: "trash") { [weak self] in

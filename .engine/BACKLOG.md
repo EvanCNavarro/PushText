@@ -750,3 +750,20 @@ that. The narrative for each lives in the issue.
   ModelPreparer block and broke the build - and was reverted to HEAD and redone in one pass rather
   than patched forward.)
 
+#154 - Edit Dictionary cannot open the dictionary: .jsonl has no handler - DONE
+  (2026-08-24: Bobby, on the overflow menu - "these dropdown options aren't all built out working
+  ... with true editability". Edit Dictionary produced "There is no application set to open the
+  document" and stopped.
+  Measured rather than guessed: a .jsonl file gets the DYNAMIC UTI dyn.ah62d4rv4ge80y65tr30a because
+  macOS does not know the extension, so urlForApplication(toOpen: <the file>) returns NONE - while
+  urlForApplication(toOpen: .plainText) returns TextEdit.app on the same machine. The old code called
+  NSWorkspace.open on the file itself, so there was nothing to open it with.
+  revealHistory() was not broken but was a dead end: it revealed in Finder, the user double-clicked,
+  and hit the identical wall. Renamed to Open History File and it opens the transcripts.
+  PlainTextOpener opens the file AS PLAIN TEXT and falls back to revealing when no editor resolves -
+  the fallback being the part with a right and wrong answer, and the part the tests assert. Verified
+  on the real machine: TextEdit.app resolved, file opened, TextEdit running with it.
+  Three plants: no fallback (the original bug), always reveal, and resolve-nothing. The third did NOT
+  fire, correctly - the tests inject the resolver so they never launch TextEdit, which means the
+  production default is not covered by them BY DESIGN. That plant is what drove the real run.)
+
