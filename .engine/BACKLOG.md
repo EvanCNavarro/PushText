@@ -767,3 +767,23 @@ that. The narrative for each lives in the issue.
   fire, correctly - the tests inject the resolver so they never launch TextEdit, which means the
   production default is not covered by them BY DESIGN. That plant is what drove the real run.)
 
+#156 - The dictionary is a JSONL file handed to TextEdit, not an editor - DONE
+  (2026-08-24: Bobby - "what about those things being editable in a popup proper ui". #154 made the
+  file OPEN, which is not the same as editable: the user had to know the format, keep the JSON valid,
+  and not break the app with a mistyped brace.
+  A real editor now - one row per rule, add and delete, saving as you type. A WINDOW rather than a
+  popover, and not as a preference: the menu-bar popover dismisses the moment focus moves and a text
+  field takes focus, so an editor inside it would close on the first keystroke. TermTile runs its
+  uninstall alerts in their own window for the same reason.
+  The rules live in a testable model because they have right and wrong answers: a blank row is never
+  written; a row with a spoken form but NO written form is never written either, because it would
+  rewrite the user's word to nothing and silently delete what they just dictated; whitespace is
+  trimmed, since a trailing space stops the rule ever matching; order is preserved, because the file
+  is the user's document and CustomDictionary sorts longest-first when it matches anyway. Four
+  plants, all caught.
+  RENDERING caught two things no test would: Add Entry used LinkButton, the EXTERNAL-LINK affordance,
+  which stretched full-width and drew a trailing arrow reading as "this leaves the app"; and the view
+  repeated the window's own title. Both found by looking at the screenshot.
+  STILL OPEN: the history is read-only and still opens in a text editor. A viewer with search is the
+  same shape of work and is not in this change.)
+
