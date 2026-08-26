@@ -1142,3 +1142,20 @@ that. The narrative for each lives in the issue.
   only whether macOS ALSO acts, never whether PushText does.
   REOPENS ON A SYMPTOM, not a schedule: Apple's dictation panel appearing while PushText dictates, or
   PushText not running after a restart with Launch at login on. Neither has been observed.)
+
+#222 - The history file grows without bound, and reading it costs the whole file - DONE
+  (2026-08-26: found by building an instrument for Bobby's "what is bloated, what is inefficient, and
+  how can we tell?" rather than guessing. MEASURED: load() costs 0.34ms at 23 records, 6.19 at 500,
+  25.15 at 5,000, 88.10 at 20,000 - scaling with the FILE while decoded stays pinned at 500, because
+  the trim happened in memory and was never written back. changeStamp() is FLAT at 0.07ms throughout,
+  so #202's cheap check does exactly what it was built for.
+  Fixed by compacting in append() past 512 KB with an atomic write - in the WRITE path, because the
+  viewer reaches the store through HistoryReading precisely so it cannot rewrite the file. The
+  trigger is a stat, not a read; reading the file on every append to decide would BE the cost.
+  THE AFTER-MEASUREMENT NEARLY MEANT NOTHING. Re-running the size table gave identical numbers,
+  correctly - it writes files DIRECTLY and never calls append(), so compaction never fires and it
+  cannot distinguish fixed from unfixed. Driving the write path instead: after 20,000 real appends
+  the file is 289,665 bytes rather than 4,088,890, and load() is 9.93ms rather than 88.10.
+  One test had to be rewritten before it meant anything - "keeps the newest records" asserted on
+  load(), which has always trimmed in memory, so it passed with no compaction at all. Both plants
+  caught. docs/verification/task222-history-growth.md.)

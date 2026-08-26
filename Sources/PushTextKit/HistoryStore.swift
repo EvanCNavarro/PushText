@@ -36,6 +36,13 @@ public final class JSONLHistoryStore: HistoryStore, @unchecked Sendable {
     /// kilobytes - small enough that the read-and-trim is not worth optimising.
     public static let defaultLimit = 500
 
+    /// Compact once the file passes this (#222).
+    ///
+    /// Measured, not chosen by feel: `load()` costs ~6 ms at 101 KB, ~25 ms at 1 MB and ~88 ms at
+    /// 4 MB, because it reads and trims the WHOLE file to show the newest 500. Half a megabyte keeps
+    /// that read in single digits while still being large enough that compaction is rare.
+    public static let compactionThreshold = 512 * 1024
+
     private let url: URL
     private let limit: Int
     private let lock = NSLock()
@@ -62,8 +69,35 @@ public final class JSONLHistoryStore: HistoryStore, @unchecked Sendable {
         guard let line = try? HistoryRecord.encodeLine(record) else { return }
         guard let data = (line + "\n").data(using: .utf8) else { return }
         write(data)
+        // In the WRITE path, never in `load()`. The viewer reaches the store through `HistoryReading`
+        // precisely so it cannot rewrite the file, and compacting on read would hand it that power
+        // through the back door.
+        compactIfOversized()
         // Announced AFTER the lock is given up - see `announceChange`.
         announceChange()
+    }
+
+    /// Rewrites the file down to `limit` records once it grows past `compactionThreshold` (#222).
+    ///
+    /// **The check is a `stat`, not a read.** Reading the file on every append to decide whether it
+    /// is too big would BE the cost this exists to remove.
+    ///
+    /// This does not reintroduce the whole-file write JSONL was chosen to avoid: that objection was
+    /// to rewriting on EVERY append, and at half a megabyte this runs roughly once per fourteen
+    /// hundred dictations. The write is atomic, so a crash during it cannot leave a truncated
+    /// history - the old file stays until the new one is complete.
+    private func compactIfOversized() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let stamp = HistoryFileStamp.read(url),
+              stamp.size > Self.compactionThreshold,
+              let contents = try? String(contentsOf: url, encoding: .utf8) else { return }
+        let trimmed = HistoryRecord.trim(contents, toMostRecent: limit)
+        guard trimmed.count < contents.count else { return }
+        // The trailing newline is load-bearing: `trim` joins WITHOUT one, and the next append would
+        // then land on the same line and merge two dictations into one unparseable record.
+        guard let data = (trimmed + "\n").data(using: .utf8) else { return }
+        try? data.write(to: url, options: .atomic)
     }
 
     private func write(_ data: Data) {
