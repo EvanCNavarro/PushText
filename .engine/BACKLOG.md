@@ -1175,3 +1175,15 @@ that. The narrative for each lives in the issue.
   wrong. Now splits on the label and validates the shape, falling back to "unavailable".
   Measured: 16 MB fresh vs 33 MB after hours with the menu opened.
   docs/verification/task224-footprint-baseline.md.)
+
+#224 - Launch to menu-bar ready, measured (the third dimension #224 left open) - DONE
+  (2026-08-26: the third dimension named in #224's "still not covered". Exec to a clickable status
+  item: debug 894/585/570 ms, release 834/569/578 ms - three samples each, first is cold.
+  DEBUG AND RELEASE ARE INDISTINGUISHABLE, which is the finding. Release optimises our Swift and
+  debug does not, so if our code dominated launch the columns would differ. They do not, placing the
+  time in dyld and framework init rather than anything this project wrote. Nothing here to optimise.
+  No permanent gate: recording it every run would need a readiness marker in PRODUCTION code, since
+  the measurement borrows #209's probe-only status-item poll - real cost for a regression that is
+  unlikely and partly covered by the footprint line and the existing liveness poll.
+  Does NOT measure login-to-ready, which includes SMAppService's own scheduling - macOS's, not ours.
+  docs/verification/task224-launch-to-ready.md.)
