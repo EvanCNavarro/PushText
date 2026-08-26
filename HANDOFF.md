@@ -1,4 +1,12 @@
-# HANDOFF — read this first in a new session
+# HANDOFF — a historical record, not current state
+
+> **Superseded 2026-08-26 (#211). Do not act on this file.** It was the handoff into the macOS 26
+> upgrade, which completed; twenty-two releases have shipped since, through v0.6.4. Its plans are
+> done, its open questions are answered, and its numbers are stale - "46 tests passed" was true of
+> `9f93969` and the suite is now at 443. It is kept because it records what was believed BEFORE the
+> upgrade, which is the only place several disproved assumptions are written down.
+>
+> For current state read [`README.md`](README.md), `.engine/BACKLOG.md`, and the open issues.
 
 Written 2026-08-22, at the end of the session that created this project, immediately before Bobby
 upgrades macOS 15.1 → macOS 26 (Tahoe). **That upgrade kills the session that wrote everything here.**
