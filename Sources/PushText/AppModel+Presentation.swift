@@ -11,6 +11,15 @@ import PushTextKit
 @MainActor
 extension AppModel {
 
+    /// Which mark the menu bar shows. WHAT it looks like is `MenuBarGlyph`'s business (#216).
+    ///
+    /// Capturing, not recording: the inverted mark has to appear the moment the microphone could be
+    /// open, including while arming, or the one indicator that PushText is listening lags the thing
+    /// it indicates.
+    var menuBarGlyph: MenuBarGlyph.Kind {
+        machine.isCapturing ? .active : .idle
+    }
+
     var statusText: String {
         switch machine.state {
         case .idle: "Ready"

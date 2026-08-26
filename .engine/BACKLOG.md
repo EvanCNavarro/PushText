@@ -1085,3 +1085,24 @@ that. The narrative for each lives in the issue.
   assumptions that turned out wrong. GitHub: ten topics where there were none, homepage set, and the
   description's "no network" softened to match the truth.
   docs/verification/task211-docs-accuracy.md.)
+
+#216 - The menu-bar icon is an SF Symbol that does not match the app icon - DONE
+  (2026-08-26: the menu bar drew SF `waveform` - varied wavy strokes, a different logo from the app
+  icon's five tiles - and `waveform.circle.fill` when active, a circle where the icon uses a
+  squircle. Both replaced with the icon's own geometry scaled: tiles 86 wide on a 129 pitch, heights
+  170/350/520/350/170, from AppIconSource.svg.
+  INVERSION RATHER THAN A COLOUR because both ship as TEMPLATE images: macOS gets only the alpha and
+  tints for light or dark itself, so the app never picks a colour - and "active" therefore cannot BE
+  one. The active mark is the same tiles knocked out of a filled squircle, corner ratio 205/896.
+  PNG NOT PDF, and the measurement decided it. TermTile ships PDF and vector is better artwork, but
+  rsvg's PDF output is NOT deterministic (two renders of an unchanged SVG differ by 122 bytes) and
+  sips rasterising a PDF is not either. With no stable comparison a --check could only assert the
+  file EXISTS, which passes on a stale asset - the exact divergence render-icon.sh exists to catch.
+  rsvg's PNG output is byte-stable, so all three assets use the same real check.
+  The badge is composited locally because MacFaceKit.MenuBarBadge takes a symbol NAME with no image
+  overload and is a separate pinned package; Tokens still supply the dot so the vocabulary is shared.
+  Tests read ALPHA off the raster rather than comparing images: centre opaque when idle and
+  transparent when active, and the reverse in the gap between bars. Two marks could differ in every
+  byte and both read as bars. Both plants caught.
+  NOT VERIFIED: a photo of it in the live menu bar - the probe's status item landed in the hidden
+  overflow of Bobby's menu-bar manager. docs/verification/task216-menu-bar-glyph.md.)

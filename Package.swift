@@ -52,7 +52,14 @@ let package = Package(
             // SPM warns "found 1 file(s) which are unhandled" on every build, and the copy keeps
             // the icon reachable from Bundle should the branded update dialog ever want it the way
             // TermTile's does. Sparkle's standard dialog reads CFBundleIconFile off the .app.
-            resources: [.copy("Resources/AppIcon.png")],
+            resources: [
+                .copy("Resources/AppIcon.png"),
+                // The menu-bar marks (#216). Reached through `Bundle.module`, so unlike the app
+                // icon these are read by the RUNNING APP rather than only by build-app.sh - if the
+                // copy is dropped the menu bar loses its icon entirely.
+                .copy("Resources/MenuGlyphIdle.png"),
+                .copy("Resources/MenuGlyphActive.png")
+            ],
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]),
