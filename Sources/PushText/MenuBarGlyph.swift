@@ -80,9 +80,30 @@ enum MenuBarGlyph {
     ///
     /// The PNG is 36px and the menu bar wants 18pt: setting `size` is what makes AppKit treat the
     /// file as a 2x representation rather than drawing a 36pt image twice the height of the bar.
+    ///
+    /// **`Bundle.main`, and `Bundle.module` only in DEBUG (TRAP-4).** SwiftPM's generated
+    /// `Bundle.module` looks in exactly two places - a `PushText_PushText.bundle` beside the app,
+    /// and an ABSOLUTE PATH INTO THE BUILD DIRECTORY OF THE MACHINE THAT COMPILED IT - and calls
+    /// `fatalError` when neither exists. `build-app.sh` ships resources FLATTENED into
+    /// `Contents/Resources`, because the alternatives either break `codesign --strict` or are never
+    /// looked at, so a packaged app has no such bundle.
+    ///
+    /// Measured, not argued: the first version of this file used `Bundle.module` unguarded. Built
+    /// into a .app, run with the build directory renamed to stand in for any other Mac, it died -
+    /// `Trace/BPT trap: 5`, exit 133, "could not load resource bundle". The same app with this
+    /// version stayed up. v0.2.0 shipped that crash once already, carrying
+    /// `/Users/runner/work/PushText/...` into a release.
     static func load(_ kind: Kind) -> NSImage? {
-        guard let url = Bundle.module.url(forResource: kind.resourceName, withExtension: "png"),
-              let image = NSImage(contentsOf: url) else { return nil }
+        var url = Bundle.main.url(forResource: kind.resourceName, withExtension: "png")
+        #if DEBUG
+        // Only in a debug build, and `test-packaged-app.sh` enforces that: under `swift test` the
+        // main bundle is the test runner, so the file is not there and the module bundle IS - the
+        // exact reverse of the shipped app.
+        if url == nil {
+            url = Bundle.module.url(forResource: kind.resourceName, withExtension: "png")
+        }
+        #endif
+        guard let url, let image = NSImage(contentsOf: url) else { return nil }
         image.size = pointSize
         return image
     }

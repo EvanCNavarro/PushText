@@ -33,11 +33,24 @@ research that found them is not read on every cycle, and the trap is.
   Accessibility and PostEvent all in play, forgetting costs three re-approvals per build.
   `build-app.sh` prints a WARNING when it falls back to ad-hoc.
 
-### TRAP-4 (INHERITED): Bundle.module outside `#if DEBUG` crashes every shipped build
-- what happened: not yet, here. `Bundle.module`'s generated accessor bakes in an ABSOLUTE `.build`
-  path, which exists on the build machine and nowhere else — in CI that is `/Users/runner/...`.
-- warning: resolve packaged resources from `Bundle.main`. `scripts/test-packaged-app.sh` carries an
-  awk guard that is `#if DEBUG`-nesting-aware; do not weaken it to a plain grep.
+### TRAP-4: Bundle.module outside `#if DEBUG` crashes every shipped build
+- what happened: TWICE. `Bundle.module`'s generated accessor bakes in an ABSOLUTE `.build` path,
+  which exists on the build machine and nowhere else — in CI that is `/Users/runner/...`. v0.2.0
+  shipped it and SIGTRAPed on first menu open (#134). #217 shipped it again in the menu-bar glyph
+  loader and was caught before release (#219): packaged and run with the build directory renamed to
+  stand in for another Mac, it died `Trace/BPT trap: 5`, exit 133, "could not load resource bundle";
+  the guarded build stayed alive under identical conditions.
+- warning: resolve packaged resources from `Bundle.main`. `.engine/checks/bundle-module-guarded.sh`
+  carries an awk guard that is `#if DEBUG`-nesting-aware; do not weaken it to a plain grep.
+- **the second occurrence was a GATE PLACEMENT failure, not a missing gate.** That guard already
+  existed and was correct — it named `MenuBarGlyph.swift:84` the instant it was pointed at the code.
+  It lived only in `scripts/test-packaged-app.sh`, which needs a BUILT app and is not part of the PR
+  gate, so CI went green on a PR containing the crash. It now lives in `.engine/checks/`, which CI
+  runs on every pull request, and `test-packaged-app.sh` delegates to it.
+  **Ask of any new guard: does it run where the change arrives?** A correct check in a script the
+  gate never invokes is indistinguishable from no check at all.
+- no unit test can catch this: under `swift test` the DEBUG path is the working one, so the suite
+  passes identically either way. The defect exists only in a configuration the tests never enter.
 
 ### TRAP-5: a bare curl against rdap.org returns 302 and tells you nothing
 - what happened: checking domain availability with
