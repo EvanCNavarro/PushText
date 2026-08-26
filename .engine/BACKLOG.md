@@ -1126,3 +1126,19 @@ that. The narrative for each lives in the issue.
   path is the one that works. The defect exists only in a configuration the suite never runs in.
   0.6.5 was never affected - the glyph landed after that tag and 0.6.6 was not cut.
   docs/verification/task219-bundle-module-crash.md.)
+
+#206 - Measure what the Globe key actually does on macOS 26, at the keyboard - DONE
+  (DONE means CLOSED NOT PLANNED - the taxonomy has no other closed marker. 2026-08-26: three
+  observations needing a human at the keyboard - hold Globe, double-press Globe,
+  and a reboot to see whether launch-at-login actually STARTS the app rather than merely registering.
+  Bobby's call: "it's not worth the time for reboot etc for now - if something pops up as an error
+  then we'll address it."
+  CLOSING IS SAFE BECAUSE NOTHING SHIPPED DEPENDS ON THE ANSWER, and that was checked rather than
+  assumed. #182 already reworded the Globe notice from "when you press Globe, macOS acts first" -
+  which rested on docs/research/04's unmeasured WindowServer claim - to "macOS also uses the Globe
+  key for X", which is what System Settings itself says. task182's write-up records the gap in those
+  words, so the repo says "unmeasured" rather than asserting either answer. And suppression itself IS
+  measured: the tap consumes the Globe flag, with three plants on the policy. What is unmeasured is
+  only whether macOS ALSO acts, never whether PushText does.
+  REOPENS ON A SYMPTOM, not a schedule: Apple's dictation panel appearing while PushText dictates, or
+  PushText not running after a restart with Launch at login on. Neither has been observed.)
