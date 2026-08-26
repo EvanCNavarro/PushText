@@ -78,6 +78,21 @@ final class HistoryViewerWindow: NSObject, NSWindowDelegate {
         listener = nil
     }
 
+    /// Makes the viewer key again, for the probe that proves `windowDidBecomeKey` re-reads (#207).
+    ///
+    /// Not a shortcut around the test: BECOMING key is the event under test, and a window that
+    /// never lost key cannot become it. The probe takes key away first.
+    func makeKey() {
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// What the list is CURRENTLY showing, for the #207 probe.
+    ///
+    /// Read from the model rather than measured off a screenshot: a whole-window pixel hash cannot
+    /// tell "the list gained a row" from "the title bar dimmed because the window lost key", and it
+    /// scored the second as a failed control on the first run of this probe.
+    var visibleRowCount: Int? { model?.visible.count }
+
     /// The window number, so a probe can hand it to `screencapture -l` instead of hunting for it.
     ///
     /// Discovery from outside does not work here: `kCGWindowName` is nil without Screen Recording,

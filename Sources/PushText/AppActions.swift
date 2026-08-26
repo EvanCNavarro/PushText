@@ -190,6 +190,10 @@ final class AppActions {
     @ObservationIgnored
     let historyViewer = HistoryViewerWindow()
 
+    /// Retains the probe's key-thief window (#207); nil in every non-probe process.
+    @ObservationIgnored
+    var probeKeyThief: NSWindow?
+
     /// Launch at login (#162). Read through, never cached - see AppActions+LoginItem.
     @ObservationIgnored
     let loginItem: any LoginItemControlling = SMAppServiceLoginItem()

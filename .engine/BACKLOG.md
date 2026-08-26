@@ -1012,3 +1012,25 @@ that. The narrative for each lives in the issue.
   Four planted defects, four caught. The notification test first counted FOUR posts for one append -
   parallel suites, unattributed broadcast - so the post now carries its store.
   docs/verification/task202-history-viewer-live-refresh.md.)
+
+#207 - The history viewer's become-key refresh is wired but never exercised - DONE
+  (2026-08-25: #202 shipped two refresh paths and measured one. This measured the other.
+  MY OWN FILED DEPENDENCY WAS WRONG. #207 said moving key focus "likely needs cliclick or an
+  NSApplication activation hook" - inferred, never checked. The menu probe window uses
+  orderFrontRegardless(), which does NOT take key, so the viewer had held key through every earlier
+  probe; the app can steal key from itself with an ordinary NSWindow. One read of the probe code.
+  AN UNBUNDLED BINARY CANNOT BE TESTED FOR THIS. Against .build/debug/PushText: "MAKEKEY before:
+  isKey=false appActive=false / after: isKey=false", no delegate callback - an inactive app cannot
+  make a window key and an SPM binary has no bundle to activate. The probe said NOT CONFIRMED, which
+  was true of the environment and false about the code, and would have sent someone to fix a working
+  delegate. scripts/probe-history-become-key.sh refuses the binary in its header for that reason.
+  THE INSTRUMENT WAS WRONG TWICE. A whole-window pixel hash called the control failed because the
+  TITLE BAR had dimmed on losing key - content was identical at 2 rows. Then the crop meant to fix
+  it, `sips -c 824 1120 --cropOffset 80 0`, exited 0, printed the output path, and returned an image
+  still 904px tall; the cropped hashes came back byte-identical to the uncropped ones, which is the
+  only reason it was caught. The verdict now reads the model's row count, which is the quantity the
+  question is about.
+  Measured: 2 rows while unkeyed after an outside edit, 3 once key returned. Control is load-bearing
+  - the edit is a raw append, not through JSONLHistoryStore, so nothing is posted.
+  Planted: refresh() removed from windowDidBecomeKey -> 2 and 2, RESULT FAILED, control still ok.
+  Restored byte-identical. docs/verification/task207-become-key-refresh.md.)

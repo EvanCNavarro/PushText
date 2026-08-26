@@ -46,6 +46,7 @@ extension AppActions {
             print("HISTORY_PROBE window=\(historyViewer.windowNumber ?? 0) mode=live")
             fflush(stdout)
             scheduleProbeAppend()
+            scheduleProbeRekey()
             return
         }
         let fixture = HistoryProbeFixture(mode: mode)
@@ -82,6 +83,45 @@ extension AppActions {
                 HistoryRecord(text: text, recordedAt: Date(), durationSeconds: 30))
             print("HISTORY_PROBE appended")
             fflush(stdout)
+        }
+    }
+
+    /// Drives the become-key path (#207): take key away from the viewer, then give it back.
+    ///
+    /// Both halves are necessary. `windowDidBecomeKey` only fires on a window that BECOMES key, so a
+    /// viewer that never lost it would sit there while the delegate never ran - and a probe built
+    /// without the thief would report the same green whether the delegate existed or not.
+    ///
+    /// The thief is a real `NSWindow` because that is what takes key; `orderFrontRegardless`, which
+    /// the menu probe uses, deliberately does not, which is why the viewer kept key through every
+    /// earlier probe run.
+    private func scheduleProbeRekey() {
+        let environment = ProcessInfo.processInfo.environment
+        guard let raw = environment["PUSHTEXT_HISTORY_PROBE_REKEY"],
+              let seconds = Double(raw) else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            let thief = NSWindow(contentRect: NSRect(x: 20, y: 20, width: 160, height: 90),
+                                 styleMask: [.titled], backing: .buffered, defer: false)
+            thief.title = "key thief (probe)"
+            thief.makeKeyAndOrderFront(nil)
+            self?.probeKeyThief = thief
+            print("HISTORY_PROBE keystolen")
+            fflush(stdout)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            // THE CONTROL, sampled the instant before key returns: the file was changed from
+            // outside, which posts nothing, so an unkeyed window must still be showing the old
+            // count. If this already reads the new number then something else refreshed it and
+            // nothing below can be credited to becoming key.
+            print("HISTORY_PROBE rows_before_key=\(self?.historyViewer.visibleRowCount ?? -1)")
+            self?.historyViewer.makeKey()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                print("HISTORY_PROBE rows_after_key=\(self?.historyViewer.visibleRowCount ?? -1)")
+                print("HISTORY_PROBE rekeyed")
+                fflush(stdout)
+            }
         }
     }
 
