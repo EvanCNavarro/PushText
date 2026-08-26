@@ -1159,3 +1159,19 @@ that. The narrative for each lives in the issue.
   One test had to be rewritten before it meant anything - "keeps the newest records" asserted on
   load(), which has always trimmed in memory, so it passed with no compaction at all. Both plants
   caught. docs/verification/task222-history-growth.md.)
+
+#224 - Memory has no baseline, so no number about it can mean anything - DONE
+  (2026-08-26: measured 33 MB footprint, 41.9 MB peak, 18 MB MALLOC_SMALL plus ~4 MB graphics - and
+  the point is that the number alone is UNANSWERABLE. 33 MB is meaningful only against a baseline or
+  a trend, and neither existed.
+  THE OBVIOUS INSTRUMENT LIES: ps RSS said 89.8 MB for the same process, 2.7x over, because RSS counts
+  the shared AppKit/SwiftUI pages every app maps. Reporting it would have sent someone optimising
+  nothing. `footprint -p` is the honest one.
+  test-packaged-app.sh now records footprint on every packaged run - RECORDED, NOT ASSERTED, because
+  a threshold needs a baseline this project does not have and a limit picked by feel gets raised the
+  first time it fires.
+  A PARSE BUG THAT WOULD HAVE SHIPPED SILENTLY: a positional awk produced "footprint=64-bit
+  Footprint:" - a value-shaped string that would have sat in every release smoke without ever looking
+  wrong. Now splits on the label and validates the shape, falling back to "unavailable".
+  Measured: 16 MB fresh vs 33 MB after hours with the menu opened.
+  docs/verification/task224-footprint-baseline.md.)
