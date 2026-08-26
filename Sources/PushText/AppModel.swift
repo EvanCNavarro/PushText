@@ -165,10 +165,6 @@ private let engine: any TranscriptionEngine
         startupFailure = message
     }
 
-    var menuBarSymbol: String {
-        machine.isCapturing ? "waveform.circle.fill" : "waveform"
-    }
-
     /// Feeds one event into the dictation machine.
     ///
     /// The composition root routes hotkey edges here; keeping the mapping in one place means the

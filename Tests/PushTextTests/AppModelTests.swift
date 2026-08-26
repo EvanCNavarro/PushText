@@ -24,16 +24,16 @@ struct AppModelTests {
         let model = makeModel()
         #expect(model.machine.state == .idle)
         #expect(model.statusText == "Ready")
-        #expect(model.menuBarSymbol == "waveform")
+        #expect(model.menuBarGlyph == .idle)
     }
 
-    @Test("A key press maps to hotkeyPressed and the menu bar symbol changes")
+    @Test("A key press maps to hotkeyPressed and the menu bar mark changes")
     func pressStartsCapture() {
         let model = makeModel()
         model.handle(.pressed, at: 0)
         #expect(model.machine.state == .arming)
         #expect(model.machine.isCapturing)
-        #expect(model.menuBarSymbol == "waveform.circle.fill")
+        #expect(model.menuBarGlyph == .active)
         #expect(model.statusText == "Starting...")
     }
 
@@ -47,7 +47,7 @@ struct AppModelTests {
         model.handle(.released, at: 1)
         #expect(model.machine.state == .transcribing)
         #expect(!model.machine.isCapturing)
-        #expect(model.menuBarSymbol == "waveform")
+        #expect(model.menuBarGlyph == .idle)
     }
 
     /// The menu row is hidden while idle (#128), because "Ready" is what it said every time anyone

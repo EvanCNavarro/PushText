@@ -1,0 +1,21 @@
+<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+  <!-- The menu-bar glyph, idle (#216): the SAME five-tile mark as the app icon, so the menu bar and
+       the Dock say the same thing. SF Symbol `waveform` was here before and is a different shape -
+       varied wavy strokes rather than five tiles - which is why the two never matched.
+
+       Geometry is the app icon's, scaled. AppIconSource.svg draws tiles 86 wide on a 129 pitch,
+       heights 170/350/520/350/170, spanning 602x520 on a 1024 canvas. Scaled by 16/602 = 0.02658
+       that is 2.286 wide on a 3.43 pitch, heights 4.52/9.30/13.82, centred on an 18x18 box - the
+       menu bar's natural size - leaving 1pt of air each side.
+
+       BLACK on transparent, deliberately. It ships as a TEMPLATE image, so macOS ignores the colour
+       and uses only the alpha: it tints the glyph for a light or dark menu bar itself. Painting it
+       white here would look right on this Mac and disappear on a light menu bar. -->
+  <g fill="#000000">
+    <rect x="1"     y="6.74" width="2.286" height="4.52"  rx="0.8"/>
+    <rect x="4.43"  y="4.35" width="2.286" height="9.30"  rx="0.8"/>
+    <rect x="7.86"  y="2.09" width="2.286" height="13.82" rx="0.8"/>
+    <rect x="11.29" y="4.35" width="2.286" height="9.30"  rx="0.8"/>
+    <rect x="14.71" y="6.74" width="2.286" height="4.52"  rx="0.8"/>
+  </g>
+</svg>

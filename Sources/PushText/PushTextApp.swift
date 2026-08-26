@@ -238,21 +238,23 @@ struct PushTextApp: App {
     var body: some Scene {
         // The icon carries the update mark too (#138), composited into ONE image rather than
         // layered: MenuBarExtra flattens and tints its label, so an overlaid badge is re-tinted to
-        // the glyph colour and disappears. MacFaceKit.MenuBarBadge is that workaround, shared.
+        // the glyph colour and disappears. `MenuBarGlyph` does that compositing over the app's OWN
+        // artwork (#216); MacFaceKit's version takes a symbol name and cannot.
         MenuBarExtra {
             MenuContent(model: model, actions: actions)
         } label: {
             // The glyph colour is passed explicitly because a badged image is not a template, so
             // the menu bar no longer tints it - without this the symbol draws in its default black
             // and disappears on a dark menu bar. Caught by rendering it, not by any assertion.
-            if let badged = MenuBarBadge.badged(systemImage: model.menuBarSymbol,
-                                                attention: actions.updateAvailability
-                                                    .hasAvailableUpdate,
-                                                glyphColor: menuBarGlyphColor) {
-                Image(nsImage: badged)
+            if let glyph = MenuBarGlyph.image(model.menuBarGlyph,
+                                              attention: actions.updateAvailability
+                                                  .hasAvailableUpdate,
+                                              glyphColor: menuBarGlyphColor) {
+                Image(nsImage: glyph)
             } else {
-                // A symbol that will not resolve must still leave a reachable menu.
-                Image(systemName: model.menuBarSymbol)
+                // Artwork that will not load must still leave a reachable menu, so fall back to the
+                // stock symbol rather than to nothing.
+                Image(systemName: "waveform")
             }
         }
         .menuBarExtraStyle(.window)

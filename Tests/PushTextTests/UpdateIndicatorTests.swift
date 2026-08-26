@@ -70,13 +70,17 @@ struct UpdateIndicatorTests {
     func renderMenuBarImages() throws {
         let directory = try #require(ProcessInfo.processInfo.environment["PUSHTEXT_SNAPSHOT_DIR"])
         let scale: CGFloat = 8
-        let canvas = NSImage(size: NSSize(width: 70 * scale, height: 24 * scale))
+        let canvas = NSImage(size: NSSize(width: 140 * scale, height: 24 * scale))
         canvas.lockFocus()
         NSColor(calibratedWhite: 0.11, alpha: 1).setFill()
         NSRect(origin: .zero, size: canvas.size).fill()
         var x: CGFloat = 6 * scale
-        for attention in [false, true] {
-            guard let image = MenuBarBadge.badged(systemImage: "waveform", attention: attention)
+        // All four states, because the pair that matters is idle-vs-active and a snapshot of only
+        // one of them cannot show that dictation changes the mark at all (#216).
+        let states: [(MenuBarGlyph.Kind, Bool)] = [(.idle, false), (.idle, true),
+                                                   (.active, false), (.active, true)]
+        for (kind, attention) in states {
+            guard let image = MenuBarGlyph.image(kind, attention: attention, glyphColor: .white)
             else { continue }
             let size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
             let scaled = NSImage(size: size)
@@ -108,9 +112,13 @@ struct UpdateIndicatorTests {
     /// badged unconditionally.
     @Test("The menu bar image is badged only when an update is waiting")
     func menuBarImageFollowsAvailability() throws {
-        let plain = try #require(MenuBarBadge.badged(systemImage: "waveform", attention: false))
-        let badged = try #require(MenuBarBadge.badged(systemImage: "waveform", attention: true))
+        let plain = try #require(MenuBarGlyph.image(.idle, attention: false, glyphColor: .white))
+        let badged = try #require(MenuBarGlyph.image(.idle, attention: true, glyphColor: .white))
+        // Template and non-template is not a detail: a template is tinted by the menu bar, and a
+        // badged image is NOT one, which is why it has to carry an explicit colour.
         #expect(plain.isTemplate)
         #expect(badged.isTemplate == false)
+        // The badge widens the canvas so the dot sits BESIDE the mark rather than over it.
+        #expect(badged.size.width > plain.size.width)
     }
 }
