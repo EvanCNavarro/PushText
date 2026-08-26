@@ -79,6 +79,9 @@ jobs:
       - name: Backlog agrees with GitHub
         run: .engine/checks/backlog-matches-github.sh
 
+      - name: Bundle.module stays DEBUG-only
+        run: .engine/checks/bundle-module-guarded.sh
+
       - name: Install librsvg
         run: brew install librsvg
 

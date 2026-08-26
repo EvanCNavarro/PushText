@@ -1106,3 +1106,23 @@ that. The narrative for each lives in the issue.
   byte and both read as bars. Both plants caught.
   NOT VERIFIED: a photo of it in the live menu bar - the probe's status item landed in the hidden
   overflow of Bobby's menu-bar manager. docs/verification/task216-menu-bar-glyph.md.)
+
+#219 - The menu glyph loaded via Bundle.module and would crash every machine but the build one - DONE
+  (2026-08-26: #217 loaded the menu-bar artwork with Bundle.module. SwiftPM's accessor looks in two
+  places - a bundle beside the app, and an ABSOLUTE PATH INTO THE BUILD DIRECTORY OF THE COMPILING
+  MACHINE - and fatalErrors when neither exists. build-app.sh flattens resources into
+  Contents/Resources, so a packaged app has no such bundle: it works for whoever built it and traps
+  for everyone else. v0.2.0 shipped this once already carrying /Users/runner/work/PushText/...
+  MEASURED both ways: the offending .app with its build dir renamed died with Trace/BPT trap: 5,
+  exit 133, "could not load resource bundle"; the guarded build stayed alive under identical
+  conditions.
+  THE GUARD ALREADY EXISTED AND DID NOT RUN WHERE IT MATTERED. test-packaged-app.sh has carried a
+  TRAP-4 scan since v0.2.0 and it caught this instantly when pointed at the code
+  (MenuBarGlyph.swift:84) - but it needs a BUILT app and the PR gate runs .engine/checks, swift test
+  and swiftlint, so #217 went green and merged with the crash in it. Extracted to
+  .engine/checks/bundle-module-guarded.sh, run by CI on every PR; test-packaged-app.sh delegates to
+  it rather than keeping a copy.
+  NO UNIT TEST COULD HAVE CAUGHT IT: 451 passed before and after, because under swift test the DEBUG
+  path is the one that works. The defect exists only in a configuration the suite never runs in.
+  0.6.5 was never affected - the glyph landed after that tag and 0.6.6 was not cut.
+  docs/verification/task219-bundle-module-crash.md.)
