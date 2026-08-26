@@ -1067,3 +1067,21 @@ that. The narrative for each lives in the issue.
   now, --check compares the RENDER not bytes, and .engine/checks/icon-render-current.sh gates it.
   Battle-tested both ways; the FIRST plant was bad - a comment after </svg> renders identically and
   correctly did not trip it. docs/verification/task210-icon-single-mark.md.)
+#211 - The README describes a Phase 0 scaffold that has not existed for 22 releases - DONE
+  (2026-08-26: not ordinary staleness - the central claim was FALSE. "Status: Phase 0 scaffold ...
+  Speech recognition is a mock" against TranscriptionEngineFactory.makeDefault() returning
+  AppleSpeechEngine; an entire section "Why it doesn't transcribe yet" about an upgrade that happened
+  and an Apple bug task11 records as not reproducing; "Fn ... cannot be suppressed" which
+  ModifierGate.swift itself calls a misreading (#176); and a flat "no network" where SECURITY.md
+  correctly says no network EXCEPT the update check - overclaiming privacy in the direction that
+  costs trust.
+  It also broke the project's own rule on its front page: RELEASING.md forbids telling a reader what
+  does not work, in Bobby's words about the 0.2.0 notes.
+  Zero of ten shipped features were mentioned; no install path for an app that ships notarized
+  releases; no permissions section; and the macOS 26 requirement appeared nowhere.
+  Numbers re-measured, not copied: 46 tests -> 443, ~9,400 research lines -> 10,054, "one field
+  today" -> five. Defaults read out of AppSettings.defaults.
+  HANDOFF.md marked superseded rather than deleted - it is the only record of several pre-upgrade
+  assumptions that turned out wrong. GitHub: ten topics where there were none, homepage set, and the
+  description's "no network" softened to match the truth.
+  docs/verification/task211-docs-accuracy.md.)

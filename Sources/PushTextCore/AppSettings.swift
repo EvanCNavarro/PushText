@@ -1,8 +1,9 @@
 /// The user-changeable settings, as a pure value (#102).
 ///
-/// One field today, deliberately. #102 asked for the store to be built with its FIRST consumer
-/// rather than speculatively: a settings type with no reader is an abstraction invented ahead of
-/// its use, and the shape of the second setting is unknown until something needs it.
+/// Built with its FIRST consumer rather than speculatively (#102): a settings type with no reader is
+/// an abstraction invented ahead of its use. It started as one field for that reason and now holds
+/// five, each added by the feature that needed it - which is the outcome that rule was aiming for,
+/// not a departure from it.
 ///
 /// `init` takes every field with NO default, following TermTile's `AppSettings`, whose comment
 /// records why: a partial write must not silently clobber another field back to a default.
