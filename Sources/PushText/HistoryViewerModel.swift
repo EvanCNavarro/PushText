@@ -20,6 +20,12 @@ final class HistoryViewerModel {
     /// One transcript, with its metadata already turned into something readable. The formatting
     /// lives here rather than in the view so it can be asserted on.
     struct Row: Identifiable {
+        /// Counted from the OLDEST record, so it does not move when a new dictation arrives.
+        ///
+        /// SwiftUI keys per-row `@State` off this, and the copy button's checkmark is per-row
+        /// state. Numbering from the newest end - which is what the list is DISPLAYED in - would
+        /// renumber every row on each append, and with the window now refreshing live (#202) a tick
+        /// showing "Copied" would jump to whatever transcript had taken that position.
         let id: Int
         let record: HistoryRecord
         let timestamp: String
@@ -31,29 +37,53 @@ final class HistoryViewerModel {
 
     var query: String = ""
 
-    private let records: [HistoryRecord]
+    /// Oldest-first, exactly as the file holds it. `visible` reverses for display; keeping the
+    /// stored order is what lets a row's identity survive a new dictation arriving - see `Row.id`.
+    private var records: [HistoryRecord]
+
+    /// Kept so the window can re-read while it is open (#202), and `nil` for the fixtures that are
+    /// constructed from records directly.
+    @ObservationIgnored private var store: (any HistoryReading)?
+
+    /// The version of the file the current `records` came from.
+    @ObservationIgnored private var stamp: HistoryFileStamp?
 
     init(records: [HistoryRecord]) {
-        // Reversed once, here. The file is appended to, so it is oldest-first; a viewer that opened
-        // in that order would land on the user's oldest dictation and bury today's under the five
-        // hundred the store keeps.
-        self.records = records.reversed()
+        self.records = records
     }
 
     /// Reads the store, so the window always shows what is on disk rather than a cached copy.
     convenience init(store: any HistoryReading) {
+        // Stamp BEFORE load, and the order is load-bearing. Stamping afterwards would mean a
+        // dictation landing between the two calls gets a stamp that already accounts for it while
+        // the records do not - and every later tick would then compare equal and never re-read it.
+        // Stamping first can only cost one redundant reload, which is the harmless direction.
+        let stamp = store.changeStamp()
         self.init(records: store.load())
+        self.store = store
+        self.stamp = stamp
+    }
+
+    /// Re-reads the store if the file changed since the last look (#202).
+    ///
+    /// Bobby left the window open, dictated, and watched nothing appear. The window had always been
+    /// a snapshot taken at open - the comment above `HistoryViewerWindow.show` even named a stale
+    /// viewer as the thing to avoid, and then only handled REOPENING it.
+    func refresh() {
+        guard let store else { return }
+        let current = store.changeStamp()
+        guard current != stamp else { return }
+        stamp = current
+        records = store.load()
     }
 
     var visible: [Row] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         // Numbered BEFORE filtering, so a transcript keeps its identity as the query changes.
-        //
-        // SwiftUI keys per-row `@State` off the row's id, and the copy button's checkmark is
-        // per-row state. Numbering the FILTERED list makes that state follow a position instead of
-        // a transcript: copy the top row, type in the search box, and the tick reappears on
-        // whatever is now on top.
-        return records.enumerated().compactMap { index, record -> Row? in
+        // Copy the top row, type in the search box, and a filtered-list numbering would put the
+        // tick on whatever is now on top. `reversed()` is display order only - the numbers come
+        // from the file's own order, which is the half that survives an append.
+        return records.enumerated().reversed().compactMap { index, record -> Row? in
             var matches: [Range<String.Index>] = []
             if !needle.isEmpty {
                 // `TranscriptSearch` searches the TEXT only. Searching the record's storage would
@@ -114,6 +144,15 @@ final class HistoryViewerModel {
 /// a record, and a viewer holding the ability to rewrite it is one mistake away from doing so.
 protocol HistoryReading {
     func load() -> [HistoryRecord]
+    /// What the reader compares to decide whether `load()` would say anything new (#202).
+    func changeStamp() -> HistoryFileStamp?
+}
+
+extension HistoryReading {
+    /// A reader with nothing behind it never changes. The probe fixtures are fixed sets of records,
+    /// so `nil` here is the truth about them rather than a stub - and it stays `nil` on every tick,
+    /// which is what stops them from re-reading something that cannot move.
+    func changeStamp() -> HistoryFileStamp? { nil }
 }
 
 /// The viewer only ever reads (#161).

@@ -984,3 +984,31 @@ that. The narrative for each lives in the issue.
   reads 63. The smoke exports a per-run suite and deletes it on exit - measured before=61 after=61.
   The trust latch used UserDefaults.standard directly and was writing real grantLatch keys.)
 
+
+#202 - The history window is a snapshot, so a dictation made while it is open never appears - DONE
+  (2026-08-25: Bobby opened Dictation History, dictated, and nothing arrived - his screenshot read
+  "22 dictations" while LAST TRANSCRIPT showed a dictation that was not in the list.
+  `HistoryViewerModel` held `private let records`, loaded once. The comment above
+  `HistoryViewerWindow.show` had already named the hazard - "a viewer showing a stale copy of a file
+  the app is actively appending to is worse than no viewer" - and closed only the REOPEN half of it.
+  A second defect the obvious fix would have added: `Row.id` was the index into DISPLAY order, so
+  prepending renumbered every row and `TranscriptRow`'s per-row `@State copied` checkmark would jump
+  to a different transcript. Ids now count from the oldest record, which does not move.
+  THE POLL THAT LOOKED BROKEN AND WAS NOT. First design polled once a second; every model test
+  passed and the real path produced two byte-identical screenshots, SHA-256 4a95271546fbcb17 both.
+  The timer fired ZERO times while its arm site reported main=true, RunLoop.main,
+  kCFRunLoopDefaultMode. The explanation reached for was App Nap and it was WRONG - written into two
+  code comments before `sample` showed the main thread parked in [NSAlert runModal] under
+  SPUStandardUpdaterController. Sparkle cannot check for updates from an unbundled SPM binary, and a
+  modal run loop starves default-mode timers AND the main dispatch queue, so Timer and
+  DispatchQueue.main.asyncAfter failed identically. Every render probe in this repo had been
+  screenshotting an app whose main thread was blocked; they survived on only ever needing one frame.
+  ProbeActivation.isProbeProcess now keeps Sparkle out of any probe. The refresh became a
+  NOTIFICATION on its merits - instant, free when idle, no timer alive for a window open for hours -
+  not because polling was disproved in production, which it was not.
+  Measured on the real path: append THROUGH JSONLHistoryStore inside the app, window redraws, third
+  transcript on top, footer 2 dictations -> 3 dictations. The probe fails closed - when the in-app
+  append had not happened it printed "verdict is inconclusive, not negative" and exited 1.
+  Four planted defects, four caught. The notification test first counted FOUR posts for one append -
+  parallel suites, unattributed broadcast - so the post now carries its store.
+  docs/verification/task202-history-viewer-live-refresh.md.)

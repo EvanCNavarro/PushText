@@ -56,8 +56,10 @@ public enum ProbeActivation {
             "PUSHTEXT_MENU_PROBE_UPDATE",
             "PUSHTEXT_MENU_PROBE_DICTIONARY",
             "PUSHTEXT_MENU_PROBE_HISTORY",
-            "PUSHTEXT_MENU_PROBE_SECONDS"
+            "PUSHTEXT_MENU_PROBE_SECONDS",
+            "PUSHTEXT_HISTORY_PROBE_APPEND"
         ]),
+        ("PUSHTEXT_HISTORY_FILE", []),
         ("PUSHTEXT_HUD_PROBE", [
             "PUSHTEXT_HUD_PROBE_LEVEL"
         ]),
@@ -67,6 +69,24 @@ public enum ProbeActivation {
             "PUSHTEXT_TRANSCRIBE_PROBE_REALTIME"
         ])
     ]
+
+    /// Whether this process was launched as a probe rather than as the user's app.
+    ///
+    /// **What it is for: keeping Sparkle out of a probe.** `SPUStandardUpdaterController` cannot
+    /// check for updates from a bare SPM binary with no bundle, and the way it says so is
+    /// `[NSAlert runModal]` - which blocks the main thread inside a MODAL run loop. Sampled during
+    /// #202: every default-mode timer stopped firing, `DispatchQueue.main.asyncAfter` never drained,
+    /// and the window stopped redrawing, all while the app looked perfectly alive. A probe that
+    /// screenshots in that state is photographing a frozen app.
+    ///
+    /// Any activation variable is enough. A process running under `PUSHTEXT_DEFAULTS_SUITE` alone
+    /// has already been pointed away from the user's settings, and is not somewhere to run an
+    /// update check either.
+    public static func isProbeProcess(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        probes.contains { !(environment[$0.activation] ?? "").isEmpty }
+    }
 
     /// Returns a human-readable complaint when a probe's tuning variables are set without the
     /// probe itself being activated, else nil.
