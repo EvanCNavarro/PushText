@@ -58,7 +58,7 @@ final class AppActions {
     func refreshUpdateAvailability(now: Date = Date()) {
         // Never in a probe. Touching `updater` CONSTRUCTS Sparkle, and in an unbundled binary that
         // ends in a modal alert which freezes the main thread - see `ProbeActivation.isProbeProcess`.
-        guard !ProbeActivation.isProbeProcess() else { return }
+        guard !ProbeActivation.isProbeProcess() || LayeringProbe.isRequested else { return }
         guard UpdateCheckPolicy.shouldCheck(lastCompleted: lastUpdateCheck,
                                             now: now,
                                             isChecking: updateAvailability == .checking) else {
@@ -208,6 +208,7 @@ final class AppActions {
     /// Opens the editor (#156). #154 made the FILE open in TextEdit, which is not the same as being
     /// editable in any sense a user would call an interface - it handed them JSONL and hoped.
     func editDictionary() {
+        MenuPanel.dismiss()
         guard let url = JSONLDictionaryStore.defaultURL() else { return }
         let store = JSONLDictionaryStore(url: url)
         store.createWithExampleIfMissing()
@@ -235,6 +236,7 @@ final class AppActions {
     }
 
     func checkForUpdates() {
+        MenuPanel.dismiss()
         dictationLog.info("update check requested")
         updater.checkForUpdates(nil)
     }
@@ -242,6 +244,7 @@ final class AppActions {
     /// Asks first, because this is irreversible from the user's point of view and the menu item is
     /// one slip away from Quit.
     func confirmUninstall() {
+        MenuPanel.dismiss()
         let alert = NSAlert()
         alert.messageText = "Uninstall PushText?"
         alert.informativeText = """

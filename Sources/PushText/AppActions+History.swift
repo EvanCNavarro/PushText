@@ -25,6 +25,7 @@ extension AppActions {
     /// The raw file is still one click away, inside the viewer - it is the user's data in a format
     /// every tool on the machine can open, and that was half the point of choosing JSONL.
     func showHistory() {
+        MenuPanel.dismiss()
         guard let url = historyURL else { return }
         historyViewer.show(store: JSONLHistoryStore(url: url)) { [weak self] in
             self?.revealHistory()
@@ -126,6 +127,7 @@ extension AppActions {
     }
 
     func revealHistory() {
+        MenuPanel.dismiss()
         guard let url = historyURL else { return }
         // Opened rather than revealed (#154). Revealing worked, and then the user double-clicked
         // the file and hit the same no-handler wall - so the menu item did its job and the user
@@ -135,6 +137,7 @@ extension AppActions {
 
     /// Deletes every recorded dictation. Irreversible, so it confirms first.
     func clearHistory() {
+        MenuPanel.dismiss()
         guard let url = historyURL else { return }
         let alert = NSAlert()
         alert.messageText = "Delete all dictation history?"
