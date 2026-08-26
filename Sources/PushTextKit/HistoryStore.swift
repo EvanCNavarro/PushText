@@ -1,6 +1,16 @@
 import Foundation
 import PushTextCore
 
+public extension Notification.Name {
+    /// Posted whenever the history file is written or removed (#202).
+    ///
+    /// The open viewer listens for this instead of polling. A notification costs nothing while
+    /// nobody is dictating, puts the transcript on screen the moment it is written rather than up
+    /// to a poll-interval later, and needs no timer to be alive for a window that may sit open for
+    /// hours. The app already knows when it appends; asking the filesystem was the long way round.
+    static let historyDidChange = Notification.Name("PushTextHistoryDidChange")
+}
+
 /// Where dictations are kept.
 ///
 /// A port so `AppModel` never touches the filesystem, matching every other system capability in
@@ -50,10 +60,15 @@ public final class JSONLHistoryStore: HistoryStore, @unchecked Sendable {
 
     public func append(_ record: HistoryRecord) {
         guard let line = try? HistoryRecord.encodeLine(record) else { return }
+        guard let data = (line + "\n").data(using: .utf8) else { return }
+        write(data)
+        // Announced AFTER the lock is given up - see `announceChange`.
+        announceChange()
+    }
+
+    private func write(_ data: Data) {
         lock.lock()
         defer { lock.unlock() }
-        guard let data = (line + "\n").data(using: .utf8) else { return }
-
         if let handle = try? FileHandle(forWritingTo: url) {
             defer { try? handle.close() }
             // Seek to end and write: the ONE syscall that makes this format worth using.
@@ -71,9 +86,35 @@ public final class JSONLHistoryStore: HistoryStore, @unchecked Sendable {
         return HistoryRecord.decodeFile(HistoryRecord.trim(contents, toMostRecent: limit))
     }
 
+    /// The current version of the file on disk, for a reader that wants to know whether re-reading
+    /// would tell it anything new (#202).
+    public func changeStamp() -> HistoryFileStamp? {
+        lock.lock()
+        defer { lock.unlock() }
+        return HistoryFileStamp.read(url)
+    }
+
     public func clear() {
+        remove()
+        announceChange()
+    }
+
+    private func remove() {
         lock.lock()
         defer { lock.unlock() }
         try? FileManager.default.removeItem(at: url)
+    }
+
+    /// Tells anyone displaying this history that it moved.
+    ///
+    /// Posted OUTSIDE the lock: an observer that reads the store synchronously would otherwise
+    /// deadlock on a lock the posting thread still holds.
+    ///
+    /// Sent WITH the store as the object, so a listener can narrow to one history if it wants to.
+    /// The app has a single history file and its viewer listens for any of them - but the broadcast
+    /// being unattributable is how two independent stores become indistinguishable, which showed up
+    /// immediately as a test counting four posts where one store had appended once.
+    private func announceChange() {
+        NotificationCenter.default.post(name: .historyDidChange, object: self)
     }
 }

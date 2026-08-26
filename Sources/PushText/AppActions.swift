@@ -56,6 +56,9 @@ final class AppActions {
     /// Rate-limited by `UpdateCheckPolicy` (#170), because this is now called from three places -
     /// launch, the timer, and every time the menu opens - and the menu gets opened constantly.
     func refreshUpdateAvailability(now: Date = Date()) {
+        // Never in a probe. Touching `updater` CONSTRUCTS Sparkle, and in an unbundled binary that
+        // ends in a modal alert which freezes the main thread - see `ProbeActivation.isProbeProcess`.
+        guard !ProbeActivation.isProbeProcess() else { return }
         guard UpdateCheckPolicy.shouldCheck(lastCompleted: lastUpdateCheck,
                                             now: now,
                                             isChecking: updateAvailability == .checking) else {
@@ -138,7 +141,7 @@ final class AppActions {
 
     /// Opens the app's plain-text files. Injected so tests never launch TextEdit.
     @ObservationIgnored
-    private let textOpener: PlainTextOpener
+    let textOpener: PlainTextOpener
 
     /// One reused editor window - a menu item that stacks a new one per click is the kind of thing
     /// nobody notices until there are nine of them.
@@ -185,7 +188,7 @@ final class AppActions {
 
     /// The viewer window, reused across opens (#161).
     @ObservationIgnored
-    private let historyViewer = HistoryViewerWindow()
+    let historyViewer = HistoryViewerWindow()
 
     /// Launch at login (#162). Read through, never cached - see AppActions+LoginItem.
     @ObservationIgnored
@@ -193,76 +196,6 @@ final class AppActions {
 
     /// Bumped after a change so the menu re-reads `SMAppService`.
     var loginItemRevision = 0
-
-    /// Where history lives, so the actions below agree on one path.
-    private var historyURL: URL? { JSONLHistoryStore.defaultURL() }
-
-    /// Opens the history file itself rather than a viewer.
-    ///
-    /// The file IS the feature: plain JSONL the user can read, grep and delete. Building a browser
-    /// would put a worse reader in front of a file that every tool on the machine already opens.
-    /// Opens the searchable viewer (#161).
-    ///
-    /// #154 made the FILE open, which is not the same as being readable: one JSON object per line,
-    /// timestamps as ISO strings, and no way to find anything. The dictionary got a real editor in
-    /// #156 and history is the surface with more content in it.
-    ///
-    /// The raw file is still one click away, inside the viewer - it is the user's data in a format
-    /// every tool on the machine can open, and that was half the point of choosing JSONL.
-    func showHistory() {
-        guard let url = historyURL else { return }
-        historyViewer.show(store: JSONLHistoryStore(url: url)) { [weak self] in
-            self?.revealHistory()
-        }
-    }
-
-    /// Opens the viewer on a KNOWN set of records so each state can be looked at (#161).
-    ///
-    /// Screenshotting the real store shows whatever this machine happens to hold, which on a fresh
-    /// install is nothing at all - so the populated state, the one with all the layout in it, would
-    /// never be seen.
-    func showHistoryProbe(mode: String) {
-        let fixture = HistoryProbeFixture(mode: mode)
-        // The highlight only exists while something matches, so the searched states have to be
-        // openable too - and the FUZZY one especially, since it is the state where the highlight
-        // has to prove it lands on the word actually matched rather than the word typed.
-        let query: String
-        switch mode {
-        case "nomatch": query = "quarterly"
-        // Both words in the SAME transcript. "invoice release" was the first attempt and matched
-        // nothing, correctly - they live in different dictations and the query is an AND.
-        case "match": query = "invoice project"
-        case "fuzzy": query = "invoce"
-        default: query = ""
-        }
-        historyViewer.show(store: fixture, query: query) { [weak self] in self?.revealHistory() }
-        // Printed rather than discovered: `kCGWindowName` is nil without Screen Recording, so an
-        // outside lookup by title finds nothing and reads identically to the window never opening.
-        print("HISTORY_PROBE window=\(historyViewer.windowNumber ?? 0) mode=\(mode)")
-        fflush(stdout)
-    }
-
-    func revealHistory() {
-        guard let url = historyURL else { return }
-        // Opened rather than revealed (#154). Revealing worked, and then the user double-clicked
-        // the file and hit the same no-handler wall - so the menu item did its job and the user
-        // still could not read their own transcripts.
-        textOpener.open(url)
-    }
-
-    /// Deletes every recorded dictation. Irreversible, so it confirms first.
-    func clearHistory() {
-        guard let url = historyURL else { return }
-        let alert = NSAlert()
-        alert.messageText = "Delete all dictation history?"
-        alert.informativeText = "Every transcript PushText has recorded will be removed from "
-            + url.path + ". This cannot be undone."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Delete")
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        JSONLHistoryStore(url: url).clear()
-    }
 
     /// Opens the dictionary file for editing, creating a self-documenting one if it is missing.
     ///
