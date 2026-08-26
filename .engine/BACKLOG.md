@@ -1034,3 +1034,22 @@ that. The narrative for each lives in the issue.
   - the edit is a raw append, not through JSONLHistoryStore, so nothing is posted.
   Planted: refresh() removed from windowDidBecomeKey -> 2 and 2, RESULT FAILED, control still ok.
   Restored byte-identical. docs/verification/task207-become-key-refresh.md.)
+
+#209 - The update dialog opens behind the menu panel, covering its Install button - DONE
+  (2026-08-26: Bobby hit it twice - the Sparkle alert with Install covered, then Dictation History
+  behind the same panel. MEASURED: MenuBarExtraWindow level=101, NSStatusBarWindow 25, our windows 0.
+  activate() and makeKeyAndOrderFront decide key and front WITHIN a level, so neither could ever have
+  fixed it; the panel has to close. Sparkle's own header says the same for background apps: the alert
+  is shown "behind other running applications or behind the app's own windows".
+  THE FIRST FIX WAS WORSE THAN THE BUG. orderOut() hid the panel and left SwiftUI thinking it was
+  open, so the next click on the icon toggled it closed - measured, panel gone at t=6, icon clicked
+  at t=9, no panel for the rest of the run. A dead menu-bar icon beats a mis-ordered window. Now it
+  clicks the status item, toggling the state SwiftUI already tracks, guarded on the panel being open
+  because clicking while closed would OPEN it.
+  NEAR-MISS worth keeping: the first probe drove the real mouse to the status item, which on this
+  multi-display Mac is at x=-4607. cliclick did not honour the negative coordinate and the click
+  landed on the APPLE MENU with Restart highlighted. Escape was sent, nothing was clicked, and the
+  approach was dropped - the probe now asks the status button to click itself, in process, with no
+  coordinates to get wrong.
+  All six presenting actions dismiss the panel, not just the update path.
+  scripts/probe-window-layering.sh; docs/verification/task209-window-layering.md.)
