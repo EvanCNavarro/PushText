@@ -82,7 +82,9 @@ window as a failed fix.
   open window.
 - NOT covered by the notification: someone editing `history.jsonl` in another application. Nothing
   posts for that. `windowDidBecomeKey` re-reads, so it is picked up when the user returns to the
-  window, which is when they would look anyway.
+  window, which is when they would look anyway. **This path is wired, not measured** - the probe
+  drives the notification chain, and nothing here exercised AppKit actually calling the delegate
+  method. It rests on documented AppKit behaviour, which is a citation and not a measurement.
 - Still not proven by `swift test`: that `TranscriptFinisher` calls `append` after a real dictation.
   That is pre-existing behaviour with its own tests, and the probe starts one step downstream of it.
 
