@@ -148,5 +148,8 @@ extension PushTextApp {
         if SoundProbe.isRequested {
             SoundProbe.runAndExit()
         }
+        if HistoryPerfProbe.isRequested {
+            HistoryPerfProbe.runAndExit()
+        }
     }
 }
