@@ -145,6 +145,28 @@ if [ "$alive" -lt 8 ]; then
 	sed 's/^/launch: /' "$LAUNCH_LOG" >&2 || true
 	fail "$APP_NAME died within ~4s (alive=$alive/8)"
 fi
+
+# --- Footprint, recorded not asserted (#224) -----------------------------------------------------
+# A single memory number answers nothing: 33 MB is neither good nor bad without a baseline or a
+# trend. Recording it on every packaged run is what turns it into one.
+#
+# `footprint`, NOT ps RSS. Measured while answering "what is bloated": RSS reported 89.8 MB for a
+# process whose real footprint was 33 MB, because RSS counts the shared AppKit and SwiftUI pages
+# every app on the machine maps. Reporting RSS would have made a normal app look bloated.
+#
+# NOT a threshold. A number that fails the build needs a baseline this project does not have yet, and
+# a gate whose limit was picked by feel is one that gets raised whenever it fires.
+# Split on the LABEL, not on column positions: the line is
+#   PushText [92295]: 64-bit    Footprint: 33 MB (16384 bytes per page)
+# and a positional awk picked "64-bit Footprint:" - a value-shaped string that would have been
+# recorded on every release without ever looking like an error.
+FOOTPRINT_MB="$(footprint -p "$PID" 2>/dev/null \
+	| awk -F'Footprint:' '/Footprint:/ { split($2, a, "("); gsub(/^[ \t]+|[ \t]+$/, "", a[1]); print a[1]; exit }')"
+case "$FOOTPRINT_MB" in
+	*[0-9]*" MB"|*[0-9]*" KB"|*[0-9]*" GB") : ;;
+	*) FOOTPRINT_MB="unavailable" ;;
+esac
+
 stop_launched_app
 
 after="$(ls "$CRASH_DIR" 2>/dev/null | grep -c "^$APP_NAME" || true)"
@@ -249,4 +271,4 @@ else
 	AUDIO_NOTE="microphone not authorized, capture assertions skipped"
 fi
 
-echo "OK: $APP launched and stayed alive (alive=$alive/8, crash-reports ${before}->${after}); hotkey probe: ${PROBE_NOTE}; audio probe: ${AUDIO_NOTE}"
+echo "OK: $APP launched and stayed alive (alive=$alive/8, footprint=${FOOTPRINT_MB}, crash-reports ${before}->${after}); hotkey probe: ${PROBE_NOTE}; audio probe: ${AUDIO_NOTE}"
