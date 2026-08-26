@@ -78,6 +78,12 @@ jobs:
         run: .engine/checks/probe-gate-runs-first.sh
       - name: Backlog agrees with GitHub
         run: .engine/checks/backlog-matches-github.sh
+
+      - name: Install librsvg
+        run: brew install librsvg
+
+      - name: The icon PNG matches its SVG source
+        run: .engine/checks/icon-render-current.sh
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Build

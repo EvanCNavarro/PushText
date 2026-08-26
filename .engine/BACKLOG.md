@@ -1053,3 +1053,17 @@ that. The narrative for each lives in the issue.
   coordinates to get wrong.
   All six presenting actions dismiss the panel, not just the update path.
   scripts/probe-window-layering.sh; docs/verification/task209-window-layering.md.)
+#210 - The app icon carries a bottom line that nothing else in the app draws - DONE
+  (2026-08-26: the menu-bar SF Symbol `waveform` and the HUD's capsules are bars alone; only the app
+  icon had a 602px bar under them, meant as inserted text and reading as an underline. Removed.
+  RECENTRING WAS FORCED BY THE REMOVAL: the bars had been balanced against the LINE, not the
+  squircle - centred on y=421 where the squircle centres on 512, per the SVG's own comment about the
+  97px balance. All five moved down 91px; the mark now spans 252..772 with 188px above and below.
+  One source, everything derived: SVG -> AppIcon.png -> AppIcon.icns -> Dock, Finder, Sparkle dialog,
+  and the menu panel tile (which resolves applicationIconImage, so no code changed). Verified by
+  unpacking the built .icns with iconutil and looking at it.
+  THE REAL GAP: no script rendered the SVG to the PNG - the step lived in a comment inside the SVG,
+  so an edit without a re-render would ship the old icon silently. scripts/render-icon.sh does it
+  now, --check compares the RENDER not bytes, and .engine/checks/icon-render-current.sh gates it.
+  Battle-tested both ways; the FIRST plant was bad - a comment after </svg> renders identically and
+  correctly did not trip it. docs/verification/task210-icon-single-mark.md.)
