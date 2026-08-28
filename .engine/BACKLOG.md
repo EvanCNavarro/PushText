@@ -1220,3 +1220,22 @@ that. The narrative for each lives in the issue.
   Two plants, two catches, including a NEW assertion that the active glyph's corner is transparent so
   a full-box squircle cannot creep back. App icon untouched - this was menu-bar only.
   docs/verification/task231-glyph-scale.md.)
+
+#234 - The pasteboard suite takes 7 named boards at once and CI wedges on some - S1
+  (2026-08-28: a docs-only PR went red. Three tests in "Pasteboard conceal markers" timed out
+  acquiring a named pasteboard, while master ran the IDENTICAL Swift sources green two minutes
+  earlier and a rerun of the same commit went green. Same bytes, two answers.
+  THE BOUND FROM #179 IS FINE; THE LOAD IS NOT. NSPasteboard(name:) reaches the pasteboard server
+  over mach, and on a headless runner that server is intermittently unresponsive - #144. #179 turned
+  the ten-minute hang into a ten-second failure and did not change how MANY boards the suite takes:
+  one per test, seven, fired concurrently at a serial setup path. Four returned; the other three
+  timed out at the same instant, 10.835s.
+  Correlation, cause unverified - the wedge does not reproduce on a Mac with a live window server,
+  so there is no local red to turn green. The exposure is what is verifiable: one board now, in a
+  static let, suite .serialized.
+  THE FIRST GUARD WAS VACUOUS AND THE PLANT IS WHAT SHOWED IT. Count acquisitions, assert 1 - it
+  PASSED on the broken version, because the counting test ran first and saw only its own. Deleted,
+  not shipped. Replaced by .engine/checks/one-test-pasteboard.sh, which counts acquisition SITES and
+  has no ordering dependency - and which reported 2 sites on a clean tree until string literals and
+  comments were stripped. Four states run: baseline green, planted site red, prose green, restored
+  green. docs/verification/task234-one-test-pasteboard.md.)

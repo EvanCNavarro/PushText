@@ -82,6 +82,11 @@ jobs:
       - name: Bundle.module stays DEBUG-only
         run: .engine/checks/bundle-module-guarded.sh
 
+      # Runs BEFORE the suite on purpose: the load it guards against is what makes the suite itself
+      # unreliable on this runner, so a red here explains a red down there (#234).
+      - name: The tests take one pasteboard
+        run: .engine/checks/one-test-pasteboard.sh
+
       - name: Install librsvg
         run: brew install librsvg
 
