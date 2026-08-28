@@ -1187,3 +1187,21 @@ that. The narrative for each lives in the issue.
   unlikely and partly covered by the footprint line and the existing liveness poll.
   Does NOT measure login-to-ready, which includes SMAppService's own scheduling - macOS's, not ours.
   docs/verification/task224-launch-to-ready.md.)
+
+#228 - Version the app icon so designs can be compared, and draft a p-mark variant - DONE
+  (2026-08-28: Bobby asked for the mark rearranged into a lowercase "p" - stem plus the waveform
+  hanging off it - and for the old design kept.
+  MY FIRST READING WAS WRONG. I rebuilt it as a stem plus a "bowl" of top-aligned tiles and threw the
+  waveform away; rendered against two alternatives it was the best of a bad set, and read as a bar
+  chart. His sketch changes ONE thing: column one keeps its top at 427 and runs to 950 instead of
+  597, columns two to five untouched. Measured off his image, bars 2-5 matched v1 within a few px.
+  WHY 950 NOT 985: the squircle's bottom-left corner (r=205, centre 269,755) puts the boundary at
+  y=952 under x=212, so a longer stem is sliced at an angle and reads as a mistake.
+  THE MENU BAR WAS A SCALING PROBLEM, NOT A DESCENDER PROBLEM. Scaling the icon into the 18pt box
+  shrinks every tile from 2.29pt to 1.95pt - measured, visibly thinner - which is what made the
+  earlier attempt look unusable there. Moving the waveform UP 1.2pt instead frees the room the stem
+  needs and keeps every tile full width, so the p ships everywhere rather than in the Dock only.
+  Verified in ALPHA not by eye: at row 32 of 36 the stem is opaque and the tallest tile transparent.
+  Planted a stem shortened to match the others - caught. Chain checked SVG -> PNG -> .icns unpacked
+  from the built bundle; all four menu states rendered.
+  docs/verification/task228-p-mark.md.)

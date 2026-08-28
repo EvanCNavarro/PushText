@@ -1,0 +1,43 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- App icon, variant 2 (#228): the level meter with its first tile carried down into a
+       descender, so the mark reads as a lowercase "p".
+       THIS IS THE SHIPPED DESIGN - `ICON_VARIANT` in scripts/render-icon.sh selects it, and
+       v1-level-meter.svg is one line away if it ever needs to come back.
+
+       WHY a letter. TermTile arranges its tiles into a "T" and v1 arranged ours into a level meter,
+       so one was a letterform and the other was not. A "p" makes them true siblings.
+
+       THE WAVEFORM IS UNTOUCHED. Columns two through five are v1 exactly - y 337/252/337/427 at
+       heights 350/520/350/170. Only column one changes, keeping its top at 427 and running to 950
+       instead of 597. That is the whole edit, and it is what makes this work where the first attempt
+       did not: a version that top-aligned everything into a "bowl" lost the waveform entirely and
+       read as a bar chart with a tall first bar.
+
+       WHY 950 AND NOT FURTHER. The squircle's bottom-left corner has radius 205 centred on
+       (269, 755), so under this column the boundary runs from y=952 at x=212 to y=960 at x>=269. A
+       stem drawn to 985 gets sliced at an angle by that curve, which reads as a mistake rather than
+       a deliberate bleed - rendered and looked at, not reasoned about. 950 is the longest descender
+       whose rounded cap still clears the corner.
+
+       KNOWN COST, measured: as a menu-bar glyph the descender must fit the same 18pt box, so the
+       whole mark scales by 0.02264 instead of 0.02658 - tiles 1.95pt wide instead of 2.29pt, and a
+       visibly lighter icon. Still legible as a waveform, unlike the first attempt. Whether the menu
+       bar adopts this mark or keeps v1's is a separate decision from which icon ships. -->
+  <defs>
+    <linearGradient id="bg" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#26202f"/>
+      <stop offset="1" stop-color="#0e0b14"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="205" fill="url(#bg)"/>
+  <rect x="64" y="64" width="896" height="896" rx="205" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="10"/>
+  <g fill="#f4f5f7">
+    <!-- column one: v1's top, carried down into the descender -->
+    <rect x="212" y="427" width="86" height="523" rx="30"/>
+    <!-- columns two to five: v1, unchanged -->
+    <rect x="341" y="337" width="86" height="350" rx="30"/>
+    <rect x="470" y="252" width="86" height="520" rx="30"/>
+    <rect x="599" y="337" width="86" height="350" rx="30"/>
+    <rect x="728" y="427" width="86" height="170" rx="30"/>
+  </g>
+</svg>
