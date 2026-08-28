@@ -1,0 +1,43 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- App icon, variant 2 (#228): the same tiles arranged into a lowercase "p".
+       NOT shipped by default - `ICON_VARIANT` in scripts/render-icon.sh selects between this and
+       v1-level-meter.svg, and v1 is the default.
+
+       WHY a letter. The sibling rule with TermTile was always "same vocabulary, different mark":
+       same 1024 canvas, same squircle (x/y 64, 896, rx 205), same gradient, same 86-wide tiles on
+       the same five-column grid. But TermTile arranges its tiles into a "T" while v1 arranges ours
+       into a level meter - one is a letterform and the other is not. A "p" makes them true siblings.
+
+       THE STEM DESCENDS. A lowercase p is a stem carried through the descender with a bowl at its
+       upper right, so column one runs 252..860 - past the other tiles, and past v1's 772 bottom -
+       while the bowl sits in the x-height band above.
+
+       THE BOWL IS TOP-ALIGNED AND EQUAL-HEIGHT, which was chosen by rendering three arrangements and
+       looking at them together. A symmetric arch spread across four columns read as a waveform
+       standing beside a bar, not hanging off it; a decaying staircase read as a signal decaying. Only
+       a top-aligned block reads as mass HANGING from the top of the stem, which is what a bowl does.
+
+       Column five is deliberately empty. Filling the grid put the bowl's weight too far from the
+       stem for the two to read as one letter.
+
+       KNOWN LIMIT, measured rather than assumed: this does not survive at menu-bar size. Rendered at
+       the 18pt the menu bar draws, a stem plus three tiles reads as a bar chart - the bowl needs
+       four distinct shapes inside 36px and they merge. It is an icon-size mark. Adopting it means
+       either accepting that the menu bar shows a different mark, or accepting an illegible one. -->
+  <defs>
+    <linearGradient id="bg" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#26202f"/>
+      <stop offset="1" stop-color="#0e0b14"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="205" fill="url(#bg)"/>
+  <rect x="64" y="64" width="896" height="896" rx="205" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="10"/>
+  <g fill="#f4f5f7">
+    <!-- the stem, carried through the descender -->
+    <rect x="212" y="252" width="86" height="608" rx="30"/>
+    <!-- the bowl: hangs from the stem's top edge -->
+    <rect x="341" y="252" width="86" height="320" rx="30"/>
+    <rect x="470" y="252" width="86" height="320" rx="30"/>
+    <rect x="599" y="252" width="86" height="320" rx="30"/>
+  </g>
+</svg>

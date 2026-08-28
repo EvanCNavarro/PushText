@@ -8,7 +8,7 @@
 #
 # Three assets, one source each:
 #
-#   Resources/AppIconSource.svg    -> Sources/PushText/Resources/AppIcon.png         1024, for the .icns
+#   Resources/icons/<variant>.svg  -> Sources/PushText/Resources/AppIcon.png         1024, for the .icns
 #   Resources/MenuGlyphIdle.svg    -> Sources/PushText/Resources/MenuGlyphIdle.png   36 = 18pt @2x
 #   Resources/MenuGlyphActive.svg  -> Sources/PushText/Resources/MenuGlyphActive.png
 #
@@ -33,8 +33,18 @@ command -v rsvg-convert >/dev/null 2>&1 || {
     exit 1
 }
 
+# WHICH APP-ICON DESIGN SHIPS (#228). One line, so going back is one line.
+#
+#   v1-level-meter  the five-tile waveform, shipped since #210
+#   v2-p-mark       the same tiles arranged into a lowercase "p", a truer sibling to TermTile's "T"
+#
+# Variants live side by side in Resources/icons/ rather than in git history alone, because comparing
+# two designs means rendering both, and a design you have to `git show` to look at does not get
+# compared.
+ICON_VARIANT="${ICON_VARIANT:-v1-level-meter}"
+
 # src|dest|pixels
-ASSETS="Resources/AppIconSource.svg|Sources/PushText/Resources/AppIcon.png|1024
+ASSETS="Resources/icons/$ICON_VARIANT.svg|Sources/PushText/Resources/AppIcon.png|1024
 Resources/MenuGlyphIdle.svg|Sources/PushText/Resources/MenuGlyphIdle.png|36
 Resources/MenuGlyphActive.svg|Sources/PushText/Resources/MenuGlyphActive.png|36"
 
