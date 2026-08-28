@@ -1205,3 +1205,18 @@ that. The narrative for each lives in the issue.
   Planted a stem shortened to match the others - caught. Chain checked SVG -> PNG -> .icns unpacked
   from the built bundle; all four menu states rendered.
   docs/verification/task228-p-mark.md.)
+
+#231 - The menu-bar mark is 38% taller than TermTile's and reads as oversized - DONE
+  (2026-08-28: Bobby saw the two apps side by side in his own menu bar. MEASURED against
+  ~/Developer/termtile/Resources/TermTileMenuGlyph.svg rather than his screenshot: TermTile's mark is
+  14 wide x 12 tall, tiles 2 wide rx 1 on a pitch of 3; ours was 16 x 16.5 with 2.286 tiles. The
+  width was close, the HEIGHT was 38% over, and that is what read as oversized.
+  THE GRID WAS NEVER WRONG. Both marks descend from the same five-column icon grid, so at TermTile's
+  tile width of 2 our columns land exactly on its pitch of 3 and the mark is exactly 14 wide. Only
+  the vertical extent changed - the waveform plus descender scaled by 12/698 to span y 3..15. Column
+  one bottoms at 15.00 against the tallest other tile at 11.94, so the descender survives the shrink.
+  THE ACTIVE STATE HAD TO SHRINK TOO: a full-box squircle beside a 12-tall idle mark makes listening
+  twice the resting weight - the same oversizing moved elsewhere. Now 14x14 inset by 2, mark at 0.7.
+  Two plants, two catches, including a NEW assertion that the active glyph's corner is transparent so
+  a full-box squircle cannot creep back. App icon untouched - this was menu-bar only.
+  docs/verification/task231-glyph-scale.md.)

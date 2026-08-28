@@ -1,27 +1,29 @@
 <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-  <!-- The menu-bar glyph while dictation is running (#216, redrawn for #228): the same "p",
-       INVERTED - knocked out of a filled squircle rather than drawn as tiles.
+  <!-- The menu-bar glyph while dictation is running (#231): the same mark, INVERTED - knocked out of
+       a filled squircle rather than drawn as tiles.
 
        Inverted rather than a second colour, because this ships as a TEMPLATE image: macOS uses only
-       the alpha channel, so anything that must read as "active" has to be a difference in SHAPE, not
-       in colour. A knockout is legible on a light or a dark menu bar without the app choosing either.
+       the alpha channel, so anything that must read as "active" has to be a difference in SHAPE.
 
-       The squircle's corner ratio is the app icon's own: 205/896 = 0.2288, which on 18 is 4.12. The
-       mark inside is the idle glyph scaled by 0.75 so it sits within the fill with air around it -
-       the same relationship the previous pair had, carried over to the new letterform.
+       THE SQUIRCLE SHRANK WITH THE MARK. It used to fill the whole 18pt box while the idle mark was
+       16.5 tall; now the idle mark is 12 tall on TermTile's grid, and a full-box squircle would make
+       the listening state twice the weight of the resting one - swapping one oversized icon for
+       another. At 14x14 it sits a little above the idle mark's footprint, which is right: the active
+       state should read as MORE, not as a different logo.
 
-       The stem still descends past the other tiles inside the knockout. That is what keeps the two
-       states recognisably the same mark: if the bowl were re-proportioned to fit, the active icon
-       would be a different logo that happened to invert. -->
+       Corner ratio is still the app icon's own, 205/896 = 0.2288, which on 14 is 3.2. The mark
+       inside is the idle geometry at 0.7 so it keeps air around it, and column one still bottoms
+       below the others - if the descender were dropped to fit, the two states would stop being the
+       same letter. -->
   <mask id="mark">
-    <rect width="18" height="18" rx="4.12" fill="#ffffff"/>
+    <rect x="2" y="2" width="14" height="14" rx="3.2" fill="#ffffff"/>
     <g fill="#000000">
-      <rect x="3"     y="6.30" width="1.714" height="8.90"  rx="0.6"/>
-      <rect x="5.57"  y="4.51" width="1.714" height="6.98"  rx="0.6"/>
-      <rect x="8.15"  y="2.81" width="1.714" height="10.37" rx="0.6"/>
-      <rect x="10.72" y="4.51" width="1.714" height="6.98"  rx="0.6"/>
-      <rect x="13.28" y="6.30" width="1.714" height="3.39"  rx="0.6"/>
+      <rect x="4.10" y="6.91" width="1.4" height="6.29" rx="0.7"/>
+      <rect x="6.20" y="5.82" width="1.4" height="4.21" rx="0.7"/>
+      <rect x="8.30" y="4.80" width="1.4" height="6.26" rx="0.7"/>
+      <rect x="10.40" y="5.82" width="1.4" height="4.21" rx="0.7"/>
+      <rect x="12.50" y="6.91" width="1.4" height="2.04" rx="0.7"/>
     </g>
   </mask>
-  <rect width="18" height="18" rx="4.12" fill="#000000" mask="url(#mark)"/>
+  <rect x="2" y="2" width="14" height="14" rx="3.2" fill="#000000" mask="url(#mark)"/>
 </svg>

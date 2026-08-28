@@ -35,9 +35,9 @@ struct MenuBarGlyphTests {
 
     @Test("The idle mark is bars on transparency")
     func idleIsBarsOnTransparency() throws {
-        // Dead centre is the tallest bar.
-        #expect(try alpha(.idle, x: 18, y: 18) > 0.9)
-        // The far corner is outside every bar.
+        // The tallest tile, which spans rows 6 to 24 now that the mark sits on TermTile's grid.
+        #expect(try alpha(.idle, x: 18, y: 12) > 0.9)
+        // The far corner is outside every tile.
         #expect(try alpha(.idle, x: 0, y: 0) < 0.1)
     }
 
@@ -46,21 +46,22 @@ struct MenuBarGlyphTests {
     /// and the bars have SWAPPED which of them is transparent.
     @Test("The active mark is a filled squircle with the bars knocked out")
     func activeIsAKnockout() throws {
-        // Dead centre is the middle bar - transparent here, opaque in the idle mark.
-        #expect(try alpha(.active, x: 18, y: 18) < 0.1)
-        // The gap between the first and second bars is inside the fill, so it is opaque here and
-        // transparent in the idle mark.
-        #expect(try alpha(.active, x: 10, y: 18) > 0.9)
-        // And the corner is inside the squircle rather than outside the artwork.
-        #expect(try alpha(.active, x: 18, y: 2) > 0.9)
+        // The middle tile is knocked out here, and drawn in the idle mark.
+        #expect(try alpha(.active, x: 18, y: 15) < 0.1)
+        // Above the tiles but inside the squircle: fill.
+        #expect(try alpha(.active, x: 18, y: 7) > 0.9)
+        // The squircle no longer fills the box - it is 14x14 inset by 2 - so the very corner is
+        // OUTSIDE it. That is the shrink #231 made, and asserting it keeps a future full-box
+        // squircle from creeping back in unnoticed.
+        #expect(try alpha(.active, x: 2, y: 2) < 0.1)
     }
 
     /// The pair, compared directly: at the same pixel the two marks must disagree, or the menu bar
     /// would show no change when dictation starts.
     @Test("Idle and active disagree where it matters")
     func theTwoDiffer() throws {
-        let idleCentre = try alpha(.idle, x: 18, y: 18)
-        let activeCentre = try alpha(.active, x: 18, y: 18)
+        let idleCentre = try alpha(.idle, x: 18, y: 12)
+        let activeCentre = try alpha(.active, x: 18, y: 15)
         #expect(idleCentre > 0.9 && activeCentre < 0.1)
     }
 
@@ -73,8 +74,8 @@ struct MenuBarGlyphTests {
     /// transparency alone would pass on an empty image.
     @Test("The stem descends below every other tile")
     func stemDescends() throws {
-        #expect(try alpha(.idle, x: 4, y: 32) > 0.9, "the stem should still be drawing here")
-        #expect(try alpha(.idle, x: 18, y: 32) < 0.1, "the tallest tile should have ended above this")
+        #expect(try alpha(.idle, x: 5, y: 27) > 0.9, "the stem should still be drawing here")
+        #expect(try alpha(.idle, x: 18, y: 27) < 0.1, "the tallest tile should have ended above this")
     }
 
     /// Unbadged, the mark must stay a template so macOS tints it for a light or dark menu bar. The
