@@ -1,5 +1,8 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-  <!-- App icon (#logo): a 5-tile voice waveform, and nothing else. Deliberately a SIBLING of
+  <!-- App icon, variant 1 (#logo): a 5-tile voice waveform, and nothing else.
+       SUPERSEDED by v2-p-mark.svg in #228, and kept because a design you have to `git show` to look
+       at does not get compared. `ICON_VARIANT` in scripts/render-icon.sh brings it back in one line.
+ Deliberately a SIBLING of
        TermTile's icon, not a copy: same 1024 canvas, same squircle (x/y 64, 896 square, rx 205),
        same vertical gradient, same white tile vocabulary (86 wide, rx 30) on the same five-column
        grid (x 212/341/470/599/728), so the two sit together in a Dock. Only the mark differs -

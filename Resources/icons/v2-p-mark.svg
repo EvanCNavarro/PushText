@@ -1,29 +1,28 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-  <!-- App icon, variant 2 (#228): the same tiles arranged into a lowercase "p".
-       NOT shipped by default - `ICON_VARIANT` in scripts/render-icon.sh selects between this and
-       v1-level-meter.svg, and v1 is the default.
+  <!-- App icon, variant 2 (#228): the level meter with its first tile carried down into a
+       descender, so the mark reads as a lowercase "p".
+       THIS IS THE SHIPPED DESIGN - `ICON_VARIANT` in scripts/render-icon.sh selects it, and
+       v1-level-meter.svg is one line away if it ever needs to come back.
 
-       WHY a letter. The sibling rule with TermTile was always "same vocabulary, different mark":
-       same 1024 canvas, same squircle (x/y 64, 896, rx 205), same gradient, same 86-wide tiles on
-       the same five-column grid. But TermTile arranges its tiles into a "T" while v1 arranges ours
-       into a level meter - one is a letterform and the other is not. A "p" makes them true siblings.
+       WHY a letter. TermTile arranges its tiles into a "T" and v1 arranged ours into a level meter,
+       so one was a letterform and the other was not. A "p" makes them true siblings.
 
-       THE STEM DESCENDS. A lowercase p is a stem carried through the descender with a bowl at its
-       upper right, so column one runs 252..860 - past the other tiles, and past v1's 772 bottom -
-       while the bowl sits in the x-height band above.
+       THE WAVEFORM IS UNTOUCHED. Columns two through five are v1 exactly - y 337/252/337/427 at
+       heights 350/520/350/170. Only column one changes, keeping its top at 427 and running to 950
+       instead of 597. That is the whole edit, and it is what makes this work where the first attempt
+       did not: a version that top-aligned everything into a "bowl" lost the waveform entirely and
+       read as a bar chart with a tall first bar.
 
-       THE BOWL IS TOP-ALIGNED AND EQUAL-HEIGHT, which was chosen by rendering three arrangements and
-       looking at them together. A symmetric arch spread across four columns read as a waveform
-       standing beside a bar, not hanging off it; a decaying staircase read as a signal decaying. Only
-       a top-aligned block reads as mass HANGING from the top of the stem, which is what a bowl does.
+       WHY 950 AND NOT FURTHER. The squircle's bottom-left corner has radius 205 centred on
+       (269, 755), so under this column the boundary runs from y=952 at x=212 to y=960 at x>=269. A
+       stem drawn to 985 gets sliced at an angle by that curve, which reads as a mistake rather than
+       a deliberate bleed - rendered and looked at, not reasoned about. 950 is the longest descender
+       whose rounded cap still clears the corner.
 
-       Column five is deliberately empty. Filling the grid put the bowl's weight too far from the
-       stem for the two to read as one letter.
-
-       KNOWN LIMIT, measured rather than assumed: this does not survive at menu-bar size. Rendered at
-       the 18pt the menu bar draws, a stem plus three tiles reads as a bar chart - the bowl needs
-       four distinct shapes inside 36px and they merge. It is an icon-size mark. Adopting it means
-       either accepting that the menu bar shows a different mark, or accepting an illegible one. -->
+       KNOWN COST, measured: as a menu-bar glyph the descender must fit the same 18pt box, so the
+       whole mark scales by 0.02264 instead of 0.02658 - tiles 1.95pt wide instead of 2.29pt, and a
+       visibly lighter icon. Still legible as a waveform, unlike the first attempt. Whether the menu
+       bar adopts this mark or keeps v1's is a separate decision from which icon ships. -->
   <defs>
     <linearGradient id="bg" x1="0.5" y1="0" x2="0.5" y2="1">
       <stop offset="0" stop-color="#26202f"/>
@@ -33,11 +32,12 @@
   <rect x="64" y="64" width="896" height="896" rx="205" fill="url(#bg)"/>
   <rect x="64" y="64" width="896" height="896" rx="205" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="10"/>
   <g fill="#f4f5f7">
-    <!-- the stem, carried through the descender -->
-    <rect x="212" y="252" width="86" height="608" rx="30"/>
-    <!-- the bowl: hangs from the stem's top edge -->
-    <rect x="341" y="252" width="86" height="320" rx="30"/>
-    <rect x="470" y="252" width="86" height="320" rx="30"/>
-    <rect x="599" y="252" width="86" height="320" rx="30"/>
+    <!-- column one: v1's top, carried down into the descender -->
+    <rect x="212" y="427" width="86" height="523" rx="30"/>
+    <!-- columns two to five: v1, unchanged -->
+    <rect x="341" y="337" width="86" height="350" rx="30"/>
+    <rect x="470" y="252" width="86" height="520" rx="30"/>
+    <rect x="599" y="337" width="86" height="350" rx="30"/>
+    <rect x="728" y="427" width="86" height="170" rx="30"/>
   </g>
 </svg>

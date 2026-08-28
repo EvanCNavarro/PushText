@@ -41,7 +41,7 @@ command -v rsvg-convert >/dev/null 2>&1 || {
 # Variants live side by side in Resources/icons/ rather than in git history alone, because comparing
 # two designs means rendering both, and a design you have to `git show` to look at does not get
 # compared.
-ICON_VARIANT="${ICON_VARIANT:-v1-level-meter}"
+ICON_VARIANT="${ICON_VARIANT:-v2-p-mark}"
 
 # src|dest|pixels
 ASSETS="Resources/icons/$ICON_VARIANT.svg|Sources/PushText/Resources/AppIcon.png|1024

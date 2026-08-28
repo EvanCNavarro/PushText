@@ -64,6 +64,19 @@ struct MenuBarGlyphTests {
         #expect(idleCentre > 0.9 && activeCentre < 0.1)
     }
 
+    /// The letterform itself (#228). The mark is a lowercase "p" only because column one carries on
+    /// past every other tile; a stem that merely started higher would look like a taller bar and no
+    /// assertion above would notice.
+    ///
+    /// Low in the glyph - row 32 of 36 - the stem must still be there and the tallest tile must not.
+    /// Both halves are needed: opacity alone would pass on a mark with no descender at all, and
+    /// transparency alone would pass on an empty image.
+    @Test("The stem descends below every other tile")
+    func stemDescends() throws {
+        #expect(try alpha(.idle, x: 4, y: 32) > 0.9, "the stem should still be drawing here")
+        #expect(try alpha(.idle, x: 18, y: 32) < 0.1, "the tallest tile should have ended above this")
+    }
+
     /// Unbadged, the mark must stay a template so macOS tints it for a light or dark menu bar. The
     /// app never picks a colour, so it can never pick the wrong one.
     @Test("An unbadged mark is a template")
