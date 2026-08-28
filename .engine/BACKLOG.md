@@ -1221,7 +1221,7 @@ that. The narrative for each lives in the issue.
   a full-box squircle cannot creep back. App icon untouched - this was menu-bar only.
   docs/verification/task231-glyph-scale.md.)
 
-#234 - The pasteboard suite takes 7 named boards at once and CI wedges on some - S1
+#234 - The pasteboard suite takes 7 named boards at once and CI wedges on some - DONE
   (2026-08-28: a docs-only PR went red. Three tests in "Pasteboard conceal markers" timed out
   acquiring a named pasteboard, while master ran the IDENTICAL Swift sources green two minutes
   earlier and a rerun of the same commit went green. Same bytes, two answers.
@@ -1238,4 +1238,7 @@ that. The narrative for each lives in the issue.
   not shipped. Replaced by .engine/checks/one-test-pasteboard.sh, which counts acquisition SITES and
   has no ordering dependency - and which reported 2 sites on a clean tree until string literals and
   comments were stripped. Four states run: baseline green, planted site red, prose green, restored
-  green. docs/verification/task234-one-test-pasteboard.md.)
+  green. docs/verification/task234-one-test-pasteboard.md.
+  MERGED as #235. CI ran the new gate (ok - 1 acquisition site) and the suite passed in 0.390s,
+  where the failing run had it blocked for ~11s on acquisitions. One healthy-server run, not proof
+  the wedge is gone - that only accumulates across future runs.)
