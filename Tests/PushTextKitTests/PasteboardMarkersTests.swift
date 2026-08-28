@@ -3,6 +3,48 @@ import Foundation
 import AppKit
 @testable import PushTextKit
 
+/// The suite's one and only pasteboard, fetched from the server exactly once (#234).
+///
+/// **Why one.** `NSPasteboard(name:)` reaches the pasteboard server over mach, and on a headless CI
+/// runner that server is intermittently unresponsive - the #144 wedge, bounded but not cured by
+/// #179. Each test used to take its OWN named board, so Swift Testing's parallelism fired seven
+/// concurrent acquisitions at a serial setup path. Run 33174982445 shows the cost: four returned and
+/// the other three all timed out at the same instant, on a docs-only PR whose Swift sources were
+/// byte-identical to a green master run two minutes earlier.
+///
+/// Whether that concurrency CAUSES the stall is correlation, not a verified cause - the wedge does
+/// not reproduce on a Mac with a live window server, so there is no local red to turn green. What is
+/// verifiable is the exposure, and one acquisition is strictly less of it than seven.
+///
+/// **Still NAMED, never `.general`.** A test that scribbles on the real clipboard destroys whatever
+/// the developer had copied, on every run. The name was never the problem.
+///
+/// **No retry.** A second attempt against a stalled mach send re-hangs and abandons another thread,
+/// and the four acquisitions that returned are not evidence that a fifth would. If this one stalls,
+/// `BoundedWork` says so within ten seconds and the suite fails honestly.
+///
+/// **What keeps it at one is `.engine/checks/one-test-pasteboard.sh`, not a test.** The obvious
+/// runtime guard - count the acquisitions, assert 1 - was written first and PLANTED AGAINST, and it
+/// passed on the broken version: with the suite serialized, the counting test ran first and saw only
+/// its own acquisition. An assertion whose verdict depends on execution order cannot say no, so it
+/// was replaced by a source gate that counts acquisition SITES and does not care when they run.
+private final class SharedPasteboard: @unchecked Sendable {
+    static let shared = SharedPasteboard()
+
+    private let result: Result<NSPasteboard, any Error>
+
+    private init() {
+        let name = NSPasteboard.Name("dev.ecn.apps.pushtext.test.shared")
+        result = Result {
+            try BoundedWork.run("NSPasteboard(name: \(name.rawValue))", timeout: 10) {
+                NSPasteboard(name: name)
+            }
+        }
+    }
+
+    func board() throws -> NSPasteboard { try result.get() }
+}
+
 /// Keeps dictated text out of third-party clipboard managers (#41).
 ///
 /// Every utterance passes through `NSPasteboard.general`, so Raycast, Maccy, Paste and Alfred will
@@ -12,34 +54,16 @@ import AppKit
 /// that nothing leaves the machine, text landing in a third-party archive contradicts the product
 /// claim rather than merely being untidy.
 ///
-/// These use a NAMED pasteboard, never `.general`: a test that scribbles on the real clipboard
-/// destroys whatever the developer had copied, and would do it on every run.
-@Suite("Pasteboard conceal markers")
+/// `.serialized` is load-bearing rather than tidiness: these tests share one pasteboard, and run in
+/// parallel they would overwrite each other's contents between the write and the read.
+@Suite("Pasteboard conceal markers", .serialized)
 struct PasteboardMarkersTests {
 
-    /// A named pasteboard, acquired with a DEADLINE (#178).
-    ///
-    /// `NSPasteboard(name:)` can block forever. Measured on CI: it reaches `CFPasteboardCreate` ->
-    /// `_onqueue_CFPasteboardSetupInstance` -> `dispatch_mach_send_with_result_and_wait_for_reply`
-    /// and never gets a reply, because the pasteboard server is intermittently unresponsive on a
-    /// headless runner. That one call took the whole job down for ten minutes at a time, about one
-    /// run in ten (#144), and survived three investigations because a hang leaves nothing to read.
-    ///
-    /// Still NAMED rather than `.general` - a test that scribbles on the real clipboard destroys
-    /// whatever the developer had copied. The name was never the problem; the unbounded wait was.
-    ///
-    /// A timeout FAILS this suite loudly in seconds rather than hanging the run. Ten seconds is far
-    /// beyond any healthy acquisition, which is instant.
-    private func makePasteboard(_ label: String) throws -> NSPasteboard {
-        let name = NSPasteboard.Name("dev.ecn.apps.pushtext.test.\(label)")
-        return try BoundedWork.run("NSPasteboard(name: \(name.rawValue))", timeout: 10) {
-            NSPasteboard(name: name)
-        }
-    }
+    private func pasteboard() throws -> NSPasteboard { try SharedPasteboard.shared.board() }
 
     @Test("The staged item carries the text itself")
     func stagesTheText() throws {
-        let pasteboard = try makePasteboard("text")
+        let pasteboard = try pasteboard()
         PasteboardTextInjector.stage("hello world", on: pasteboard)
 
         #expect(pasteboard.string(forType: .string) == "hello world")
@@ -47,7 +71,7 @@ struct PasteboardMarkersTests {
 
     @Test("The staged item is marked transient, concealed and auto-generated")
     func stagesAllThreeMarkers() throws {
-        let pasteboard = try makePasteboard("markers")
+        let pasteboard = try pasteboard()
         PasteboardTextInjector.stage("secret dictation", on: pasteboard)
 
         let types = pasteboard.pasteboardItems?.first?.types.map(\.rawValue) ?? []
@@ -63,7 +87,7 @@ struct PasteboardMarkersTests {
     /// would still pass if the two were split.
     @Test("The markers are on the same item as the text, not a sibling")
     func markersRideWithTheText() throws {
-        let pasteboard = try makePasteboard("sameitem")
+        let pasteboard = try pasteboard()
         PasteboardTextInjector.stage("hello", on: pasteboard)
 
         let items = pasteboard.pasteboardItems ?? []
@@ -76,7 +100,7 @@ struct PasteboardMarkersTests {
 
     @Test("Staging replaces previous contents rather than appending to them")
     func stagingReplaces() throws {
-        let pasteboard = try makePasteboard("replace")
+        let pasteboard = try pasteboard()
         pasteboard.clearContents()
         pasteboard.setString("something the user copied", forType: .string)
 
@@ -91,7 +115,7 @@ struct PasteboardMarkersTests {
     /// injection as a foreign write and the user's clipboard is never restored.
     @Test("Staging bumps the change count, which the restore guard depends on")
     func stagingBumpsChangeCount() throws {
-        let pasteboard = try makePasteboard("changecount")
+        let pasteboard = try pasteboard()
         let before = pasteboard.changeCount
 
         let after = PasteboardTextInjector.stage("dictated", on: pasteboard)
@@ -112,7 +136,7 @@ extension PasteboardMarkersTests {
     /// silently does not.
     @Test("Copying for the user writes plain, UNMARKED text")
     func copyIsNotConcealed() throws {
-        let pasteboard = try makePasteboard("copy")
+        let pasteboard = try pasteboard()
         PasteboardTextInjector.copy("keep this one", on: pasteboard)
 
         #expect(pasteboard.string(forType: .string) == "keep this one")
@@ -126,17 +150,27 @@ extension PasteboardMarkersTests {
 
     /// The discriminator. Both write the same string, so asserting only on the text would pass with
     /// `copy` implemented as a call to `stage` - which is the mistake worth preventing.
+    ///
+    /// One board written twice rather than two boards written once (#234). Same comparison, half the
+    /// server round trips, and it removes a confound: any difference now has to come from the two
+    /// calls rather than from two separately created pasteboards.
     @Test("Copy and inject differ in exactly the markers")
     func copyAndStageDifferOnlyInMarkers() throws {
-        let copied = try makePasteboard("diff-copy")
-        let staged = try makePasteboard("diff-stage")
-        PasteboardTextInjector.copy("same text", on: copied)
-        PasteboardTextInjector.stage("same text", on: staged)
+        let pasteboard = try pasteboard()
 
-        #expect(copied.string(forType: .string) == staged.string(forType: .string))
+        PasteboardTextInjector.copy("same text", on: pasteboard)
+        let copiedText = pasteboard.string(forType: .string)
+        let copiedTypes = Set(pasteboard.pasteboardItems?.first?.types.map(\.rawValue) ?? [])
 
-        let copiedTypes = Set(copied.pasteboardItems?.first?.types.map(\.rawValue) ?? [])
-        let stagedTypes = Set(staged.pasteboardItems?.first?.types.map(\.rawValue) ?? [])
+        PasteboardTextInjector.stage("same text", on: pasteboard)
+        let stagedText = pasteboard.string(forType: .string)
+        let stagedTypes = Set(pasteboard.pasteboardItems?.first?.types.map(\.rawValue) ?? [])
+
+        // An unreadable board would make the subtraction below vacuously empty. That is not the
+        // marker set, so it still fails - but it would fail for the wrong reason and read as a
+        // marker bug, so the emptiness is caught here and named.
+        #expect(!copiedTypes.isEmpty, "the copy wrote nothing readable; the comparison is meaningless")
+        #expect(copiedText == stagedText)
         #expect(stagedTypes.subtracting(copiedTypes)
                     == Set(PasteboardTextInjector.concealMarkers.map(\.rawValue)),
                 "the only difference between them must be the conceal markers")
