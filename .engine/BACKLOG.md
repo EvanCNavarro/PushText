@@ -1270,3 +1270,19 @@ that. The narrative for each lives in the issue.
   PROCESS NOTE: this entry was written S1 pre-merge and needed a follow-up commit, for the second
   time in one session. Unnecessary - backlog-matches-github.sh deliberately PASSES the 'marked DONE,
   still open' direction precisely so a PR can mark its own line DONE. Write DONE in the PR.)
+
+#240 - No run has ever proven a Sparkle update INSTALLS, only that the app launches - S1
+  (2026-08-31: found while verifying #237. Everything we check stops short of the installer: the
+  appcast is signed and a tampered archive is rejected, the feed is anonymously fetchable, the bundle
+  embeds the pinned Sparkle, the app launches. Sparkle's download -> verify -> unpack -> swap ->
+  relaunch has NEVER executed in any recorded run. True since #17; worth writing down at #237,
+  because 2.9.6's fixes are in installer behaviour specifically.
+  DEP: needs a PUBLISHED release newer than an INSTALLED copy, which CI cannot have - a runner has a
+  fresh build and nothing to update from, and a locally-served appcast would only prove our
+  scaffolding agrees with itself.
+  TRIGGER: next release published while an older PushText is installed on a real Mac; v0.6.10
+  against an installed 0.6.9 is the first chance.
+  Also record whether the Accessibility and Input Monitoring grants survive the bundle swap - TCC
+  binds to the designated requirement, so that is where they would silently break, and the user
+  would not find out until the next key press.)
+
