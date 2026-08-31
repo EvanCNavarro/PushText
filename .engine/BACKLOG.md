@@ -1242,3 +1242,27 @@ that. The narrative for each lives in the issue.
   MERGED as #235. CI ran the new gate (ok - 1 acquisition site) and the suite passed in 0.390s,
   where the failing run had it blocked for ~11s on acquisitions. One healthy-server run, not proof
   the wedge is gone - that only accumulates across future runs.)
+
+#237 - Sparkle sits at 2.9.3 through two upstream security releases, unwatched - S1
+  (2026-08-31: asked for a status check, found nothing open and this. Shipped 2.9.3; upstream 2.9.6
+  since 2026-08-17. 2.9.5 hardens delta-patch symlinks, 2.9.6 fixes a privilege escalation and
+  rejects pkg installs whose signature failed - both security.
+  EXPOSURE IS LOW AND SAYING OTHERWISE WOULD BE AS WRONG AS IGNORING IT: the privesc needs a root
+  process and we are not one, 2.9.5 is delta-patch code and our appcast ships a plain zip with no
+  deltas, the pkg fix needs a pkg. What remains is the updater being three releases behind.
+  NO GATE WAS WRONG; NONE WAS LOOKING. Sparkle is a local binaryTarget with no manifest and no
+  lockfile, so Dependabot cannot see it and its `swift` ecosystem would not change that.
+  THREE MORE DEFECTS FOUND WHILE CONFIRMING IT: pinned twice in two files with nothing tying them
+  together (framework vs the generate_appcast CLI that SIGNS the appcast); no checksum on the
+  download, so the version was pinned and the bytes were not; and `[ -d "$DEST" ] && exit 0`, so the
+  bump would have taken in CI and silently not on this machine.
+  TWO MORE IN MY OWN FIX, BOTH FOUND BY PLANTING. The first version deleted the old framework before
+  downloading the new one - a bad digest printed the right refusal and left the machine with NO
+  Sparkle; restructured to verify first, replace last. And the new gate exited 1 with NO OUTPUT on
+  the pre-change tree, because set -e killed it at a non-matching grep before the explaining branch.
+  Only running it against the PRE-change baseline shows that.
+  Gate battle-tested over five states; an earlier run returned 126 on all five (copy not executable)
+  and the three RED rows "passed" - only the GREEN rows failing exposed the broken harness.
+  Real path driven: dist/PushText.app launches with 2.9.6 embedded, alive 8/8, tap armed, audio
+  verified. NOT proven: an end-to-end Sparkle update install under 2.9.6, which only a real user
+  taking a real update executes. docs/verification/task237-sparkle-2-9-6.md.)

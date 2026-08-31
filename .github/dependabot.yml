@@ -1,7 +1,20 @@
 version: 2
 updates:
-  # SwiftPM has no Dependabot ecosystem. MacFaceKit is pinned .upToNextMinor in Package.swift and
-  # bumped deliberately; github-actions keeps the CI workflow action pins current.
+  # WHAT DEPENDABOT COVERS HERE, AND WHAT NOTHING COVERS.
+  #
+  # The comment this replaces said "SwiftPM has no Dependabot ecosystem". That stopped being true:
+  # `package-ecosystem: swift` exists, and since 2026-03-31 it reads Xcode-managed manifests too.
+  #
+  # It is still not enabled, for a reason that is now the accurate one rather than a stale one: the
+  # only SwiftPM dependency is MacFaceKit, our own package, pinned .upToNextMinor in Package.swift
+  # and bumped deliberately alongside TermTile. Turning `swift` on would watch exactly that one pin.
+  #
+  # THE DEPENDENCY THAT MATTERS IS INVISIBLE TO IT EITHER WAY. Sparkle is a local binaryTarget
+  # vendored by scripts/fetch-sparkle.sh, with its version in a shell variable - no manifest, no
+  # lockfile, nothing for Dependabot to read, with or without the swift ecosystem. It sat at 2.9.3
+  # through two upstream SECURITY releases with every gate green, because no gate was looking.
+  # .engine/checks/sparkle-pins-agree.sh keeps the two pins honest with each other; noticing that
+  # upstream has moved is still a human walking up to it.
   - package-ecosystem: github-actions
     directory: /
     schedule:

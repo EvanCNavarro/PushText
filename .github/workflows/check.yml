@@ -87,6 +87,9 @@ jobs:
       - name: The tests take one pasteboard
         run: .engine/checks/one-test-pasteboard.sh
 
+      - name: The two Sparkle pins agree
+        run: .engine/checks/sparkle-pins-agree.sh
+
       - name: Install librsvg
         run: brew install librsvg
 

@@ -178,12 +178,26 @@ jobs:
         run: |
           set -euo pipefail
           # Fetch the Sparkle CLI tools (generate_appcast) — the tarball dist, not the SPM zip.
+          #
+          # THE SECOND HALF OF THE PIN. scripts/fetch-sparkle.sh pins the framework the app links;
+          # this pins the CLI that signs the appcast. Nothing derives one from the other, so they are
+          # bumped together or the release signs with a different Sparkle than it ships.
+          SPARKLE_CLI_VERSION="2.9.6"
+          SPARKLE_CLI_SHA256="52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192"
           WORK="$(mktemp -d)"
           curl -fsSL --max-time 180 \
-            "https://github.com/sparkle-project/Sparkle/releases/download/2.9.3/Sparkle-2.9.3.tar.xz" \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_CLI_VERSION}/Sparkle-${SPARKLE_CLI_VERSION}.tar.xz" \
             -o "$WORK/s.tar.xz"
+          # This tool signs every update users install. HTTPS says the transport was not tampered
+          # with; it does not say the artifact is the one we tested against.
+          GOT="$(shasum -a 256 "$WORK/s.tar.xz" | cut -d' ' -f1)"
+          if [ "$GOT" != "$SPARKLE_CLI_SHA256" ]; then
+            echo "Sparkle CLI sha256 mismatch: expected $SPARKLE_CLI_SHA256, got $GOT" >&2
+            exit 1
+          fi
           tar -xf "$WORK/s.tar.xz" -C "$WORK"
           GEN="$(find "$WORK" -name generate_appcast -type f | head -1)"
+          [ -n "$GEN" ] || { echo "generate_appcast not found in the Sparkle CLI tarball" >&2; exit 1; }
           # Write the private key to a file for --ed-key-file, remove it immediately after.
           KEYFILE="$WORK/ed_private.key"
           printf '%s' "${SPARKLE_ED_PRIVATE_KEY}" > "$KEYFILE"
