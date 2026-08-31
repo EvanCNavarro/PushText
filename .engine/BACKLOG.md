@@ -1243,7 +1243,7 @@ that. The narrative for each lives in the issue.
   where the failing run had it blocked for ~11s on acquisitions. One healthy-server run, not proof
   the wedge is gone - that only accumulates across future runs.)
 
-#237 - Sparkle sits at 2.9.3 through two upstream security releases, unwatched - S1
+#237 - Sparkle sits at 2.9.3 through two upstream security releases, unwatched - DONE
   (2026-08-31: asked for a status check, found nothing open and this. Shipped 2.9.3; upstream 2.9.6
   since 2026-08-17. 2.9.5 hardens delta-patch symlinks, 2.9.6 fixes a privilege escalation and
   rejects pkg installs whose signature failed - both security.
@@ -1265,4 +1265,8 @@ that. The narrative for each lives in the issue.
   and the three RED rows "passed" - only the GREEN rows failing exposed the broken harness.
   Real path driven: dist/PushText.app launches with 2.9.6 embedded, alive 8/8, tap armed, audio
   verified. NOT proven: an end-to-end Sparkle update install under 2.9.6, which only a real user
-  taking a real update executes. docs/verification/task237-sparkle-2-9-6.md.)
+  taking a real update executes. docs/verification/task237-sparkle-2-9-6.md.
+  MERGED as #238; CI ran the new gate green. Shipped in v0.6.10.
+  PROCESS NOTE: this entry was written S1 pre-merge and needed a follow-up commit, for the second
+  time in one session. Unnecessary - backlog-matches-github.sh deliberately PASSES the 'marked DONE,
+  still open' direction precisely so a PR can mark its own line DONE. Write DONE in the PR.)
