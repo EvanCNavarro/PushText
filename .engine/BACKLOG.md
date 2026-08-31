@@ -1243,7 +1243,7 @@ that. The narrative for each lives in the issue.
   where the failing run had it blocked for ~11s on acquisitions. One healthy-server run, not proof
   the wedge is gone - that only accumulates across future runs.)
 
-#237 - Sparkle sits at 2.9.3 through two upstream security releases, unwatched - S1
+#237 - Sparkle sits at 2.9.3 through two upstream security releases, unwatched - DONE
   (2026-08-31: asked for a status check, found nothing open and this. Shipped 2.9.3; upstream 2.9.6
   since 2026-08-17. 2.9.5 hardens delta-patch symlinks, 2.9.6 fixes a privilege escalation and
   rejects pkg installs whose signature failed - both security.
@@ -1265,4 +1265,24 @@ that. The narrative for each lives in the issue.
   and the three RED rows "passed" - only the GREEN rows failing exposed the broken harness.
   Real path driven: dist/PushText.app launches with 2.9.6 embedded, alive 8/8, tap armed, audio
   verified. NOT proven: an end-to-end Sparkle update install under 2.9.6, which only a real user
-  taking a real update executes. docs/verification/task237-sparkle-2-9-6.md.)
+  taking a real update executes. docs/verification/task237-sparkle-2-9-6.md.
+  MERGED as #238; CI ran the new gate green. Shipped in v0.6.10.
+  PROCESS NOTE: this entry was written S1 pre-merge and needed a follow-up commit, for the second
+  time in one session. Unnecessary - backlog-matches-github.sh deliberately PASSES the 'marked DONE,
+  still open' direction precisely so a PR can mark its own line DONE. Write DONE in the PR.)
+
+#240 - No run has ever proven a Sparkle update INSTALLS, only that the app launches - S1
+  (2026-08-31: found while verifying #237. Everything we check stops short of the installer: the
+  appcast is signed and a tampered archive is rejected, the feed is anonymously fetchable, the bundle
+  embeds the pinned Sparkle, the app launches. Sparkle's download -> verify -> unpack -> swap ->
+  relaunch has NEVER executed in any recorded run. True since #17; worth writing down at #237,
+  because 2.9.6's fixes are in installer behaviour specifically.
+  DEP: needs a PUBLISHED release newer than an INSTALLED copy, which CI cannot have - a runner has a
+  fresh build and nothing to update from, and a locally-served appcast would only prove our
+  scaffolding agrees with itself.
+  TRIGGER: next release published while an older PushText is installed on a real Mac; v0.6.10
+  against an installed 0.6.9 is the first chance.
+  Also record whether the Accessibility and Input Monitoring grants survive the bundle swap - TCC
+  binds to the designated requirement, so that is where they would silently break, and the user
+  would not find out until the next key press.)
+

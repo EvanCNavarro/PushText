@@ -76,6 +76,25 @@ if [ "${REQUIRE_SPARKLE_KEY:-0}" = "1" ]; then
 		|| fail "SUPublicEDKey missing - updates would not verify"
 fi
 
+# THE SPARKLE THAT SHIPPED MUST BE THE SPARKLE WE PINNED (#237).
+#
+# Every check up to here reads the app's own plist, so all of them are equally true of a bundle
+# carrying a stale framework. `Vendor/` is gitignored and populated by a script, so what gets
+# embedded is whatever happened to be on the build machine - and until #237 that script exited early
+# whenever Vendor/ already existed, which is exactly how a bump takes in CI and silently not
+# elsewhere. sparkle-pins-agree.sh checks the two PINS against each other; this checks the BYTES
+# that shipped against the pin, which is the claim a user is affected by.
+SPARKLE_PIN="$(grep -E '^SPARKLE_VERSION=' scripts/fetch-sparkle.sh | head -1 | cut -d'"' -f2 || true)"
+SPARKLE_SHIPPED="$(plutil -extract CFBundleShortVersionString raw \
+	"$APP/Contents/Frameworks/Sparkle.framework/Resources/Info.plist" 2>/dev/null || true)"
+# Empty must never read as agreement: two unreadable values are equal to each other.
+[ -n "$SPARKLE_PIN" ] || fail "could not read SPARKLE_VERSION from scripts/fetch-sparkle.sh"
+[ -n "$SPARKLE_SHIPPED" ] \
+	|| fail "no Sparkle.framework version in the bundle - the updater is missing or unreadable"
+[ "$SPARKLE_SHIPPED" = "$SPARKLE_PIN" ] \
+	|| fail "bundle ships Sparkle $SPARKLE_SHIPPED but the pin is $SPARKLE_PIN"
+echo "Sparkle embedded: $SPARKLE_SHIPPED (matches the pin)"
+
 # Signature must verify strict. Local/dev smoke may accept ad-hoc; release smoke sets
 # REQUIRE_STABLE_CODESIGN=1 so public artifacts cannot regress to TCC-breaking cdhash-only identity.
 codesign --verify --deep --strict "$APP" || fail "codesign --verify --deep --strict failed"
