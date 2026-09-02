@@ -1271,7 +1271,7 @@ that. The narrative for each lives in the issue.
   time in one session. Unnecessary - backlog-matches-github.sh deliberately PASSES the 'marked DONE,
   still open' direction precisely so a PR can mark its own line DONE. Write DONE in the PR.)
 
-#240 - No run has ever proven a Sparkle update INSTALLS, only that the app launches - S1
+#240 - No run has ever proven a Sparkle update INSTALLS, only that the app launches - DONE
   (2026-08-31: found while verifying #237. Everything we check stops short of the installer: the
   appcast is signed and a tampered archive is rejected, the feed is anonymously fetchable, the bundle
   embeds the pinned Sparkle, the app launches. Sparkle's download -> verify -> unpack -> swap ->
@@ -1306,3 +1306,39 @@ that. The narrative for each lives in the issue.
   comparison because Swift has heterogeneous BinaryInteger ==/!=; checked rather than waved through.
   NOT COVERED: the delegate wiring itself, which needs a live SPUUpdater. The real proof is the log
   line changing on the next release. docs/verification/task241-update-check-outcome.md.)
+  DISCHARGED 2026-09-01. v0.6.10 fired the trigger and the baseline had been captured BEFORE the tag,
+  which is the only reason the comparison exists. 0.6.9/145/Sparkle 2.9.3 -> 0.6.10/149/Sparkle 2.9.6.
+  THAT THE INSTALLER RAN, not just that the version changed: app was 0.6.9 at 16:03, release
+  published 16:07, process started 16:18; Sparkle's own defaults carry an SUUpdateAlert2 window
+  frame, which exists only because the dialog was shown. That key is UNDATED, so it corroborates
+  rather than proves - nobody watched the install, and this records its result plus four traces.
+  THE TCC ANSWER IS BEHAVIOURAL, NOT A STRING MATCH. The designated requirement is byte-identical
+  across the swap, but that is a prediction; the result is that the updated app has since pressed the
+  hotkey (Input Monitoring), captured audio (Microphone) and injected via Command-V (Accessibility)
+  in one dictation, with nothing re-granted.
+  NOT COVERED: delta updates (our appcast ships a plain zip, and 2.9.5's symlink fix lives in that
+  path), a failed/interrupted install, and - worth stating - 2.9.6's OWN installer code, because an
+  app updates itself with the Sparkle it currently ships, which here was 2.9.3.
+  docs/verification/task240-update-installs.md.)
+
+
+#243 - The dictation overlay does not appear while recording, though dictation works - S1
+  (2026-09-01, Bobby: "overlay not showing while audio capturing text". Running 0.6.10, one display.
+  RULED OUT BY MEASUREMENT, not by reading. The window layer is healthy: a second instance under
+  PUSHTEXT_HUD_PROBE put the pill onscreen=true for 13 consecutive seconds at level 25, sampled from
+  the WINDOW SERVER outside the process so visibility is macOS's answer and not the app's own. The
+  indicator is wired and the panel exists - the running app carries a 240x76 window at level 25,
+  exactly makePanel()'s geometry, which only exists once show() has run. The anchor is NOT confused:
+  statusItemAnchor() matches any class name containing "MenuBarExtra", which the dropdown's does, but
+  the dropdown sits at 1265,35 320x832 while the HUD is at 1162,37 under the menu bar. Not a stuck
+  capture either - the 20-minute watchdog would have force-closed and logged it.
+  THE ANOMALY IS UNRESOLVED AND SAID SO. The one logged dictation shows the press arriving with the
+  machine ALREADY in recording, ending a 26.5s utterance, with no "HUD anchor=" line - which
+  position() emits on every show(). I cannot tell whether those lines are absent or evicted:
+  Logger.info is memory-backed with short retention and two queries over the same period disagreed.
+  An absence from that source is not evidence, so no diagnosis is built on it.
+  DEP: needs one real dictation while the tracer runs - log stream at info level filtered to
+  process == "PushText", plus window-server visibility every 250ms, on one timeline. The process
+  filter is load-bearing: without it swiftpm-testing-helper logs the same subsystem and the same
+  transitions, and my own test runs appeared in the trace as if they were real dictations.
+  TRIGGER: the next time Bobby dictates with the tracer live.)
