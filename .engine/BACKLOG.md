@@ -1286,3 +1286,23 @@ that. The narrative for each lives in the issue.
   binds to the designated requirement, so that is where they would silently break, and the user
   would not find out until the next key press.)
 
+
+#241 - Every clean update check is recorded as FAILED - DONE
+  (2026-09-01: found while investigating the dictation overlay, by reading the RUNNING app's log
+  rather than the code. Six times in a day: "update check: none found" then, 42ms later, "update
+  check FAILED: You're up to date!" - same check, and the second one sets state.
+  Sparkle delivers no-update through didFinishUpdateCycleFor as an NSError in SUSparkleErrorDomain,
+  and the watcher treated any non-nil error as failure, so the outcome meaning SUCCESS arrived on
+  the error path. Codes MEASURED off a binary linked against the vendored framework - noUpdate=1001,
+  cancelled=4007 - not read off the header.
+  IT SHIPPED BECAUSE THE COMMENT ABOVE IT ARGUES THE OPPOSITE MISTAKE, correctly: a failed check
+  must not render as up-to-date (#170). The code overcorrected into "every error is a failure" and
+  made up-to-date render as broken instead. UpdateIndicatorTests covered how each availability
+  RENDERS; nothing covered the mapping ONTO one, which is where the defect lived.
+  Fixed with isCheckFailure(domain:code:), pure over its arguments so it is testable without driving
+  Sparkle. Battle-tested BOTH directions: `return true` (the original) goes red on 3 tests, and
+  `return false` (the tempting over-correction, which would restore #170 from the other side) goes
+  red on 6. A width mismatch - SUError is NS_ENUM(OSStatus) so rawValue is Int32 - compiles in the
+  comparison because Swift has heterogeneous BinaryInteger ==/!=; checked rather than waved through.
+  NOT COVERED: the delegate wiring itself, which needs a live SPUUpdater. The real proof is the log
+  line changing on the next release. docs/verification/task241-update-check-outcome.md.)
